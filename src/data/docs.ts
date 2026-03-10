@@ -1783,7 +1783,7 @@ Monitor for verification failures to detect misconfigured secrets or potential r
   "llm-providers": {
     slug: "llm-providers",
     title: "LLM Providers",
-    category: "How-To Guides",
+    category: "Configuration",
     content: `# How to Configure LLM Providers
 
 BugPilot uses LLMs to synthesize additional hypotheses when evidence is complex or when rule-based patterns don't fully explain an incident. LLM usage is **optional** — BugPilot works without one using its rule-based and graph correlation engines.
