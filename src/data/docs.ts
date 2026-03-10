@@ -244,7 +244,7 @@ bugpilot fix run act_d2f4... --dry-run
   "developer-setup": {
     slug: "developer-setup",
     title: "Developer Setup",
-    category: "Getting Started",
+    category: "Self-Hosting",
     content: `# Developer Setup Guide
 
 This guide covers setting up a full local development environment for contributing to BugPilot.
