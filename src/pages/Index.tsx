@@ -17,14 +17,15 @@ export default function Index() {
     <>
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="container relative z-10 py-24 lg:py-36">
+        <div className="absolute inset-0 bg-grid-pattern opacity-40" />
+        <div className="container relative z-10 py-28 lg:py-40">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="mx-auto max-w-3xl text-center"
           >
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border bg-secondary px-4 py-1.5 text-sm font-medium text-muted-foreground">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border bg-background px-4 py-1.5 text-sm font-medium text-muted-foreground">
               <Terminal className="h-3.5 w-3.5" />
               CLI-first debugging platform
             </div>
@@ -65,7 +66,7 @@ export default function Index() {
                 <div><span className="text-success">$</span> bugpilot investigate --trace ERR-4829</div>
                 <div className="mt-2 text-primary-foreground/50">⠋ Tracing error through 12 services...</div>
                 <div className="mt-1 text-primary-foreground/50">✓ Root cause identified in 2.3s</div>
-                <div className="mt-3"><span className="text-warning">→</span> NullPointerException at UserService.java:142</div>
+                <div className="mt-3"><span className="text-primary">→</span> NullPointerException at UserService.java:142</div>
                 <div className="text-primary-foreground/50">  Caused by: missing null check on user.preferences</div>
                 <div className="text-primary-foreground/50">  First seen: 2h ago | Affected: 847 requests</div>
                 <div className="mt-3"><span className="text-success">$</span> bugpilot fix --suggest</div>
@@ -74,25 +75,24 @@ export default function Index() {
             </div>
           </motion.div>
         </div>
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
       </section>
 
       {/* Features */}
-      <section className="border-t bg-secondary/30 py-24">
+      <section className="border-t py-24">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight">Everything you need to debug at speed</h2>
             <p className="mt-4 text-muted-foreground">Purpose-built tools that integrate directly into your engineering workflow.</p>
           </div>
-          <div className="mx-auto mt-16 grid max-w-5xl gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto mt-16 grid max-w-5xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((f, i) => (
               <motion.div
                 key={f.title}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="rounded-xl border bg-card p-6"
+                transition={{ delay: i * 0.08 }}
+                className="rounded-xl border bg-card p-6 transition-shadow hover:shadow-md"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <f.icon className="h-5 w-5" />
@@ -106,9 +106,9 @@ export default function Index() {
       </section>
 
       {/* CTA */}
-      <section className="py-24">
+      <section className="border-t py-24">
         <div className="container">
-          <div className="mx-auto max-w-2xl rounded-2xl border bg-primary/5 p-10 text-center">
+          <div className="mx-auto max-w-2xl rounded-2xl border bg-card p-10 text-center shadow-sm">
             <h2 className="text-2xl font-bold">Ready to debug smarter?</h2>
             <p className="mt-3 text-muted-foreground">Create your account, download the CLI, and start investigating in minutes.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
