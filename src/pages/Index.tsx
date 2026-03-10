@@ -1,4 +1,3 @@
-// Force GitHub sync
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Terminal, Search, Zap, Shield, GitBranch, BarChart3 } from "lucide-react";
