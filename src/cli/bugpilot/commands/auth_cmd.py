@@ -104,9 +104,6 @@ def cmd_activate(
     license_key: Optional[str] = typer.Option(
         None, "--key", "-k", help="License key", envvar="BUGPILOT_LICENSE_KEY"
     ),
-    api_secret: Optional[str] = typer.Option(
-        None, "--secret", "-s", help="API secret", envvar="BUGPILOT_API_SECRET"
-    ),
     email: Optional[str] = typer.Option(None, "--email", "-e", help="Your email address"),
     display_name: Optional[str] = typer.Option(None, "--name", help="Your display name"),
 ) -> None:
@@ -118,8 +115,6 @@ def cmd_activate(
 
     if not license_key:
         license_key = Prompt.ask("[bold]Enter your license key[/bold]", password=True)
-    if not api_secret:
-        api_secret = Prompt.ask("[bold]Enter your API secret[/bold]", password=True)
     if not email:
         email = Prompt.ask("[bold]Enter your email address[/bold]")
 
@@ -128,7 +123,6 @@ def cmd_activate(
             resp = await activate(
                 app_ctx,
                 license_key=license_key,
-                api_secret=api_secret,
                 email=email,
                 display_name=display_name,
             )
