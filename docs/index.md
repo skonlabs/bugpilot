@@ -1,6 +1,6 @@
 # BugPilot Documentation
 
-BugPilot is a CLI-first debugging and investigation platform. It connects to your existing monitoring tools, collects evidence automatically, and uses a multi-pass engine (rule-based + graph correlation + AI synthesis) to generate ranked, actionable root cause hypotheses.
+BugPilot is a CLI tool you download and run from your terminal (macOS or Windows). It connects to the BugPilot cloud service and your existing monitoring tools, collects evidence automatically, and uses a multi-pass engine (rule-based + graph correlation + AI synthesis) to generate ranked, actionable root cause hypotheses.
 
 ---
 
@@ -8,9 +8,8 @@ BugPilot is a CLI-first debugging and investigation platform. It connects to you
 
 | Guide | Description |
 |-------|-------------|
-| [Getting Started](./getting-started.md) | Install, configure, and run your first investigation in 5 minutes |
-| [Developer Setup](./developer_setup.md) | Full local dev environment setup for contributors |
-| [Deployment](./deployment.md) | Docker Compose, Kubernetes, and AWS ECS deployment |
+| [Getting Started](./getting-started.md) | Download, install, and run your first investigation in 5 minutes |
+| [Download the CLI](https://bugpilot.io/download) | Direct download for macOS and Windows |
 
 ---
 
@@ -37,12 +36,23 @@ BugPilot is a CLI-first debugging and investigation platform. It connects to you
 
 ---
 
+## Self-Hosting (Advanced)
+
+Run BugPilot on your own infrastructure instead of the cloud service.
+
+| Guide | Description |
+|-------|-------------|
+| [Deployment Guide](./deployment.md) | Docker Compose, Kubernetes, and AWS ECS |
+| [Developer Setup](./developer_setup.md) | Local dev environment for contributors |
+
+---
+
 ## Support
 
 | Resource | Link |
 |----------|------|
 | Issues | https://github.com/skonlabs/bugpilot/issues |
-| API Docs (local) | http://localhost:8000/docs |
+| API Docs (self-hosted) | http://localhost:8000/docs |
 | Troubleshooting | [Troubleshooting Guide](./troubleshooting.md) |
 
 ---

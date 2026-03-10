@@ -12,7 +12,7 @@ bugpilot [OPTIONS] COMMAND [ARGS]...
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
-| `--api-url TEXT` | `BUGPILOT_API_URL` | `http://localhost:8000` | BugPilot backend URL |
+| `--api-url TEXT` | `BUGPILOT_API_URL` | `https://api.bugpilot.io` | BugPilot API URL |
 | `-o, --output TEXT` | `BUGPILOT_OUTPUT` | `human` | Output format: `human` \| `json` \| `verbose` |
 | `--no-color` | `NO_COLOR` | false | Disable Rich colour output |
 | `-v, --version` | — | — | Print version and exit |
@@ -35,27 +35,26 @@ bugpilot investigate list -o json | jq '.[] | select(.status == "open")'
 
 ### `auth activate`
 
-Activate a BugPilot license on this device.
+Activate BugPilot with your license key. You only need to do this once per machine.
 
 ```bash
-bugpilot auth activate --license-key bp_<KEY>
+bugpilot auth activate --key bp_<KEY> [--email EMAIL] [--name DISPLAY_NAME]
 ```
 
-| Option | Required | Description |
-|--------|----------|-------------|
-| `--license-key` | Yes | License key (format: `bp_...`) |
+| Option | Short | Required | Env var | Description |
+|--------|-------|----------|---------|-------------|
+| `--key` | `-k` | Yes | `BUGPILOT_LICENSE_KEY` | License key (format: `bp_...`) |
+| `--email` | `-e` | Prompted if omitted | — | Your email address |
+| `--name` | — | No | — | Your display name |
 
 **Example:**
 
 ```
-$ bugpilot auth activate --license-key bp_T7zK9mNvXq...
+$ bugpilot auth activate --key bp_T7zK9mNvXq...
 
-✓ License activated
-  Org:        acme-corp
-  Tier:       pro
-  Seats:      8 / 10 available
-  Expires:    2027-03-01
-  Device ID:  dev_a3f8c2d1e9
+✓ Activated successfully!
+  Org:   acme-corp
+  Role:  investigator
 ```
 
 Credentials are stored at `~/.config/bugpilot/credentials.json` with permissions `600`.
@@ -501,16 +500,15 @@ bugpilot --install-completion fish
 
 ## Using with CI/CD
 
-In CI pipelines, use `--output json` and `BUGPILOT_API_URL` / `BUGPILOT_LICENSE_KEY` environment variables:
+In CI pipelines, use `--output json` and the `BUGPILOT_LICENSE_KEY` environment variable:
 
 ```yaml
 # GitHub Actions example
 - name: Triage deployment incident
   env:
-    BUGPILOT_API_URL: ${{ secrets.BUGPILOT_URL }}
-    BUGPILOT_LICENSE_KEY: ${{ secrets.BUGPILOT_KEY }}
+    BUGPILOT_LICENSE_KEY: ${{ secrets.BUGPILOT_LICENSE_KEY }}
   run: |
-    bugpilot auth activate --license-key "$BUGPILOT_LICENSE_KEY"
+    bugpilot auth activate --key "$BUGPILOT_LICENSE_KEY"
     bugpilot incident triage \
       --service "$SERVICE" \
       --alert-name "Deployment smoke test failed" \
