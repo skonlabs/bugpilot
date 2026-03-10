@@ -1,0 +1,47 @@
+{
+  "id": "7654321",
+  "title": "HIGH CPU utilization on payment-service",
+  "event_type": "metric_alert_monitor",
+  "priority": "P1",
+  "alert_type": "error",
+  "alert_metric": "system.cpu.user",
+  "alert_transition": "Triggered",
+  "alert_query": "avg(last_5m):avg:system.cpu.user{service:payment-service} > 90",
+  "alert_scope": "service:payment-service",
+  "hostname": "ip-10-0-1-42.us-east-1.compute.internal",
+  "host": "payment-service",
+  "service": "payment-service",
+  "tags": ["service:payment-service", "env:production", "team:platform"],
+  "url": "https://app.datadoghq.com/monitors/7654321",
+  "monitor_id": 7654321,
+  "monitor_name": "payment-service CPU > 90%",
+  "org": {
+    "id": "acme123",
+    "name": "Acme Corp"
+  },
+  "severity": "critical",
+  "priority_reason": "P1 - Production service degraded",
+  "text": "%%is_alert%%\npayment-service CPU utilization has exceeded 90% (current: 94.7%) for the past 5 minutes.\n\nMetric: system.cpu.user\nHost: ip-10-0-1-42.us-east-1.compute.internal\nScope: service:payment-service, env:production\n\nThis is impacting checkout flow response times.\n%%end%%",
+  "message": "payment-service CPU utilization has exceeded 90% (current: 94.7%)",
+  "body": "CPU utilization threshold exceeded",
+  "date_happened": 1705329600,
+  "date_detected": 1705329600,
+  "last_updated_ts": 1705329600,
+  "triggered_at": "2024-01-15T14:40:00Z",
+  "snapshot": "https://app.datadoghq.com/snapshot/view/abc123",
+  "metric": {
+    "name": "system.cpu.user",
+    "value": 94.7,
+    "threshold": 90.0
+  },
+  "event": {
+    "id": "7654321",
+    "title": "HIGH CPU utilization on payment-service",
+    "text": "CPU exceeded 90%",
+    "priority": "normal",
+    "host": "payment-service",
+    "date_happened": 1705329600,
+    "alert_type": "error",
+    "source_type_name": "Datadog"
+  }
+}
