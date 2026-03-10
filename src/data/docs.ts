@@ -6,9 +6,12 @@ export interface DocPage {
 }
 
 export const docsCategories = [
-  { label: "Getting Started", items: ["introduction", "getting-started", "developer-setup", "deployment"] },
-  { label: "How-To Guides", items: ["how-to-investigate", "connectors", "webhooks", "llm-providers", "rbac", "data-retention"] },
+  { label: "Getting Started", items: ["introduction", "getting-started"] },
+  { label: "Investigating Incidents", items: ["how-to-investigate", "webhooks", "connectors"] },
+  { label: "Configuration", items: ["llm-providers"] },
+  { label: "Administration", items: ["rbac", "data-retention"] },
   { label: "Reference", items: ["cli-reference", "api-reference", "architecture"] },
+  { label: "Self-Hosting", items: ["deployment", "developer-setup"] },
   { label: "Support", items: ["troubleshooting"] },
 ];
 
