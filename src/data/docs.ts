@@ -1233,7 +1233,7 @@ To improve hypothesis quality:
   connectors: {
     slug: "connectors",
     title: "Connector Setup",
-    category: "How-To Guides",
+    category: "Investigating Incidents",
     content: `# Connector Setup Guide
 
 BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a real-world monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, or code changes).
