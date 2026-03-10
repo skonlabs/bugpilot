@@ -75,7 +75,7 @@ export default function Credentials() {
 
           <div className="rounded-lg border bg-info/5 p-4 text-sm">
             <p className="font-medium">Activate the CLI</p>
-            <code className="mt-2 block rounded bg-foreground px-3 py-2 font-mono text-xs text-primary-foreground">bugpilot activate --key {cred.api_key} --secret YOUR_SECRET</code>
+            <code className="mt-2 block rounded bg-foreground px-3 py-2 font-mono text-xs text-primary-foreground">bugpilot auth activate --key {cred.api_key} --secret YOUR_SECRET</code>
           </div>
         </div>
       )}

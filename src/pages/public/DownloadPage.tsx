@@ -59,11 +59,11 @@ export default function DownloadPage() {
 
           <div className="mt-12 space-y-6">
             <h2 className="text-2xl font-bold">Activate the CLI</h2>
-            <p className="text-muted-foreground">After installation, activate BugPilot with your license key:</p>
-            <CopyBlock text="bugpilot auth activate --key bp_YOUR_LICENSE_KEY" />
+            <p className="text-muted-foreground">After installation, activate BugPilot with your license key and API secret:</p>
+            <CopyBlock text="bugpilot auth activate --key bp_YOUR_LICENSE_KEY --secret YOUR_API_SECRET" />
             <div className="rounded-lg border bg-info/10 p-4 text-sm">
-              <p className="font-medium text-info">Where do I find my license key?</p>
-              <p className="mt-1 text-muted-foreground">Your license key is available in your dashboard under <strong>API Credentials</strong>. If you don't have one, ask your admin to generate a key for you.</p>
+              <p className="font-medium text-info">Where do I find my credentials?</p>
+              <p className="mt-1 text-muted-foreground">Your license key and API secret are shown under <strong>API Credentials</strong> after you log in. The secret is only displayed once at generation time — store it securely.</p>
             </div>
           </div>
 
