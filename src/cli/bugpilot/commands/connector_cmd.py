@@ -24,9 +24,93 @@ from bugpilot.session import APIError
 
 app = typer.Typer(help="Manage data source connectors")
 
+_CONNECTOR_TEMPLATE = """\
+# BugPilot Connector Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+# Uncomment and fill in the connector(s) you want to use.
+# Secrets can be stored as environment variables:  api_key: ${MY_ENV_VAR}
+#
+# Apply after editing:  bugpilot connector test
+# ──────────────────────────────────────────────────────────────────────────────
+
+connectors:
+
+  # ── Datadog ───────────────────────────────────────────────────────────────
+  # datadog:
+  #   api_key: ${DATADOG_API_KEY}          # required, secret
+  #   app_key: ${DATADOG_APP_KEY}          # required, secret
+  #   site: datadoghq.com                  # e.g. datadoghq.eu, us3.datadoghq.com
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  # grafana:
+  #   url: https://grafana.example.com     # required
+  #   api_token: ${GRAFANA_TOKEN}          # required, service-account token
+  #   org_id: "1"                          # default: 1
+  #   prometheus_datasource_uid:           # optional
+
+  # ── AWS CloudWatch ────────────────────────────────────────────────────────
+  # cloudwatch:
+  #   aws_access_key_id: AKIAIOSFODNN7EXAMPLE
+  #   aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+  #   region: us-east-1
+  #   log_group_names:                     # optional
+  #     - /aws/lambda/my-function
+
+  # ── GitHub ────────────────────────────────────────────────────────────────
+  # github:
+  #   token: ${GITHUB_TOKEN}               # PAT or GitHub App token
+  #   org: my-org
+  #   repos:                               # optional – omit to include all
+  #     - my-repo
+
+  # ── Kubernetes ────────────────────────────────────────────────────────────
+  # kubernetes:
+  #   api_server: https://k8s.example.com:6443
+  #   token: ${K8S_SERVICE_ACCOUNT_TOKEN}
+  #   namespace: production
+  #   extra_namespaces:                    # optional
+  #     - staging
+  #   ca_cert_path:                        # optional, e.g. /etc/ssl/certs/ca.crt
+
+  # ── PagerDuty ─────────────────────────────────────────────────────────────
+  # pagerduty:
+  #   api_key: ${PAGERDUTY_API_KEY}
+  #   from_email: oncall@example.com
+  #   service_ids:                         # optional
+  #     - P1234567
+"""
+
 
 def _get_ctx(typer_ctx: typer.Context) -> AppContext:
     return typer_ctx.obj
+
+
+# ---------------------------------------------------------------------------
+# init
+# ---------------------------------------------------------------------------
+
+@app.command("init")
+def cmd_init(
+    ctx: typer.Context,
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing config"),
+) -> None:
+    """Write a template config.yaml to ~/.config/bugpilot/config.yaml."""
+    from bugpilot.config_loader import CONFIG_DIR, CONFIG_YAML
+
+    if CONFIG_YAML.exists() and not force:
+        print_warning(f"Config already exists: {CONFIG_YAML}")
+        print_info("Use --force to overwrite, or edit it directly.")
+        raise typer.Exit(0)
+
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_YAML.write_text(_CONNECTOR_TEMPLATE)
+    CONFIG_YAML.chmod(0o600)
+
+    print_success(f"Template written to {CONFIG_YAML}")
+    console.print(
+        "\n[dim]Uncomment the connector(s) you want, fill in your credentials,\n"
+        "then run:[/dim]  bugpilot connector test\n"
+    )
 
 
 # ---------------------------------------------------------------------------
