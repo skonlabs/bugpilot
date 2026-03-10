@@ -29,7 +29,7 @@ export default function Index() {
               CLI-first debugging platform
             </div>
             <h1 className="text-balance text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
-              Your AI Copilot for{" "}
+              AI That Finds the Root Cause of{" "}
               <span className="text-primary">Production Incidents</span>
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
