@@ -1966,7 +1966,7 @@ Rule-based and graph correlation hypotheses are available instantly without any 
   rbac: {
     slug: "rbac",
     title: "Users & Roles",
-    category: "How-To Guides",
+    category: "Administration",
     content: `# How to Manage Users and Roles
 
 BugPilot uses role-based access control (RBAC) with four roles. This guide covers role assignments, permissions, and common administration tasks.
