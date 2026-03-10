@@ -76,7 +76,7 @@ Phase 3: Raw payload
 
 ## Updating Retention Settings
 
-Admins can update the retention policy via the API or the dashboard under **Settings → Data Retention**:
+Admins can update the retention policy via the API:
 
 ```bash
 curl -X PATCH https://api.bugpilot.io/api/v1/admin/org/settings \

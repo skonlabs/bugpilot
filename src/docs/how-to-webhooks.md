@@ -1,4 +1,4 @@
-# How to Configure Webhooks
+# How to Configure Webhooks (Automatic Mode)
 
 BugPilot can receive webhooks from your monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
 
@@ -26,7 +26,10 @@ Create new     Update existing
 investigation  investigation
           │
           ▼
-Evidence collection enqueued
+Evidence collection begins
+          │
+          ▼
+Open terminal → bugpilot investigate list --status open
 ```
 
 ---
@@ -42,28 +45,36 @@ Evidence collection enqueued
 
 ---
 
-## Step 1: Register a Webhook Secret
+## Step 1: Add a Webhook Secret to Your Config
 
-Each webhook source requires a secret (minimum 32 characters) used to verify incoming request signatures.
-
-Via the dashboard: **Settings → Webhooks → Add Webhook**
-
-Via the API:
+Each webhook source requires a secret (minimum 32 characters) used to verify incoming request signatures. Add the secret to the `webhooks` section of `~/.config/bugpilot/config.yaml`:
 
 ```bash
-curl -X POST https://api.bugpilot.io/api/v1/admin/webhooks \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source": "datadog",
-    "secret": "your-webhook-secret-min-32-chars-long",
-    "description": "Production Datadog alerts"
-  }'
+# Generate a starter config if you haven't already
+bugpilot config init
 ```
+
+Then edit `~/.config/bugpilot/config.yaml` and fill in the `webhooks` section:
+
+```yaml
+webhooks:
+  datadog:
+    secret: "${DD_WEBHOOK_SECRET}"
+  grafana:
+    secret: "${GRAFANA_WEBHOOK_SECRET}"
+  cloudwatch:
+    secret: "${CW_WEBHOOK_SECRET}"
+  pagerduty:
+    secret: "${PD_WEBHOOK_SECRET}"
+```
+
+Use a different secret for each source. Secrets must be at least 32 characters.
 
 ---
 
 ## Step 2: Configure Your Monitoring Platform
+
+Point your monitoring platform's webhook/notification settings at the BugPilot endpoint and set the shared secret.
 
 ### Datadog
 
@@ -71,7 +82,7 @@ curl -X POST https://api.bugpilot.io/api/v1/admin/webhooks \
 2. Add a new webhook:
    - **URL:** `https://api.bugpilot.io/api/v1/webhooks/datadog`
    - **Payload:** Leave as default (standard Datadog format)
-   - **Secret:** Use the secret you registered in Step 1
+   - **Secret:** The value you set for `webhooks.datadog.secret` in config.yaml
 3. Add the webhook to any monitor under **Notify your team**
 
 ### Grafana
@@ -94,7 +105,38 @@ curl -X POST https://api.bugpilot.io/api/v1/admin/webhooks \
 1. Go to **Integrations → Generic Webhooks (v3)**
 2. Add endpoint: `https://api.bugpilot.io/api/v1/webhooks/pagerduty`
 3. Select events: **incident.triggered**, **incident.acknowledged**, **incident.resolved**
-4. Set the webhook secret to match what you registered in Step 1
+4. Set the webhook secret to match what you set in config.yaml
+
+---
+
+## Step 3: Verify the Config
+
+```bash
+bugpilot config validate
+```
+
+```
+✓ Config is valid.
+  2 connector(s) configured
+```
+
+---
+
+## Using Automatic Mode
+
+After webhooks are configured, alerts create investigations automatically. In the terminal:
+
+```bash
+# See what investigations have been auto-created
+bugpilot investigate list --status open
+
+# Check the status of an auto-created investigation
+bugpilot incident status inv_7f3a2b
+
+# Continue from where BugPilot left off — add more evidence, review hypotheses
+bugpilot evidence collect --investigation-id inv_7f3a2b ...
+bugpilot hypotheses list --investigation-id inv_7f3a2b
+```
 
 ---
 
@@ -115,15 +157,11 @@ If similarity exceeds the threshold, the webhook updates the existing investigat
 
 ## Secret Rotation
 
-BugPilot supports dual-secret rotation — both the current and previous secret are valid during a grace window, so you can rotate without downtime.
+To rotate a webhook secret without downtime:
 
-```bash
-# Update with new secret (old secret remains valid for 1 hour)
-curl -X PATCH https://api.bugpilot.io/api/v1/admin/webhooks/{webhook_id} \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"secret": "your-new-secret-min-32-chars-long"}'
-```
+1. Update the secret in `~/.config/bugpilot/config.yaml`
+2. Update the secret in your monitoring platform
+3. BugPilot supports a 1-hour grace window where both the old and new secret are accepted
 
 ---
 
@@ -137,21 +175,9 @@ Webhook endpoints are rate-limited to **100 requests per minute** per IP + org c
 
 **401 Unauthorized on delivery**
 - The signature header is missing or the secret doesn't match
-- Verify the secret in your monitoring platform matches the registered secret exactly
+- Verify the secret in your monitoring platform matches `webhooks.<source>.secret` in config.yaml exactly (no extra spaces or encoding differences)
 - Check for encoding differences (URL-encoding, extra whitespace)
 
 **Webhook received but no investigation created**
-- Check the structured logs: `bugpilot_webhook_verification_failures_total` Prometheus metric
 - Verify the webhook payload format matches the expected schema for your source
-
-**Testing with sample payloads**
-
-Use the sample webhook payloads to test your setup:
-
-```bash
-# Datadog sample
-curl -X POST https://api.bugpilot.io/api/v1/webhooks/datadog \
-  -H "Content-Type: application/json" \
-  -H "X-Hub-Signature: sha256=<computed_hmac>" \
-  -d @sample_webhook_payloads/datadog.json
-```
+- If a dedup check matched an existing open investigation, the webhook updated it — check `bugpilot investigate list --status open`

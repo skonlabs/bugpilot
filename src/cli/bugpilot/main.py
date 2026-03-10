@@ -13,6 +13,8 @@ from rich.console import Console
 from bugpilot.context import AppContext
 from bugpilot.commands import (
     auth_cmd,
+    config_cmd,
+    connector_cmd,
     evidence_cmd,
     export_cmd,
     fix_cmd,
@@ -34,6 +36,8 @@ app = typer.Typer(
 # Register command groups
 # ---------------------------------------------------------------------------
 app.add_typer(auth_cmd.app, name="auth")
+app.add_typer(connector_cmd.app, name="connector")
+app.add_typer(config_cmd.app, name="config")
 app.add_typer(investigate_cmd.app, name="investigate")
 app.add_typer(incident_cmd.app, name="incident")
 app.add_typer(evidence_cmd.app, name="evidence")

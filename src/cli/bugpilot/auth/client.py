@@ -27,6 +27,7 @@ async def activate(
     ctx: AppContext,
     license_key: str,
     email: str,
+    api_secret: Optional[str] = None,
     display_name: Optional[str] = None,
 ) -> dict:
     """
@@ -40,8 +41,9 @@ async def activate(
             "/api/v1/auth/activate",
             json={
                 "license_key": license_key,
+                "api_secret": api_secret,
                 "email": email,
-                "device_fp": device_fp,
+                "device_fingerprint": device_fp,
                 "display_name": display_name,
             },
         )
