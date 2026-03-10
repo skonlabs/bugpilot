@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     # Evidence TTL
     EVIDENCE_TTL_MINUTES: int = 10
 
+    # Supabase
+    # Get these from your Supabase project: Settings → API
+    SUPABASE_URL: str = ""           # https://<project-ref>.supabase.co
+    SUPABASE_ANON_KEY: str = ""      # public anon key (safe for client-side)
+    SUPABASE_SERVICE_ROLE_KEY: str = ""  # service role key (server-side only, bypasses RLS)
+
 
 @lru_cache()
 def get_settings() -> Settings:
