@@ -1,341 +1,261 @@
-# BugPilot Architecture
+# Architecture Overview
 
-## Overview
+BugPilot turns a vague symptom — "payment service is slow" — into ranked, evidence-backed debugging hypotheses with suggested safe actions. This document explains the system architecture, data flow, and key design decisions.
 
-BugPilot is a CLI-first debugging and investigation platform with a REST API backend.
+---
 
-**Core user journey:**
-```
-symptom → evidence collection → timeline reconstruction → hypothesis generation → safest next action
-```
-
-## System Components
+## System Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       User (Terminal)                        │
-└────────────────────────┬────────────────────────────────────┘
-                         │ CLI (bugpilot)
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    FastAPI Backend (port 8000)                │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  Auth    │  │Investig. │  │Evidence  │  │Hypotheses│   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ Actions  │  │  Graph   │  │ServiceMap│  │  Admin   │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Webhook Intake                          │   │
-│  │  /v1/webhooks/{datadog,grafana,cloudwatch,pagerduty} │   │
-│  └──────────────────────────────────────────────────────┘   │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Core Services                           │   │
-│  │  Config | DB | Security | RBAC | Logging             │   │
-│  └──────────────────────────────────────────────────────┘   │
-└────────────────────────┬────────────────────────────────────┘
-                         │ asyncpg
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   PostgreSQL 16                               │
-│   21 tables: orgs, licenses, users, sessions,                │
-│   investigations, evidence, hypotheses, actions,             │
-│   connectors, timeline_events, service_maps, nodes,         │
-│   edges, webhooks, webhook_deliveries, audit_logs,          │
-│   api_keys, investigation_members, comments,                │
-│   notification_subscriptions, llm_request_logs             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                          User / CI Pipeline                         │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │ CLI (typer + rich)
+                                ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      BugPilot REST API (FastAPI)                     │
+│                                                                     │
+│  /auth  /investigations  /evidence  /hypotheses  /actions           │
+│  /graph  /webhooks  /service-mappings  /admin  /health  /metrics    │
+└──────────┬───────────────────────────────────────────────┬──────────┘
+           │                                               │
+           ▼                                               ▼
+┌──────────────────┐                           ┌──────────────────────┐
+│   PostgreSQL     │                           │   Evidence Collector  │
+│  (async/asyncpg) │◄──────────────────────────│  (asyncio.gather)    │
+└──────────────────┘                           └──────┬───────────────┘
+                                                      │ concurrent
+           ┌──────────────────────────────────────────┼──────────────────┐
+           ▼                 ▼                ▼        ▼       ▼         ▼
+     ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌────┐  ┌────┐  ┌───────┐
+     │ Datadog  │  │   Grafana    │  │CloudWatch│  │ K8s│  │ GH │  │  PD   │
+     └──────────┘  └──────────────┘  └──────────┘  └────┘  └────┘  └───────┘
 ```
 
 ---
 
-## Investigation Graph Model
+## Core Concepts
 
-The investigation graph is the central data structure in BugPilot. It represents all known facts about an incident as a directed property graph.
+### Investigation
 
-### Node Types
+An **Investigation** is the top-level container for a debugging session. It is created either manually via CLI/API or automatically when a webhook alert arrives. An investigation tracks:
 
-| Node Type | Description |
-|-----------|-------------|
-| `investigation` | Root node; represents the investigation itself |
-| `symptom` | Observed anomaly (e.g., "15% HTTP 500 error rate") |
-| `business_operation` | Affected business process (e.g., "checkout flow") |
-| `service_or_component` | Software service or infrastructure component |
-| `event` | A discrete occurrence (deployment, config change, etc.) |
-| `evidence` | A collected evidence artifact (log snapshot, metric, trace) |
-| `hypothesis` | A proposed root cause explanation |
-| `action` | A proposed or executed remediation action |
-| `outcome` | Result of an action |
-| `deployment` | A code deployment event |
-| `code_change` | A commit or pull request |
-| `user_report` | Report from an end user |
-| `environment` | Infrastructure environment (Kubernetes cluster, AWS region) |
+- The affected service(s)
+- A timeline of events
+- Evidence collected from connectors
+- Hypotheses about the root cause
+- Actions taken (with approvals)
+- The final outcome
 
-### Edge Types
+Investigations can be **branched** for parallel hypothesis exploration. Each branch gets its own graph slice without affecting the main investigation.
 
-| Edge Type | Meaning |
-|-----------|---------|
-| `contains` | Investigation contains a symptom or sub-node |
-| `affects` | Symptom affects a service |
-| `depends_on` | Service depends on another service |
-| `precedes` | Event preceded another event (temporal) |
-| `supports` | Evidence supports a hypothesis |
-| `contradicts` | Evidence contradicts a hypothesis |
-| `confirms` | Action confirmed a hypothesis |
-| `rejects` | Evidence/action rejected a hypothesis |
-| `branch_lineage` | Connects branches of the investigation graph |
+### Evidence
 
-### GraphSlice
+**Evidence items** are normalised facts collected from connectors. Each item has:
 
-A `GraphSlice` is a serializable, immutable view of a subgraph. It is the **only** structure passed between the graph engine and the LLM layer. It carries a `is_redacted: bool` flag that must be `True` before being passed to any LLM provider.
+- `source_system` — which connector produced it (e.g. `datadog`, `github`)
+- `capability` — what kind of data it is (`LOGS`, `METRICS`, `DEPLOYMENTS`, etc.)
+- `normalized_summary` — a ≤500-character human-readable summary (always kept)
+- `payload_ref` — reference to the full raw payload in external storage (nulled after TTL)
+- `reliability_score` — 0-1 score adjusted for staleness and source quality
+- `is_redacted` — whether PII/secrets have been scrubbed
+- `redaction_manifest` — a log of what was redacted and why
 
-```python
-@dataclass
-class GraphSlice:
-    investigation_id: str
-    branch_id: str
-    nodes: list[GraphNode]
-    edges: list[GraphEdge]
-    metadata: dict[str, Any]
-    is_redacted: bool = False  # Must be True before passing to LLM
+Evidence is **never sent to an LLM in raw form**. The privacy layer redacts it first.
+
+### Investigation Graph
+
+Every investigation maintains a **graph** (not a simple list) of nodes and edges. Nodes represent symptoms, services, evidence items, and deployment events. Edges represent causal and temporal relationships.
+
+```
+[Symptom: 5xx rate spike]
+       │
+       ├──caused_by──► [Evidence: Datadog alert at 14:31]
+       │
+       └──correlates_with──► [Deployment: a3f8c2d at 14:23]
+                                    │
+                                    └──code_change──► [GitHub commit: Update Stripe SDK v4]
+```
+
+The graph is stored as `GraphNodeModel` and `GraphEdgeModel` rows, and can be queried as a `GraphSlice` — a lightweight in-memory snapshot used by the hypothesis engine and LLM layer.
+
+### Hypothesis Engine
+
+The hypothesis engine runs a **6-pass pipeline** on each `GraphSlice`:
+
+1. **Rule-based pass** — Pattern matching for known failure modes:
+   - OOMKilled / memory spike → Memory Exhaustion hypothesis
+   - 5xx errors + recent deployment → Bad Deployment Introduced Regression
+   - High latency + multiple services → Upstream Dependency Degradation
+
+2. **Graph correlation pass** — Scores hypotheses by edge density. Symptoms with ≥3 connected edges and related services generate Service Graph Anomaly hypotheses with confidence proportional to edge count.
+
+3. **Historical reranking** — (When DB context is available) Previous investigations with similar evidence patterns adjust confidence scores.
+
+4. **LLM synthesis pass** — If the graph slice is redacted (`is_redacted=True`), the LLM is asked to generate additional hypotheses not already covered by rule-based or graph passes. **The LLM never receives raw evidence.**
+
+5. **Merge and deduplicate** — Jaccard word-overlap similarity. Duplicates above the threshold (0.75) are merged, keeping the higher-confidence version.
+
+6. **Rank** — Sorted by confidence_score descending. In single-lane investigations (evidence from only one capability type), all scores are capped at 0.4 and `is_single_lane=True` is set.
+
+### Privacy and Redaction
+
+BugPilot enforces a strict privacy boundary. Before any data can be sent to an LLM provider, it must pass through the redaction pipeline:
+
+**Patterns scrubbed:**
+- Email addresses
+- Phone numbers (E.164 and US formats)
+- JSON Web Tokens
+- Bearer tokens
+- Payment card numbers (Luhn)
+- AWS secret access keys
+- PEM private keys
+
+The `LLMService.complete()` method raises `ValueError` if a non-redacted `GraphSlice` is passed. This is enforced at the code level, not configuration.
+
+### Deduplication
+
+When a new investigation is created (manually or via webhook), BugPilot checks for existing open investigations with overlapping context using a **weighted similarity score**:
+
+| Dimension | Weight | Description |
+|-----------|--------|-------------|
+| Service overlap | 40% | Jaccard overlap of linked service names |
+| Time overlap | 30% | Overlap of evidence time windows |
+| Alert signature | 20% | Hash match on alert name / monitor name |
+| Symptom text | 10% | Word-overlap on title strings |
+
+If the score exceeds 0.85, the new investigation is flagged as a potential duplicate. BugPilot **never silently merges** — it reports the match and lets the user decide.
+
+### Remediation and Approval
+
+Actions suggested by BugPilot are assigned a risk level. The approval requirement depends on role:
+
+| Risk level | Approval required |
+|-----------|-------------------|
+| `low` | None — any investigator can run |
+| `medium` | `approver` role |
+| `high` | `approver` role |
+| `critical` | `approver` role |
+
+Every action supports a **dry-run mode** that simulates the action and prints what would happen without making any changes.
+
+---
+
+## Database Schema Summary
+
+BugPilot uses 21 PostgreSQL tables:
+
+```
+organisations → licenses → users → sessions
+organisations → investigations → branches
+investigations → graph_nodes
+investigations → graph_edges
+investigations → evidence_items → hypothesis_evidence_links → hypotheses
+hypotheses → actions → approvals
+investigations → outcomes
+organisations → connector_configs
+organisations → service_mapping_models
+organisations → retention_policies
+organisations → audit_logs
+organisations → llm_usage_logs
+```
+
+All primary keys are UUIDs. All timestamps are `TIMESTAMPTZ`. JSON columns use PostgreSQL's `JSONB` type for indexability. A cross-dialect `TypeDecorator` ensures the test suite works with SQLite.
+
+---
+
+## Authentication Flow
+
+```
+CLI                         API                      DB
+ │                           │                        │
+ │── POST /auth/activate ───►│                        │
+ │   {license_key, device_fp}│                        │
+ │                           │── verify license ─────►│
+ │                           │── check device count ──►│
+ │                           │── create Session ──────►│
+ │◄── {jwt_token, refresh} ──│                        │
+ │                           │                        │
+ │── (on expiry) POST /auth/ │                        │
+ │   refresh {refresh_token} │                        │
+ │◄── {new_jwt, new_refresh} │                        │
+```
+
+- JWT tokens are short-lived (1 hour by default)
+- Refresh tokens are opaque (stored as bcrypt hashes)
+- Each refresh rotates both tokens
+- `logout` revokes the session row
+
+---
+
+## API Versioning
+
+All routes live under `/api/v1/`. The health and metrics endpoints are at the root:
+
+```
+GET  /health           Liveness probe
+GET  /health/ready     Readiness probe (checks DB)
+GET  /metrics          Prometheus metrics (text/plain)
 ```
 
 ---
 
-## Connector Interface
+## Observability
 
-All connectors implement the `BaseConnector` abstract base class from `app/connectors/base.py`.
+### Prometheus Metrics
 
-### Required Methods
+| Metric | Type | Description |
+|--------|------|-------------|
+| `bugpilot_activations_total` | Counter | License activations |
+| `bugpilot_active_investigations` | Gauge | Open investigations |
+| `bugpilot_investigation_duration_seconds` | Histogram | Time from open to resolved |
+| `bugpilot_time_to_first_hypothesis_seconds` | Histogram | Time from open to first hypothesis |
+| `bugpilot_connector_errors_total` | Counter | Per-connector errors (label: connector) |
+| `bugpilot_connector_rate_limits_total` | Counter | Per-connector 429s |
+| `bugpilot_webhook_verification_failures_total` | Counter | Webhook HMAC failures |
+| `bugpilot_llm_requests_total` | Counter | LLM completions (label: provider) |
+| `bugpilot_llm_tokens_total` | Counter | LLM tokens used |
+| `bugpilot_http_requests_total` | Counter | HTTP requests (label: method, path, status) |
+| `bugpilot_http_request_duration_seconds` | Histogram | HTTP latency |
 
-```python
-class BaseConnector(ABC):
-    def capabilities(self) -> list[ConnectorCapability]: ...
-    async def validate(self) -> ValidationResult: ...
-    async def fetch_evidence(
-        self,
-        capability: ConnectorCapability,
-        service: str,
-        since: datetime,
-        until: datetime,
-        limit: int = 500,
-    ) -> list[RawEvidenceItem]: ...
+### Structured Logging
+
+All log output is structured JSON (via structlog) with consistent fields:
+
+```json
+{
+  "timestamp": "2024-01-15T14:31:00.123Z",
+  "level": "info",
+  "event": "hypothesis_generated",
+  "investigation_id": "inv_7f3a2b",
+  "count": 3,
+  "is_single_lane": false
+}
 ```
 
-### ConnectorCapability Enum
-
-```
-LOGS | METRICS | TRACES | ALERTS | INCIDENTS |
-DEPLOYMENTS | CODE_CHANGES | INFRASTRUCTURE_STATE
-```
-
-### How to Add a New Connector
-
-1. Create `app/connectors/{name}/` directory with `__init__.py` and `connector.py`.
-2. Implement `BaseConnector` in `connector.py`.
-3. Declare `_SUPPORTED_CAPABILITIES` as a module-level constant.
-4. Wrap all HTTP calls with `@async_retry(max_attempts=3, base_delay=1.0, jitter=True)`.
-5. Catch `httpx.HTTPStatusError` and check for 429 (rate limit) - the retry decorator handles the `Retry-After` header automatically.
-6. Return `[]` (not raise) when `capability` is not in `self.capabilities()`.
-7. Add the connector to `ConnectorKind` enum in `app/models/all_models.py`.
-8. Register the connector in the connector factory (when implemented).
-9. Add connector tests to `backend/tests/test_connectors.py`.
-10. Document the connector in `docs/connectors.md`.
+In development (TTY), logs are printed in a human-readable format with colour.
 
 ---
 
-## Hypothesis Pipeline
+## Retention and Data Lifecycle
 
-The hypothesis engine runs up to 6 sequential passes over the evidence graph. Each pass can add, filter, or re-score hypothesis candidates.
+BugPilot implements a three-phase retention policy configurable per organisation:
 
-```
-Pass 1: Rule-based heuristics
-  - Pattern match evidence kinds against known failure modes
-  - Config diff → "recent change caused regression"
-  - Metric spike → "resource saturation"
-  - Log errors → "application error"
+| Phase | Default | Action |
+|-------|---------|--------|
+| Investigation archive | 365 days | Resolved investigations are archived |
+| Evidence metadata | 90 days | Evidence rows are deleted |
+| Raw payload expiry | 30 days | `payload_ref` is nulled (row kept) |
 
-Pass 2: Graph-based reasoning
-  - Traverse service dependency edges to identify upstream causes
-  - Correlate evidence timestamps with event nodes
-  - Weight hypotheses by temporal proximity to symptom onset
-
-Pass 3: Historical similarity
-  - Query past resolved investigations with similar symptoms+service
-  - Boost confidence of hypotheses that were confirmed in similar past cases
-
-Pass 4: LLM generation
-  - Build a GraphSlice (MUST be redacted before this step)
-  - Send to configured LLM provider with versioned prompt template
-  - Parse and normalize LLM-generated hypothesis candidates
-
-Pass 5: Deduplication
-  - Compute pairwise similarity between candidates
-  - Merge candidates above the dedup threshold (default: 0.75)
-  - Weighted scoring: service (40%) + symptoms (30%) + timewindow (20%) + description (10%)
-
-Pass 6: Ranking
-  - Sort all candidates by confidence_score descending
-  - Apply user-configurable max_hypotheses limit
-  - Return final ranked list
-```
+Each phase writes an `AuditLog` entry before any data mutation, making the operation fully auditable and idempotent. A daily purge job runs `RetentionService.run_daily_purge()` across all organisations.
 
 ---
 
-## LLM Abstraction
+## Security Design Principles
 
-BugPilot supports 4 LLM providers via a common interface.
-
-### Provider Interface
-
-```python
-class LLMProvider(ABC):
-    async def complete(self, messages: list[Message], max_tokens: int = 2000) -> LLMResponse: ...
-    def model_name(self) -> str: ...
-    def provider_name(self) -> str: ...
-```
-
-### Supported Providers
-
-| Provider | Module | Model examples |
-|----------|--------|---------------|
-| Anthropic Claude | `anthropic_provider.py` | claude-3-5-sonnet, claude-opus-4 |
-| OpenAI | `openai_provider.py` | gpt-4o, gpt-4-turbo |
-| Azure OpenAI | `azure_openai_provider.py` | azure-gpt-4o |
-| Ollama (local) | `ollama_provider.py` | llama3, mistral |
-
-### Prompt Building from GraphSlice
-
-1. Assert `graph_slice.is_redacted is True` - raise `ValueError` otherwise.
-2. Serialize nodes and edges to a concise text or JSON representation.
-3. Inject the serialized graph into the versioned prompt template.
-4. Include investigation metadata: service name, severity, symptoms.
-5. Send to provider via `complete()`.
-
-### Cache Invalidation
-
-LLM responses are cached by a composite key:
-```
-cache_key = SHA256(graph_checksum + ":" + prompt_version + ":" + SHA256(prompt_template))
-```
-
-Cache is invalidated when:
-- The graph changes (new evidence, new edges, node property updates)
-- The prompt version is bumped (e.g., from `v1.0.0` to `v2.0.0`)
-- `bypass_cache=True` is passed (forces a fresh request without deleting the cached entry)
-
----
-
-## RBAC Model
-
-### Roles
-
-| Role | Level | Description |
-|------|-------|-------------|
-| `viewer` | 0 | Read-only access to investigations |
-| `investigator` | 1 | Can create investigations and collect evidence |
-| `approver` | 2 | Can approve and run actions |
-| `admin` | 3 | Full access including connector and org management |
-
-### Permission Matrix
-
-| Permission | viewer | investigator | approver | admin |
-|-----------|--------|-------------|---------|-------|
-| `read_investigation` | Y | Y | Y | Y |
-| `create_investigation` | - | Y | Y | Y |
-| `collect_evidence` | - | Y | Y | Y |
-| `generate_hypothesis` | - | Y | Y | Y |
-| `suggest_action` | - | Y | Y | Y |
-| `approve_action` | - | - | Y | Y |
-| `run_action` | - | - | Y | Y |
-| `manage_connectors` | - | - | - | Y |
-| `manage_roles` | - | - | - | Y |
-| `manage_org_settings` | - | - | - | Y |
-| `manage_webhooks` | - | - | - | Y |
-
-Role hierarchy is strictly additive: each higher role includes all permissions of lower roles.
-
----
-
-## Session and Activation Flow
-
-```
-1. User runs: bugpilot auth activate --license-key <key>
-2. CLI sends: POST /api/v1/auth/activate
-   Body: { license_key, email, device_fp, display_name }
-
-3. Backend:
-   a. Hash license_key with SHA-256
-   b. Look up License by hash → validate status, expiry, seat limit
-   c. Upsert User record for (org_id, email)
-   d. Create JWT access token (1-hour TTL, HS256, claims: sub, org_id, device_fp, role, jti)
-   e. Create opaque refresh token (64-byte random, SHA-256 hashed in DB)
-   f. Store Session row with token_hash, refresh_hash, device_fp, ip_address
-   g. Return { access_token, refresh_token, expires_in, org_id, user_id, role }
-
-4. CLI stores tokens in ~/.config/bugpilot/session.json
-
-5. Token refresh:
-   POST /api/v1/auth/refresh { refresh_token }
-   → Revoke old session → Issue new access + refresh token pair (rotation)
-   → Old refresh token is immediately invalidated
-
-6. Logout:
-   POST /api/v1/auth/logout (Bearer token required)
-   → Revokes all sessions for this (user_id, device_fp) pair
-```
-
-### Device Fingerprint
-
-The device fingerprint (`device_fp`) is a hash derived from the CLI host machine. It is embedded in the JWT and stored in the Session row. This enables per-device session revocation.
-
----
-
-## Privacy and Redaction Boundary
-
-**Rule: No raw PII or secrets may ever be sent to an LLM provider.**
-
-### How it works
-
-1. All evidence payloads are stored with their raw content only during the `raw_payload_days` window (default: 7 days). After that, `raw_payload` is nulled; only `summary` is retained.
-
-2. Before building a `GraphSlice` for LLM consumption, the graph service calls `redact_dict()` on all node `properties` fields.
-
-3. `redact_dict()` applies these redaction patterns:
-   - Email addresses (`user@domain.com`)
-   - IPv4 addresses
-   - AWS access key IDs (`AKIA...`)
-   - JWT tokens (`eyJ...`)
-   - Generic API keys / tokens / passwords (key=value pattern)
-   - Credit/debit card numbers (13-16 digit sequences)
-
-4. The `GraphSlice.is_redacted` flag is set to `True` only after the redaction step is complete.
-
-5. LLM provider wrappers MUST assert `slice.is_redacted is True` and raise `ValueError` if not.
-
-### Adding New Redaction Patterns
-
-Add new regex patterns to `_PATTERNS` dict in `app/privacy/__init__.py`:
-
-```python
-_PATTERNS["my_pattern"] = re.compile(r"YOUR_REGEX_HERE")
-```
-
-All tests in `test_privacy.py` must pass after any pattern changes.
-
----
-
-## Webhook Intake
-
-BugPilot receives webhooks from external monitoring systems at:
-- `POST /v1/webhooks/datadog` — HMAC-SHA256 via `X-Datadog-Signature`
-- `POST /v1/webhooks/grafana` — HMAC-SHA256 via `X-Grafana-Signature` (sha256= prefix)
-- `POST /v1/webhooks/cloudwatch` — AWS SNS certificate-based verification
-- `POST /v1/webhooks/pagerduty` — HMAC-SHA256 via `X-PagerDuty-Signature` (v1= prefix, multi-sig)
-
-All endpoints support a dual-secret grace window for zero-downtime key rotation.
-
-Rate limiting: 100 requests per 60-second window per source IP + org combination.
-
-Intake records are normalized into `WebhookIntakeRecord` with fields: `source`, `org_id`, `event_type`, `timestamp`, `payload`, `signature_valid`, `metadata`.
+1. **Credentials never stored plaintext.** Connector credentials are Fernet-encrypted before database storage.
+2. **Passwords hashed with bcrypt.** All secrets (license keys, tokens) are stored as bcrypt or SHA-256 hashes.
+3. **LLM boundary enforced in code.** `LLMService` raises `ValueError` for non-redacted input — not a config flag.
+4. **Org isolation at every query.** All database queries filter by `org_id`. No cross-org data access is possible through the API.
+5. **Webhook signatures verified.** All four webhook handlers verify HMAC-SHA256 signatures with a dual-secret grace window for rotation.
+6. **Role-based access control.** Four roles (viewer, investigator, approver, admin) with a typed permission matrix. Elevation is never implicit.

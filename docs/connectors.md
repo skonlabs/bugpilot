@@ -1,366 +1,289 @@
-# BugPilot Connectors
+# Connector Setup Guide
 
-Connectors integrate BugPilot with external monitoring, logging, ticketing, and infrastructure systems.
+BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a real-world monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, or code changes).
 
-## Supported Connectors
-
-| Kind | Module | Category |
-|------|--------|----------|
-| `datadog` | `app/connectors/datadog/` | Monitoring + Logging + Tracing |
-| `grafana` | `app/connectors/grafana/` | Monitoring + Alerting |
-| `cloudwatch` | `app/connectors/cloudwatch/` | Cloud Monitoring |
-| `github` | `app/connectors/github/` | Source Control |
-| `kubernetes` | `app/connectors/kubernetes/` | Infrastructure |
-| `pagerduty` | `app/connectors/pagerduty/` | Incident Management |
+The more connectors you configure, the better BugPilot's hypotheses will be. A single-source investigation is marked as a **single-lane investigation** and confidence scores are automatically capped at 40% — prompting you to add more evidence sources.
 
 ---
 
-## Datadog Connector
+## Overview
 
-### Capabilities
+| Connector | Capabilities | Auth method |
+|-----------|-------------|-------------|
+| Datadog | Logs, Metrics, Traces, Alerts | API key + App key |
+| Grafana | Metrics, Alerts | API token |
+| AWS CloudWatch | Logs, Metrics, Alerts | Access key + Secret key |
+| GitHub | Code changes, Deployments | Personal access token |
+| Kubernetes | Infrastructure state, Deployments | Bearer token |
+| PagerDuty | Incidents, Alerts | REST API key |
 
-`LOGS` | `METRICS` | `TRACES` | `ALERTS`
+---
 
-### Required Credentials
+## Configuring Connectors via the Admin API
 
-| Field | Description | Where to find it |
-|-------|-------------|-----------------|
-| `api_key` | Datadog API key | Organization Settings → API Keys |
-| `app_key` | Datadog application key | Organization Settings → Application Keys |
-| `site` | Datadog site (default: `datadoghq.com`) | See [Datadog sites docs](https://docs.datadoghq.com/getting_started/site/) |
-
-### API Endpoints Used
-
-| Capability | Endpoint |
-|-----------|----------|
-| Validate | `GET /api/v1/validate` |
-| LOGS | `POST /api/v2/logs/events/search` |
-| METRICS | `GET /api/v1/query` |
-| TRACES | `GET /api/v2/spans/events` |
-| ALERTS | `GET /api/v1/monitor` |
-
-### Rate Limit Behavior
-
-Datadog enforces per-key rate limits. When a 429 response is received, the connector reads the `Retry-After` header and sleeps for the specified duration before retrying (up to `max_retries=3`). Exponential backoff with jitter applies when no `Retry-After` is present.
-
-### Known Limitations
-
-- Metrics endpoint (`/api/v1/query`) supports only a single query expression per request. Multiple metrics require multiple calls.
-- Traces endpoint (`/api/v2/spans/events`) may not return traces older than 15 days on Datadog's retention plan.
-- ALERTS endpoint (`/api/v1/monitor`) does not support time-range filtering; all monitors matching the service tag are returned and filtered client-side.
-
-### Example Configuration
-
-```yaml
-connectors:
-  datadog:
-    api_key: "dd_api_key_..."
-    app_key: "dd_app_key_..."
-    site: "datadoghq.com"
+```bash
+# Configure a Datadog connector
+curl -X POST http://localhost:8000/api/v1/admin/connectors \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "connector_type": "datadog",
+    "env_label": "production",
+    "credentials": {
+      "api_key": "YOUR_DATADOG_API_KEY",
+      "app_key": "YOUR_DATADOG_APP_KEY",
+      "base_url": "https://api.datadoghq.com"
+    }
+  }'
 ```
 
----
+Credentials are encrypted at rest using Fernet symmetric encryption before being stored in the database. The plaintext key is never persisted.
 
-## Grafana Connector
-
-### Capabilities
-
-`METRICS` | `ALERTS`
-
-### Required Credentials
-
-| Field | Description | Where to find it |
-|-------|-------------|-----------------|
-| `url` | Base URL of your Grafana instance | e.g., `https://grafana.example.com` |
-| `api_token` | Service account token | Administration → Service Accounts → Add Token |
-| `org_id` | Grafana organization ID (default: `1`) | Organization settings |
-
-### Optional Configuration
-
-| Field | Description |
-|-------|-------------|
-| `prometheus_datasource_uid` | UID of the Prometheus datasource to query. If not set, the connector auto-discovers the first Prometheus/Loki datasource. |
-
-### API Endpoints Used
-
-| Capability | Endpoint |
-|-----------|----------|
-| Validate | `GET /api/health` |
-| METRICS | `GET /api/datasources/proxy/{uid}/api/v1/query_range` |
-| ALERTS | `GET /api/v1/provisioning/alert-rules` |
-
-### Rate Limit Behavior
-
-Grafana does not enforce strict API rate limits by default. If Grafana is backed by a hosted cloud plan (Grafana Cloud), rate limits may apply. The connector applies standard exponential backoff on 429 responses.
-
-### Known Limitations
-
-- `ALERTS` endpoint (`/api/v1/provisioning/alert-rules`) returns all alert rules without time-range filtering. Rules are annotated with an `adaptation_note` in evidence metadata.
-- `METRICS` via the Prometheus datasource proxy requires the datasource to have query access enabled. Read-only service accounts with `Viewer` role are sufficient.
-- Loki log queries are not yet implemented (only Prometheus metrics proxy).
-
-### Example Configuration
-
-```yaml
-connectors:
-  grafana:
-    url: "https://grafana.example.com"
-    api_token: "glsa_..."
-    org_id: 1
-    prometheus_datasource_uid: "prometheus-prod"
-```
+See [`fixtures/sample_configs/sample_connector_config.yaml`](../fixtures/sample_configs/sample_connector_config.yaml) for a complete example.
 
 ---
 
-## CloudWatch Connector
+## Datadog
+
+### Required credentials
+
+| Field | Description |
+|-------|-------------|
+| `api_key` | Datadog API key (read-only is sufficient) |
+| `app_key` | Datadog Application key |
+| `base_url` | US: `https://api.datadoghq.com` · EU: `https://api.datadoghq.eu` |
+| `service_tag` | (Optional) Default Datadog service tag filter |
 
 ### Capabilities
 
-`METRICS` | `ALERTS`
+| Capability | API endpoint used |
+|-----------|-------------------|
+| `LOGS` | `POST /api/v2/logs/events/search` with `service:NAME` filter |
+| `METRICS` | `GET /api/v1/query` — CPU user, request rate |
+| `TRACES` | `GET /api/v2/spans/events` for the service |
+| `ALERTS` | `GET /api/v1/monitor` filtered by service tag |
 
-### Required Credentials
+### Minimum Datadog permissions
+
+- `logs_read_data`
+- `metrics_read`
+- `apm_read`
+- `monitors_read`
+
+---
+
+## Grafana
+
+### Required credentials
 
 | Field | Description |
 |-------|-------------|
-| `aws_access_key_id` | AWS access key ID |
-| `aws_secret_access_key` | AWS secret access key |
-| `region` | AWS region (e.g., `us-east-1`) |
+| `base_url` | Grafana instance URL (e.g. `https://grafana.example.com`) |
+| `api_token` | Service account token (Viewer role) |
+| `datasource_uid` | (Optional) Prometheus datasource UID; auto-discovered if omitted |
 
-Alternatively, the connector respects the standard AWS credential chain (environment variables, instance profile, ECS task role) when credentials are not explicitly configured.
+### Capabilities
 
-### Optional Configuration
+| Capability | API endpoint used |
+|-----------|-------------------|
+| `METRICS` | `/api/datasources/proxy/:uid/api/v1/query_range` |
+| `ALERTS` | `/api/v1/provisioning/alert-rules` |
+
+### Setup
+
+1. Grafana → Administration → Service accounts → Create service account (Viewer role).
+2. Generate a service account token.
+3. Copy your Prometheus datasource UID from Administration → Data sources.
+
+---
+
+## AWS CloudWatch
+
+### Required credentials
 
 | Field | Description |
 |-------|-------------|
-| `role_arn` | IAM role ARN to assume (for cross-account access) |
-| `log_group_names` | List of CloudWatch Log Group names to query |
+| `access_key_id` | AWS access key ID |
+| `secret_access_key` | AWS secret access key |
+| `region` | AWS region (e.g. `us-east-1`) |
+| `log_group_prefix` | (Optional) CloudWatch log group name or prefix |
 
-### Recommended IAM Permissions
+### Capabilities
+
+| Capability | AWS API used |
+|-----------|--------------|
+| `LOGS` | `StartQuery` + `GetQueryResults` (CloudWatch Insights) |
+| `METRICS` | `GetMetricData` (CPUUtilization, RequestCount) |
+| `ALERTS` | `DescribeAlarms` (state=ALARM) |
+
+### Minimum IAM permissions
 
 ```json
 {
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "cloudwatch:DescribeAlarms",
-        "cloudwatch:GetMetricData",
-        "cloudwatch:ListMetrics",
-        "logs:DescribeLogGroups",
-        "logs:FilterLogEvents",
-        "logs:GetLogEvents"
-      ],
-      "Resource": "*"
-    }
-  ]
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "logs:StartQuery",
+      "logs:GetQueryResults",
+      "cloudwatch:GetMetricData",
+      "cloudwatch:DescribeAlarms"
+    ],
+    "Resource": "*"
+  }]
 }
 ```
 
-### Rate Limit Behavior
-
-AWS SDK enforces service quotas. CloudWatch API calls are throttled at approximately 400 transactions per second (TPS). The connector uses exponential backoff on `ThrottlingException`.
-
-### Known Limitations
-
-- CloudWatch Logs Insights queries (complex analytics) are not yet implemented; only `FilterLogEvents` is used.
-- CloudWatch metric resolution is limited to 1-minute granularity for standard metrics; high-resolution metrics (1-second) require a separate API call.
-- Cross-region queries require instantiating a separate connector per region.
-
-### Example Configuration
-
-```yaml
-connectors:
-  cloudwatch:
-    aws_access_key_id: "AKIAIOSFODNN7EXAMPLE"
-    aws_secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-    region: "us-east-1"
-    log_group_names:
-      - "/aws/lambda/payment-service"
-      - "/ecs/checkout-service"
-```
+> BugPilot uses manual SigV4 signing (no boto3) to keep the image minimal. For production, prefer an IAM role on your EC2/ECS instance.
 
 ---
 
-## GitHub Connector
+## GitHub
 
-### Capabilities
-
-`CODE_CHANGES` | `DEPLOYMENTS`
-
-### Required Credentials
+### Required credentials
 
 | Field | Description |
 |-------|-------------|
-| `token` | GitHub personal access token or GitHub App installation token |
-| `org` | GitHub organization name |
+| `token` | Personal access token or GitHub App installation token |
+| `owner` | GitHub organisation or username |
+| `repo` | Default repository name |
 
-### Required Token Scopes
+### Capabilities
 
-For a PAT: `repo:read` (for private repos) or `public_repo` (for public repos only).
+| Capability | API endpoint used |
+|-----------|-------------------|
+| `CODE_CHANGES` | `GET /repos/{owner}/{repo}/commits` with since/until |
+| `DEPLOYMENTS` | `GET /repos/{owner}/{repo}/deployments` |
 
-For a GitHub App: `contents: read`, `deployments: read`, `pull_requests: read`.
+### Minimum token scopes
 
-### API Endpoints Used
+- `repo:status` (read commit statuses)
+- `read:repo_hook` (optional, deployment events)
 
-| Capability | Endpoint |
-|-----------|----------|
-| Validate | `GET /user` or `GET /orgs/{org}` |
-| CODE_CHANGES | `GET /repos/{owner}/{repo}/commits` |
-| DEPLOYMENTS | `GET /repos/{owner}/{repo}/deployments` |
-
-### Rate Limit Behavior
-
-GitHub enforces 5,000 requests/hour for authenticated requests. The connector reads `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers. When remaining is 0, the connector sleeps until the reset time.
-
-### Known Limitations
-
-- The connector queries all repos in the org unless `repos` is explicitly configured. For organizations with hundreds of repos, explicit filtering is strongly recommended.
-- GitHub Enterprise Server requires setting `api_base_url` to your GHE instance.
-- Git blame and code search are not yet implemented.
-
-### Example Configuration
-
-```yaml
-connectors:
-  github:
-    token: "ghp_..."
-    org: "mycompany"
-    repos:
-      - "payment-service"
-      - "checkout-service"
-```
+> **Tip:** Pass `owner/repo` as the service name in `investigate create` to target a specific repository.
 
 ---
 
-## Kubernetes Connector
+## Kubernetes
 
-### Capabilities
-
-`INFRASTRUCTURE_STATE` | `LOGS`
-
-### Required Credentials
+### Required credentials
 
 | Field | Description |
 |-------|-------------|
-| `api_server` | Kubernetes API server URL |
+| `base_url` | API server URL (e.g. `https://k8s.example.com:6443`) |
 | `token` | Service account bearer token |
-| `namespace` | Primary namespace to query |
+| `namespace` | Namespace to query (default: `default`) |
+| `ca_cert_pem` | (Optional) PEM CA cert for TLS verification |
+| `verify_ssl` | `false` to skip TLS (not recommended in production) |
 
-### Optional Configuration
+### Capabilities
 
-| Field | Description |
-|-------|-------------|
-| `ca_cert_path` | Path to the cluster CA certificate |
-| `kubeconfig_path` | Path to a kubeconfig file (alternative to token auth) |
-| `extra_namespaces` | Additional namespaces to include |
+| Capability | Kubernetes resources |
+|-----------|---------------------|
+| `INFRASTRUCTURE_STATE` | Pods, Nodes, Events (namespaced) |
+| `DEPLOYMENTS` | `apps/v1` Deployments matching service label |
 
-### Required RBAC Permissions
+### Creating a read-only service account
 
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: bugpilot-reader
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "events", "services", "endpoints", "namespaces"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apps"]
-    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
-    verbs: ["get", "list"]
-```
+```bash
+kubectl create serviceaccount bugpilot-reader -n default
 
-### Rate Limit Behavior
+kubectl create clusterrole bugpilot-reader \
+  --verb=get,list \
+  --resource=pods,nodes,events,deployments
 
-The Kubernetes API server does not enforce HTTP rate limits by default. However, large clusters may have `max-requests-inflight` limits. The connector uses standard exponential backoff on 429/503 responses.
+kubectl create clusterrolebinding bugpilot-reader \
+  --clusterrole=bugpilot-reader \
+  --serviceaccount=default:bugpilot-reader
 
-### Known Limitations
-
-- Pod log streaming (`LOGS` capability) reads up to 500 lines per pod tail. For full log aggregation, use the Datadog or Grafana Loki connector.
-- Multi-cluster support requires one connector instance per cluster.
-- Kubernetes metrics (CPU/memory) require the Metrics Server to be installed; raw cAdvisor metrics are not queried directly.
-
-### Example Configuration
-
-```yaml
-connectors:
-  kubernetes:
-    api_server: "https://kubernetes.example.com:6443"
-    token: "eyJhbGciOiJSUzI1NiJ9..."
-    namespace: "production"
-    extra_namespaces:
-      - "staging"
+# Get a long-lived token
+kubectl create token bugpilot-reader -n default --duration=8760h
 ```
 
 ---
 
-## PagerDuty Connector
+## PagerDuty
 
-### Capabilities
-
-`INCIDENTS` | `ALERTS`
-
-### Required Credentials
+### Required credentials
 
 | Field | Description |
 |-------|-------------|
-| `api_key` | PagerDuty REST API key (v2) |
-| `from_email` | Sender email address (required by PagerDuty for write operations) |
+| `api_key` | PagerDuty REST API key (read-only) |
+| `service_id` | (Optional) Filter incidents to one service |
 
-### API Endpoints Used
+### Capabilities
 
-| Capability | Endpoint |
-|-----------|----------|
-| Validate | `GET /abilities` |
-| INCIDENTS | `GET /incidents` |
-| ALERTS | `GET /alerts` |
+| Capability | API endpoint used |
+|-----------|-------------------|
+| `INCIDENTS` | `GET /incidents` filtered by service and date range |
+| `ALERTS` | `GET /incidents/{id}/alerts` for each matching incident |
 
-### Rate Limit Behavior
+---
 
-PagerDuty enforces 960 requests/minute per API key. The connector reads `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers. On 429, the connector sleeps until the reset time.
+## Retry and Timeout Behaviour
 
-### Known Limitations
+All connectors share a consistent policy:
 
-- Incident filtering is by time range and service IDs only; complex alert routing logic is not mirrored.
-- Webhook verification for inbound PagerDuty webhooks requires the `webhook_secret` to be configured in the webhook intake section (not the connector credentials).
-- PagerDuty's free tier has limited API history; older incidents may not be accessible.
+| Setting | Value |
+|---------|-------|
+| Request timeout | 30 seconds |
+| Collection timeout (per connector) | 45 seconds |
+| Retry on | 429, 500, 502, 503, 504 |
+| Max attempts | 3 |
+| Backoff strategy | Exponential with jitter |
+| Retry-After header | Respected |
 
-### Example Configuration
+If a connector exceeds the collection timeout or exhausts retries, it is marked **degraded**. The investigation continues with data from other connectors. Degraded connectors are listed in evidence output:
 
-```yaml
-connectors:
-  pagerduty:
-    api_key: "u+xxxxxxxxxxxxxxxxxxxx"
-    from_email: "oncall@example.com"
-    service_ids:
-      - "PXXXXXX"
+```
+  grafana/metrics   —   degraded: connection timeout after 45s
+```
+
+---
+
+## Validating Connector Connectivity
+
+```bash
+curl http://localhost:8000/api/v1/admin/connectors/validate \
+  -H "Authorization: Bearer $TOKEN"
+
+# [
+#   {"connector_id":"c1d9...","type":"datadog","valid":true,"latency_ms":210},
+#   {"connector_id":"a2f8...","type":"grafana","valid":false,"error":"401 Unauthorized"}
+# ]
 ```
 
 ---
 
 ## Adding a Custom Connector
 
-See the [architecture guide](./architecture.md#how-to-add-a-new-connector) for the complete step-by-step process.
-
-Quick reference:
+Subclass `BaseConnector` from `app.connectors.base`:
 
 ```python
-from app.connectors.base import BaseConnector, ConnectorCapability, RawEvidenceItem, ValidationResult
-from app.connectors.retry import async_retry
+from app.connectors.base import (
+    BaseConnector, ConnectorCapability, RawEvidenceItem, ValidationResult
+)
 from datetime import datetime
 
 class MyConnector(BaseConnector):
-    def __init__(self, api_key: str):
-        self._api_key = api_key
+    def __init__(self, config: dict):
+        self.base_url = config["base_url"]
+        self.api_key  = config["api_key"]
 
     def capabilities(self) -> list[ConnectorCapability]:
-        return [ConnectorCapability.LOGS, ConnectorCapability.METRICS]
+        return [ConnectorCapability.LOGS]
 
-    @async_retry(max_attempts=3, base_delay=1.0, jitter=True)
     async def validate(self) -> ValidationResult:
-        # Test connectivity; return ValidationResult(is_valid=True/False, ...)
-        ...
+        import httpx
+        async with httpx.AsyncClient() as c:
+            try:
+                r = await c.get(f"{self.base_url}/health",
+                                headers={"X-Api-Key": self.api_key}, timeout=5)
+                return ValidationResult(
+                    is_valid=(r.status_code == 200),
+                    latency_ms=r.elapsed.total_seconds() * 1000,
+                )
+            except Exception as e:
+                return ValidationResult(is_valid=False, error=str(e))
 
     async def fetch_evidence(
         self,
@@ -370,16 +293,8 @@ class MyConnector(BaseConnector):
         until: datetime,
         limit: int = 500,
     ) -> list[RawEvidenceItem]:
-        if capability == ConnectorCapability.LOGS:
-            return await self._fetch_logs(service, since, until, limit)
-        return []  # Always return [] for unsupported capabilities, never raise
+        # implement per capability
+        return []
 ```
 
-## Connector Credential Security
-
-Connector credentials are **never stored in plaintext**. They are encrypted using
-[Fernet symmetric encryption](https://cryptography.io/en/latest/fernet/) before storage.
-
-The encryption key is configured via the `FERNET_KEY` environment variable. If not set,
-a new key is generated on each startup (use only for development — all credentials will be
-unreadable after restart).
+Register it in `ConnectorType` enum (`app/models/all_models.py`) and add factory logic in the connector admin router.
