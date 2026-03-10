@@ -29,8 +29,8 @@ export default function Index() {
               CLI-first debugging platform
             </div>
             <h1 className="text-balance text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
-              AI That Investigates Incidents{" "}
-              <span className="text-primary">Like Your Best Engineer</span>
+              AI that investigates incidents{" "}
+              <span className="text-primary">like your best engineer</span>
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
               BugPilot is an AI-powered CLI that analyzes logs, metrics, traces, deployments, and code changes to identify the most likely cause of an issue — and help engineers resolve it faster.
