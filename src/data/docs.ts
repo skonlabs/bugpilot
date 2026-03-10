@@ -2128,7 +2128,7 @@ Retention changes apply to the next daily purge run.`,
   "data-retention": {
     slug: "data-retention",
     title: "Data Retention",
-    category: "How-To Guides",
+    category: "Administration",
     content: `# How to Configure Data Retention
 
 BugPilot implements a three-phase data retention policy that is configurable per organisation. This guide explains the phases, defaults, and how to tune them.
