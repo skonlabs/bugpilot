@@ -26,6 +26,7 @@ Supported provider values (both in env and per-org config):
   "anthropic"          Anthropic Claude  (BugPilot default)
   "openai"             OpenAI GPT
   "azure_openai"       Azure-hosted OpenAI deployment
+  "gemini"             Google Gemini  (AI Studio API key)
   "ollama"             Local Ollama instance
   "openai_compatible"  Any OpenAI-compatible endpoint
                        (vLLM, LM Studio, LocalAI, Groq, Together.ai, Fireworks.ai, …)
@@ -47,6 +48,7 @@ _DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-sonnet-4-6",
     "openai": "gpt-4o",
     "azure_openai": "",        # must be set via deployment name
+    "gemini": "gemini-2.0-flash",
     "ollama": "llama3",
     "openai_compatible": "",   # must be set explicitly
 }
@@ -176,6 +178,16 @@ def _build_provider(
             output_cost_per_million_tokens=output_cost_per_m,
         )
 
+    if provider == "gemini":
+        from app.llm.providers.gemini_provider import GeminiProvider
+        if not api_key:
+            raise ValueError("LLM_API_KEY is required for gemini provider (get one at aistudio.google.com)")
+        return GeminiProvider(
+            api_key=api_key,
+            model=resolved_model or "gemini-2.0-flash",
+            timeout=timeout,
+        )
+
     if provider == "ollama":
         from app.llm.providers.ollama_provider import OllamaProvider
         return OllamaProvider(
@@ -208,5 +220,5 @@ def _build_provider(
 
     raise ValueError(
         f"Unknown LLM provider: {provider!r}. "
-        "Supported: anthropic, openai, azure_openai, ollama, openai_compatible"
+        "Supported: anthropic, openai, azure_openai, gemini, ollama, openai_compatible"
     )

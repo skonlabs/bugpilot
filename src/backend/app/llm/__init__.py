@@ -8,6 +8,7 @@ from .providers import (
     AzureOpenAIProvider,
     OllamaProvider,
     OpenAICompatibleProvider,
+    GeminiProvider,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "AzureOpenAIProvider",
     "OllamaProvider",
     "OpenAICompatibleProvider",
+    "GeminiProvider",
 ]

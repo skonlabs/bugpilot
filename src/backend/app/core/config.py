@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     #   "anthropic"          — Anthropic Claude (BugPilot default)
     #   "openai"             — OpenAI GPT
     #   "azure_openai"       — Azure-hosted OpenAI deployment
+    #   "gemini"             — Google Gemini (AI Studio API key)
     #   "ollama"             — Local Ollama instance
     #   "openai_compatible"  — Any OpenAI-compatible endpoint (vLLM, Groq, Together, etc.)
     LLM_PROVIDER: str = "anthropic"
