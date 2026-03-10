@@ -9,37 +9,37 @@ The BugPilot REST API follows standard HTTP conventions. All endpoints are versi
 All endpoints except `/auth/activate` require a valid JWT in the Authorization header:
 
 ```
-Authorization: Bearer <jwt_token>
+Authorization: Bearer <access_token>
 ```
 
-JWTs expire after 1 hour. Use `POST /auth/refresh` with a valid refresh token to obtain a new pair.
+Tokens expire after **1 hour**. Use the refresh endpoint to get a new token without re-activating.
 
 ---
 
-## Authentication Endpoints
+## Auth Endpoints
 
 ### `POST /api/v1/auth/activate`
 
-Activate a license on a device and create a session.
+Exchange a license key for access and refresh tokens.
 
-**Request body:**
-
+**Request:**
 ```json
 {
-  "license_key": "bp_T7zK9mNvXqAbCdEfGhIjKlMnOpQrStUvWxYz",
-  "device_fingerprint": "sha256-of-mac-hostname-machine"
+  "license_key": "bp_T7zK9mNvXq...",
+  "email": "alice@acme.com",
+  "display_name": "Alice Smith",
+  "device_fingerprint": "sha256_of_hardware_uuid_and_system"
 }
 ```
 
 **Response `200`:**
-
 ```json
 {
   "access_token": "eyJ...",
-  "refresh_token": "opaque-64-byte-hex",
+  "refresh_token": "eyJ...",
   "token_type": "bearer",
-  "org_id": "3f8a...",
-  "user_id": "9c1b..."
+  "org_id": "org_acme",
+  "user_id": "usr_a3f8c2"
 }
 ```
 
@@ -47,40 +47,37 @@ Activate a license on a device and create a session.
 
 ### `POST /api/v1/auth/refresh`
 
-Rotate the access and refresh tokens.
+Exchange a refresh token for a new access token.
 
-**Request body:**
-
+**Request:**
 ```json
 {
-  "refresh_token": "opaque-64-byte-hex"
+  "refresh_token": "eyJ..."
 }
 ```
 
-**Response `200`:** Same structure as `/activate`.
+**Response `200`:** Same structure as `/auth/activate`.
 
 ---
 
 ### `POST /api/v1/auth/logout`
 
-Revoke the current session.
-
-**Response `204`:** No body.
+Revoke the current session. Returns `204 No Content`.
 
 ---
 
 ### `GET /api/v1/auth/whoami`
 
-Return the authenticated user's details.
+Return the current user's identity.
 
 **Response `200`:**
-
 ```json
 {
-  "user_id": "9c1b...",
+  "user_id": "usr_a3f8c2",
   "email": "alice@acme.com",
+  "display_name": "Alice Smith",
   "role": "investigator",
-  "org_id": "3f8a...",
+  "org_id": "org_acme",
   "org_slug": "acme-corp"
 }
 ```
@@ -91,33 +88,11 @@ Return the authenticated user's details.
 
 ### `GET /api/v1/investigations`
 
-List investigations for the authenticated org.
+List investigations.
 
-**Query parameters:**
+**Query params:** `status`, `severity`, `limit` (default: 20), `offset` (default: 0)
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `status` | string | — | `open` \| `in_progress` \| `resolved` \| `closed` |
-| `service` | string | — | Filter by linked service name |
-| `limit` | int | 20 | Max results |
-| `offset` | int | 0 | Pagination offset |
-
-**Response `200`:**
-
-```json
-[
-  {
-    "id": "inv_7f3a2b",
-    "title": "High error rate on payment-service",
-    "status": "open",
-    "linked_services": ["payment-service"],
-    "started_at": "2024-01-15T14:35:00Z",
-    "resolved_at": null,
-    "hypothesis_count": 3,
-    "evidence_count": 65
-  }
-]
-```
+**Response `200`:** Array of investigation objects.
 
 ---
 
@@ -125,37 +100,24 @@ List investigations for the authenticated org.
 
 Create a new investigation.
 
-**Request body:**
-
+**Request:**
 ```json
 {
   "title": "High error rate on payment-service",
+  "symptom": "HTTP 5xx rate above 5%",
+  "severity": "critical",
   "linked_services": ["payment-service"],
-  "context": {
-    "alert_name": "HTTP 5xx rate > 5%",
-    "severity": "critical"
-  }
+  "description": "Optional longer context"
 }
 ```
 
-**Response `201`:**
-
-```json
-{
-  "id": "inv_7f3a2b",
-  "title": "High error rate on payment-service",
-  "status": "open",
-  "branch_id": "branch_main",
-  "linked_services": ["payment-service"],
-  "started_at": "2024-01-15T14:35:00Z"
-}
-```
+**Response `201`:** Investigation object with `id`.
 
 ---
 
 ### `GET /api/v1/investigations/{investigation_id}`
 
-Fetch a single investigation with full detail.
+Fetch a single investigation with full details.
 
 ---
 
@@ -163,13 +125,13 @@ Fetch a single investigation with full detail.
 
 Update investigation fields.
 
-**Request body (all fields optional):**
-
+**Request (all fields optional):**
 ```json
 {
   "title": "Updated title",
   "status": "in_progress",
-  "linked_services": ["payment-service", "stripe-gateway"]
+  "severity": "high",
+  "description": "Updated notes"
 }
 ```
 
@@ -177,45 +139,37 @@ Update investigation fields.
 
 ### `DELETE /api/v1/investigations/{investigation_id}`
 
-Delete an investigation and all associated data. Requires `admin` role.
+Permanently delete an investigation and all its evidence. Returns `204`.
 
 ---
 
 ## Evidence Endpoints
 
-### `POST /api/v1/evidence/collect`
+### `GET /api/v1/evidence`
 
-Trigger evidence collection from all configured connectors.
+List evidence items for an investigation.
 
-**Request body:**
-
-```json
-{
-  "investigation_id": "inv_7f3a2b",
-  "since": "2024-01-15T12:00:00Z",
-  "until": "2024-01-15T15:00:00Z",
-  "capabilities": ["LOGS", "METRICS", "DEPLOYMENTS"]
-}
-```
-
-**Response `200`:**
-
-```json
-{
-  "collected": 65,
-  "degraded_connectors": ["grafana"],
-  "duration_seconds": 3.2,
-  "evidence_ids": ["ev_a1b2...", "..."]
-}
-```
+**Query params:** `investigation_id` (required), `kind`, `limit`, `offset`
 
 ---
 
-### `GET /api/v1/evidence`
+### `POST /api/v1/evidence`
 
-List evidence for an investigation.
+Add an evidence item.
 
-**Query parameters:** `investigation_id` (required), `capability`, `limit`, `offset`.
+**Request:**
+```json
+{
+  "investigation_id": "inv_7f3a2b",
+  "label": "payment-service error logs",
+  "kind": "log_snapshot",
+  "source": "datadog",
+  "summary": "47 NullPointerException at UserService.java:142",
+  "connector_id": "conn_dd_prod"
+}
+```
+
+**Response `201`:** Evidence object with `id`.
 
 ---
 
@@ -223,21 +177,11 @@ List evidence for an investigation.
 
 Fetch a single evidence item.
 
-**Response `200`:**
+---
 
-```json
-{
-  "id": "ev_a1b2",
-  "investigation_id": "inv_7f3a2b",
-  "source_system": "datadog",
-  "capability": "LOGS",
-  "normalized_summary": "ERROR: NullPointerException in PaymentProcessor.charge() at 14:31:42",
-  "reliability_score": 0.92,
-  "is_redacted": true,
-  "fetched_at": "2024-01-15T14:36:10Z",
-  "ttl_expires_at": "2024-01-22T14:36:10Z"
-}
-```
+### `DELETE /api/v1/evidence/{evidence_id}`
+
+Delete an evidence item. Returns `204`.
 
 ---
 
@@ -247,34 +191,33 @@ Fetch a single evidence item.
 
 List hypotheses for an investigation.
 
-**Query parameters:** `investigation_id` (required), `status` (`active` \| `confirmed` \| `rejected`).
+**Query params:** `investigation_id` (required), `status` (`active` / `confirmed` / `rejected`)
 
-**Response `200`:**
+**Response `200`:** Array of hypothesis objects, sorted by `rank`.
 
+---
+
+### `POST /api/v1/hypotheses`
+
+Create a hypothesis manually.
+
+**Request:**
 ```json
-[
-  {
-    "id": "hyp_c9e1",
-    "investigation_id": "inv_7f3a2b",
-    "title": "Bad Deployment Introduced Regression",
-    "description": "A deployment at 14:23 UTC correlates with 5xx onset...",
-    "confidence_score": 0.72,
-    "rank": 1,
-    "status": "active",
-    "generated_by": "rule",
-    "is_single_lane": false,
-    "evidence_ids": ["ev_a1b2", "ev_c3d4"]
-  }
-]
+{
+  "investigation_id": "inv_7f3a2b",
+  "title": "Bad deployment introduced regression",
+  "description": "Stripe SDK v4 changed preferences API contract",
+  "confidence_score": 0.72,
+  "reasoning": "Deployment at 14:23 correlates with error onset at 14:31",
+  "evidence_ids": ["ev_9c1d3e", "ev_a2b4f1"]
+}
 ```
 
 ---
 
 ### `POST /api/v1/hypotheses/{hypothesis_id}/confirm`
 
-Mark a hypothesis as confirmed (the root cause).
-
-**Response `200`:** Updated hypothesis object.
+Mark a hypothesis as the confirmed root cause. Returns `200`.
 
 ---
 
@@ -282,79 +225,72 @@ Mark a hypothesis as confirmed (the root cause).
 
 Mark a hypothesis as rejected.
 
-**Request body (optional):**
-
+**Request (optional):**
 ```json
-{ "reason": "Deployment was rolled back before the spike started" }
+{ "reason": "Ruled out — memory was stable during the incident" }
 ```
+
+---
+
+### `PATCH /api/v1/hypotheses/{hypothesis_id}`
+
+Update hypothesis fields.
 
 ---
 
 ## Action Endpoints
 
-### `POST /api/v1/actions/suggest`
+### `GET /api/v1/actions`
 
-Generate remediation action candidates for an investigation.
+List actions for an investigation.
 
-**Request body:**
+**Query params:** `investigation_id` (required), `status`
 
+---
+
+### `POST /api/v1/actions`
+
+Create an action.
+
+**Request:**
 ```json
 {
   "investigation_id": "inv_7f3a2b",
-  "hypothesis_id": "hyp_c9e1"
+  "title": "Rollback deployment a3f8c2d",
+  "action_type": "rollback",
+  "risk_level": "low",
+  "description": "Revert Stripe SDK v4 update",
+  "hypothesis_id": "hyp_f3a1d2",
+  "rollback_plan": "git revert a3f8c2d && redeploy"
 }
 ```
 
-**Response `200`:**
-
-```json
-[
-  {
-    "id": "act_d2f4",
-    "description": "Rollback deployment a3f8c2d",
-    "rationale": "Deployment correlates with 5xx onset",
-    "risk_level": "low",
-    "expected_effect": "Restore previous stable version",
-    "rollback_path": "git revert a3f8c2d && redeploy",
-    "status": "pending"
-  }
-]
-```
+**Response `201`:** Action object with `id` and `status: pending`.
 
 ---
 
 ### `POST /api/v1/actions/{action_id}/approve`
 
-Approve a medium/high/critical risk action. Requires `approver` role.
-
-**Request body:**
-
-```json
-{ "note": "Approved after verifying rollback path with infra team" }
-```
+Approve an action (requires `approver` or `admin` role). Returns `200`.
 
 ---
 
 ### `POST /api/v1/actions/{action_id}/run`
 
-Execute an action. For `--dry-run`, pass `"dry_run": true`.
+Execute an action.
 
-**Request body:**
-
+**Request:**
 ```json
 { "dry_run": false }
 ```
 
-**Response `200`:**
+Set `dry_run: true` to simulate without making changes.
 
-```json
-{
-  "action_id": "act_d2f4",
-  "status": "completed",
-  "dry_run": false,
-  "output": "Deployment rolled back successfully. Pod restarts: 3/3 ready."
-}
-```
+---
+
+### `POST /api/v1/actions/{action_id}/cancel`
+
+Cancel a pending or approved action. Returns `200`.
 
 ---
 
@@ -362,129 +298,100 @@ Execute an action. For `--dry-run`, pass `"dry_run": true`.
 
 ### `GET /api/v1/graph/timeline/{investigation_id}`
 
-Return the investigation timeline as a list of events sorted by time.
-
-**Response `200`:**
-
-```json
-[
-  {
-    "id": "node_1a2b",
-    "node_type": "deployment",
-    "label": "Deploy a3f8c2d",
-    "timestamp": "2024-01-15T14:23:00Z",
-    "properties": { "commit": "a3f8c2d", "author": "alice@acme.com" }
-  },
-  {
-    "id": "node_3c4d",
-    "node_type": "symptom",
-    "label": "HTTP 5xx rate spike",
-    "timestamp": "2024-01-15T14:31:00Z"
-  }
-]
-```
-
----
+Return the investigation timeline as an ordered list of events.
 
 ### `GET /api/v1/graph/causal/{investigation_id}`
 
-Return the full causal graph as nodes + edges.
+Return the causal graph as nodes and weighted edges.
 
-**Response `200`:**
+---
 
-```json
-{
-  "nodes": [...],
-  "edges": [
-    {
-      "id": "edge_e5f6",
-      "from_node_id": "node_3c4d",
-      "to_node_id": "node_1a2b",
-      "edge_type": "caused_by"
-    }
-  ]
-}
-```
+## Export Endpoints
+
+### `GET /api/v1/export/json/{investigation_id}`
+
+Export the full investigation bundle as JSON.
+
+### `GET /api/v1/export/markdown/{investigation_id}`
+
+Export a Markdown incident report.
 
 ---
 
 ## Webhook Endpoints
 
-### `POST /api/v1/webhooks/datadog`
+These endpoints receive alerts from monitoring platforms. Requests must include a valid HMAC signature.
 
-Receive a Datadog webhook. Requires `X-Datadog-Webhook-ID` and `X-Hub-Signature` headers.
+| Method | Path | Source |
+|--------|------|--------|
+| POST | `/api/v1/webhooks/datadog` | Datadog |
+| POST | `/api/v1/webhooks/grafana` | Grafana |
+| POST | `/api/v1/webhooks/cloudwatch` | AWS CloudWatch (SNS) |
+| POST | `/api/v1/webhooks/pagerduty` | PagerDuty |
 
-### `POST /api/v1/webhooks/grafana`
-
-Receive a Grafana alerting webhook. Requires `X-Grafana-Signature` header (format: `sha256=HMAC`).
-
-### `POST /api/v1/webhooks/cloudwatch`
-
-Receive an AWS SNS/CloudWatch notification. Signature verified against SNS certificate.
-
-### `POST /api/v1/webhooks/pagerduty`
-
-Receive a PagerDuty webhook. Requires `X-PagerDuty-Signature` header (format: `v1=HMAC`). Supports multiple signatures for key rotation.
-
-All webhook handlers:
-- Verify the HMAC-SHA256 signature
-- Support a dual-secret grace window for key rotation
-- Apply per-IP+org rate limiting (100 requests/minute)
-- Log verification failures to Prometheus and structlog
+All webhook endpoints return `200` on success or `401` on signature failure. Rate limit: 100 requests/min per IP + org.
 
 ---
 
 ## Admin Endpoints
 
-Admin endpoints require the `admin` role.
+All admin endpoints require the `admin` role.
+
+### Connectors
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/admin/connectors` | List configured connectors |
-| `POST` | `/api/v1/admin/connectors` | Add a new connector |
-| `DELETE` | `/api/v1/admin/connectors/{id}` | Remove a connector |
-| `GET` | `/api/v1/admin/connectors/validate` | Test all connector connections |
-| `GET` | `/api/v1/admin/users` | List org users |
-| `PATCH` | `/api/v1/admin/users/{id}` | Update user role |
-| `DELETE` | `/api/v1/admin/users/{id}` | Deactivate user |
-| `GET` | `/api/v1/admin/audit-logs` | Query audit log |
-| `GET` | `/api/v1/admin/org/settings` | Get org settings |
-| `PATCH` | `/api/v1/admin/org/settings` | Update org settings (retention, etc.) |
-| `GET` | `/api/v1/admin/webhooks` | List configured webhooks |
-| `POST` | `/api/v1/admin/webhooks` | Register a new webhook secret |
-| `DELETE` | `/api/v1/admin/webhooks/{id}` | Revoke a webhook |
+| GET | `/api/v1/admin/connectors` | List configured connectors |
+| POST | `/api/v1/admin/connectors` | Add a connector |
+| DELETE | `/api/v1/admin/connectors/{id}` | Remove a connector |
+| GET | `/api/v1/admin/connectors/validate` | Validate all connectors |
+
+### Users
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/admin/users` | List users |
+| PATCH | `/api/v1/admin/users/{id}` | Update role |
+| DELETE | `/api/v1/admin/users/{id}` | Deactivate user |
+
+### Webhooks
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/admin/webhooks` | List webhook configs |
+| POST | `/api/v1/admin/webhooks` | Register webhook |
+| DELETE | `/api/v1/admin/webhooks/{id}` | Remove webhook |
+
+### Org Settings
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/admin/org/settings` | Get org settings |
+| PATCH | `/api/v1/admin/org/settings` | Update settings (retention, etc.) |
+
+### Audit Log
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/admin/audit-logs` | Query audit log |
 
 ---
 
 ## Health Endpoints
 
-### `GET /health`
-
-Liveness probe. Always returns `200` if the process is running.
-
-```json
-{ "status": "ok" }
-```
-
-### `GET /health/ready`
-
-Readiness probe. Returns `200` if the database is reachable.
-
-```json
-{ "status": "ready", "db": "ok" }
-```
-
-Returns `503` with `{ "status": "not_ready", "db": "error: ..." }` if the DB is unavailable.
-
-### `GET /metrics`
-
-Prometheus metrics in text/plain exposition format.
+| Path | Description |
+|------|-------------|
+| `GET /health` | Liveness — returns `{"status": "ok"}` |
+| `GET /health/ready` | Readiness — checks database connectivity |
+| `GET /metrics` | Prometheus metrics |
+| `GET /openapi.json` | OpenAPI specification |
+| `GET /docs` | Swagger UI |
 
 ---
 
 ## Error Responses
 
-All errors follow a consistent structure:
+All errors use standard HTTP status codes with a JSON body:
 
 ```json
 {
@@ -494,35 +401,10 @@ All errors follow a consistent structure:
 
 | Status | Meaning |
 |--------|---------|
-| `400` | Bad request / validation error |
-| `401` | Missing or invalid JWT |
-| `403` | Insufficient role/permission |
-| `404` | Resource not found |
-| `409` | Conflict (e.g. duplicate org slug) |
-| `422` | Request body validation failed |
+| `400` | Bad request — invalid input |
+| `401` | Unauthorized — missing or invalid token |
+| `403` | Forbidden — insufficient role |
+| `404` | Not found |
+| `422` | Validation error — request body failed schema validation |
 | `429` | Rate limit exceeded |
 | `500` | Internal server error |
-
----
-
-## Rate Limiting
-
-Webhook endpoints are rate-limited to **100 requests per minute per source IP + org combination**. Other API endpoints do not currently enforce client-side rate limits but rely on the database connection pool as a natural backpressure mechanism.
-
----
-
-## OpenAPI Specification
-
-The full OpenAPI 3.1 spec is served at:
-
-```
-GET /openapi.json
-GET /docs           (Swagger UI)
-GET /redoc          (ReDoc)
-```
-
-To export the spec to a file:
-
-```bash
-curl http://localhost:8000/openapi.json > openapi/bugpilot_v1.json
-```

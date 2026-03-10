@@ -1,6 +1,6 @@
 # How to Manage Users and Roles
 
-BugPilot uses role-based access control (RBAC) with four roles. This guide covers role assignments, permissions, and common administration tasks.
+BugPilot uses role-based access control (RBAC) with four roles. This guide covers role assignments, permissions, and administration tasks.
 
 ---
 
@@ -8,150 +8,112 @@ BugPilot uses role-based access control (RBAC) with four roles. This guide cover
 
 | Role | Description |
 |------|-------------|
-| `viewer` | Read-only access to investigations, evidence, and hypotheses |
-| `investigator` | Can create and work investigations, collect evidence, run low-risk actions |
-| `approver` | Inherits investigator + can approve medium/high/critical risk actions |
-| `admin` | Full access including connector management, user management, org settings |
+| `viewer` | Read-only access — can view investigations, evidence, hypotheses, and actions |
+| `investigator` | Standard user — can create investigations, add evidence, create hypotheses and actions |
+| `approver` | All investigator permissions plus the ability to approve medium/high/critical-risk actions |
+| `admin` | Full access — manages users, connectors, webhooks, org settings, and all data |
 
 ---
 
 ## Permission Matrix
 
 | Permission | viewer | investigator | approver | admin |
-|-----------|:------:|:------------:|:--------:|:-----:|
-| `investigations:read` | ✓ | ✓ | ✓ | ✓ |
-| `investigations:write` | | ✓ | ✓ | ✓ |
-| `evidence:read` | ✓ | ✓ | ✓ | ✓ |
-| `evidence:write` | | ✓ | ✓ | ✓ |
-| `hypotheses:read` | ✓ | ✓ | ✓ | ✓ |
-| `hypotheses:write` | | ✓ | ✓ | ✓ |
-| `actions:read` | ✓ | ✓ | ✓ | ✓ |
-| `actions:write` | | ✓ | ✓ | ✓ |
-| `actions:approve` | | | ✓ | ✓ |
-| `admin:manage` | | | | ✓ |
+|------------|--------|-------------|----------|-------|
+| View investigations | ✓ | ✓ | ✓ | ✓ |
+| Create/update investigations | | ✓ | ✓ | ✓ |
+| View evidence | ✓ | ✓ | ✓ | ✓ |
+| Add/delete evidence | | ✓ | ✓ | ✓ |
+| View hypotheses | ✓ | ✓ | ✓ | ✓ |
+| Create/update hypotheses | | ✓ | ✓ | ✓ |
+| View actions | ✓ | ✓ | ✓ | ✓ |
+| Create actions | | ✓ | ✓ | ✓ |
+| **Approve medium/high/critical actions** | | | **✓** | **✓** |
+| Manage users and roles | | | | ✓ |
+| Manage connectors and webhooks | | | | ✓ |
+| View audit log | | | | ✓ |
+| Configure org settings | | | | ✓ |
 
 ---
 
-## Listing Users
+## Action Approval Workflow
 
-```bash
-curl http://localhost:8000/api/v1/admin/users \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+When an action is created with risk level `medium`, `high`, or `critical`, it is placed in `pending` status and cannot be run until approved by a user with the `approver` or `admin` role.
 
-# [
-#   {"id": "usr_abc", "email": "alice@acme.com", "role": "investigator", "is_active": true},
-#   {"id": "usr_def", "email": "bob@acme.com",   "role": "approver",     "is_active": true},
-#   {"id": "usr_ghi", "email": "carol@acme.com", "role": "viewer",       "is_active": true}
-# ]
+```
+[investigator creates action]  →  Status: pending
+         │
+         ▼
+[approver reviews]
+         │
+    ┌────┴────┐
+  Approve    Reject
+    │
+    ▼
+Status: approved  →  [investigator runs action]
 ```
 
+Safe and low-risk actions skip the approval step and can be run immediately by the creating user.
+
 ---
 
-## Changing a User's Role
+## Managing Users
+
+### Viewing Users
 
 ```bash
-curl -X PATCH http://localhost:8000/api/v1/admin/users/usr_abc \
+curl https://api.bugpilot.io/api/v1/admin/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+### Changing a User's Role
+
+```bash
+curl -X PATCH https://api.bugpilot.io/api/v1/admin/users/{user_id} \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"role": "approver"}'
 ```
 
-Role changes take effect on the next API request — existing sessions are not invalidated immediately.
+Valid roles: `viewer`, `investigator`, `approver`, `admin`
 
----
-
-## Deactivating a User
+### Deactivating a User
 
 ```bash
-curl -X DELETE http://localhost:8000/api/v1/admin/users/usr_abc \
+curl -X DELETE https://api.bugpilot.io/api/v1/admin/users/{user_id} \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-Deactivated users cannot create new sessions. Existing tokens will be rejected at the next request.
-
----
-
-## Approval Workflow
-
-When a user runs `bugpilot fix suggest`, each action is assigned a risk level. The approval gate:
-
-| Risk level | Approval required | Who can approve |
-|-----------|-------------------|-----------------|
-| `low` | No | Anyone (investigator+) can run immediately |
-| `medium` | Yes | `approver` or `admin` role |
-| `high` | Yes | `approver` or `admin` role |
-| `critical` | Yes | `approver` or `admin` role |
-
-### Approving an action (CLI)
-
-```bash
-# As a user with approver role:
-bugpilot fix approve act_d2f4e1 \
-  --note "Verified rollback path with infra team. Safe to proceed."
-```
-
-### Approving via API
-
-```bash
-curl -X POST http://localhost:8000/api/v1/actions/act_d2f4e1/approve \
-  -H "Authorization: Bearer $APPROVER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"note": "Approved — rollback verified safe."}'
-```
-
-### What happens after approval
-
-1. The action status changes from `pending` → `approved`
-2. Any `investigator` in the org can now run the action
-3. The approval is recorded in the `approvals` table with approver user ID, timestamp, and note
-4. The action execution is also logged to `audit_logs`
+Deactivated users lose access immediately. Their historical data (investigations, evidence, actions) is preserved.
 
 ---
 
 ## Audit Log
 
-All write operations are logged to the audit trail. Query it:
+Every write operation is recorded in the audit log with:
+
+- `user_id` — who performed the action
+- `action` — what was done
+- `ip_address` — where the request came from
+- `occurred_at` — timestamp
+- `metadata` — relevant IDs and field changes
 
 ```bash
-curl "http://localhost:8000/api/v1/admin/audit-logs?limit=50" \
+curl "https://api.bugpilot.io/api/v1/admin/audit-logs?limit=50" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
-
-# [
-#   {
-#     "id": "aud_abc",
-#     "event_type": "action_approved",
-#     "entity_type": "action",
-#     "entity_id": "act_d2f4e1",
-#     "user_id": "usr_def",
-#     "ip_address": "10.0.1.42",
-#     "occurred_at": "2024-01-15T15:12:00Z",
-#     "metadata": {"note": "Approved — rollback verified safe."}
-#   }
-# ]
 ```
 
-Audit logs are retained according to the org's retention policy (default: 365 days).
+The audit log is append-only and cannot be modified or deleted.
 
 ---
 
-## Org Settings
+## CLI Token Roles
 
-```bash
-# Get current settings
-curl http://localhost:8000/api/v1/admin/org/settings \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+When a user activates the CLI with `bugpilot auth activate --key bp_...`, their token inherits the role assigned to them by the admin. The role is visible in `bugpilot auth whoami`.
 
-# Update retention policy
-curl -X PATCH http://localhost:8000/api/v1/admin/org/settings \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "retention": {
-      "investigations_days": 180,
-      "evidence_metadata_days": 60,
-      "raw_payload_days": 14
-    }
-  }'
+If a command is rejected due to insufficient permissions, the CLI returns:
+
 ```
-
-Retention changes apply to the next daily purge run.
+✗ Error: 403 Forbidden — insufficient role for this action
+  Your role: investigator
+  Required:  approver
+```

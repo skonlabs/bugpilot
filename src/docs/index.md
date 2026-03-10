@@ -1,6 +1,6 @@
 # BugPilot Documentation
 
-BugPilot is a CLI tool you download and run from your terminal (macOS or Windows). It connects to the BugPilot cloud service and your existing monitoring tools, collects evidence automatically, and uses a multi-pass engine (rule-based + graph correlation + AI synthesis) to generate ranked, actionable root cause hypotheses.
+BugPilot is a CLI tool you download and run from your terminal (macOS or Windows). It connects to the BugPilot cloud service and your existing monitoring tools, collects evidence from logs, metrics, traces, and deployments, and uses a multi-pass AI engine to generate ranked, actionable root cause hypotheses.
 
 ---
 
@@ -8,8 +8,8 @@ BugPilot is a CLI tool you download and run from your terminal (macOS or Windows
 
 | Guide | Description |
 |-------|-------------|
-| [Getting Started](./getting-started.md) | Download, install, and run your first investigation in 5 minutes |
-| [Download the CLI](https://bugpilot.io/download) | Direct download for macOS and Windows |
+| [Getting Started](./getting-started.md) | Download, install, activate, and run your first investigation |
+| [CLI Reference](./cli-reference.md) | Every command, flag, and output format |
 
 ---
 
@@ -18,11 +18,11 @@ BugPilot is a CLI tool you download and run from your terminal (macOS or Windows
 | Guide | Description |
 |-------|-------------|
 | [Investigate an Incident](./how-to-investigate.md) | End-to-end walkthrough: alert → evidence → hypotheses → fix → close |
-| [Configure Connectors](./connectors.md) | Datadog, Grafana, CloudWatch, GitHub, Kubernetes, PagerDuty |
-| [Configure Webhooks](./how-to-webhooks.md) | Auto-triage from Datadog, Grafana, CloudWatch, PagerDuty alerts |
+| [Configure Connectors](./connectors.md) | Connect Datadog, Grafana, CloudWatch, GitHub, Kubernetes, PagerDuty |
+| [Configure Webhooks](./how-to-webhooks.md) | Auto-triage from incoming monitoring alerts |
 | [Configure LLM Providers](./how-to-configure-llm.md) | OpenAI, Anthropic, Azure OpenAI, Ollama |
 | [Manage Users and Roles](./how-to-rbac.md) | RBAC roles, approval workflow, audit log |
-| [Configure Data Retention](./how-to-retention.md) | Retention phases, compliance configurations |
+| [Configure Data Retention](./how-to-retention.md) | Retention phases and compliance configurations |
 
 ---
 
@@ -30,9 +30,9 @@ BugPilot is a CLI tool you download and run from your terminal (macOS or Windows
 
 | Reference | Description |
 |-----------|-------------|
-| [CLI Reference](./cli-reference.md) | Complete documentation for every CLI command |
 | [API Reference](./api-reference.md) | REST API endpoints, request/response schemas |
 | [Architecture](./architecture.md) | System design, data flow, and key decisions |
+| [Troubleshooting](./troubleshooting.md) | Common problems and how to fix them |
 
 ---
 
@@ -52,19 +52,30 @@ Run BugPilot on your own infrastructure instead of the cloud service.
 | Resource | Link |
 |----------|------|
 | Issues | https://github.com/skonlabs/bugpilot/issues |
-| API Docs (self-hosted) | http://localhost:8000/docs |
 | Troubleshooting | [Troubleshooting Guide](./troubleshooting.md) |
 
 ---
 
-## Platform at a Glance
+## How It Works
 
 ```
-Symptom → [Evidence Collection] → [Investigation Graph] → [Hypothesis Engine] → [Safe Actions]
-               │                                                    │
-               ▼                                                    ▼
-    6 connectors, concurrent            Rule-based + Graph correlation + LLM synthesis
-    45s timeout, graceful degradation   Dedup, rank, single-lane detection
+Alert / Symptom
+      │
+      ▼
+[Investigation Created]
+      │
+      ▼
+[Evidence Collection] ──── Datadog · Grafana · CloudWatch
+      │                     GitHub · Kubernetes · PagerDuty
+      ▼
+[Investigation Graph] ──── Causal links, timeline, service map
+      │
+      ▼
+[Hypothesis Engine]  ──── Rule-based → Graph correlation
+      │                   → Historical reranking → LLM synthesis
+      ▼
+[Ranked Hypotheses]  ──── Confidence scores, evidence citations
+      │
+      ▼
+[Safe Actions]       ──── Risk-rated, approval-gated, dry-run capable
 ```
-
-**Tech stack:** Python 3.11, FastAPI, PostgreSQL 14, asyncpg, SQLAlchemy 2, Alembic, Pydantic v2, structlog, Prometheus, typer, Rich.

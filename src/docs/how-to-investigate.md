@@ -1,300 +1,223 @@
 # How to Investigate an Incident with BugPilot
 
-This guide walks through a realistic incident scenario from alert to resolution using BugPilot.
+This guide walks through a realistic incident from alert to resolution.
 
 ---
 
 ## Scenario
 
-At 14:31 UTC your monitoring fires: **payment-service HTTP 5xx rate > 5%**. The on-call engineer opens a terminal.
+At 14:31 UTC your monitoring fires: **payment-service HTTP 5xx rate > 5%**. You open a terminal.
 
 ---
 
-## Step 1 — Authenticate
+## Step 1: Open an Investigation
 
-If this is your first time on this machine:
-
-```bash
-bugpilot auth activate --license-key bp_YOUR_LICENSE_KEY
-```
-
-Check who you're logged in as:
+Create an investigation to anchor all evidence and hypotheses to this incident.
 
 ```bash
-bugpilot auth whoami
+bugpilot investigate create "HTTP 5xx spike on payment-service" \
+  --symptom "5xx rate above 5% since 14:31 UTC, ~847 affected requests" \
+  --severity critical
 ```
 
 ```
-  User:  alice@acme.com
-  Role:  investigator
-  Org:   acme-corp
+✓ Created  inv_7f3a2b
+  Title:    HTTP 5xx spike on payment-service
+  Severity: critical
+  Status:   open
 ```
 
----
-
-## Step 2 — Triage (recommended: let BugPilot handle it)
-
-The `incident triage` command does the most in one step: deduplication check, investigation creation, evidence collection, and initial hypothesis generation.
+**Shortcut:** Use `bugpilot incident triage` when you want to create the investigation and immediately record the initial alert in one step:
 
 ```bash
-bugpilot incident triage \
-  --service payment-service \
-  --alert-name "HTTP 5xx rate > 5%" \
+bugpilot incident triage "HTTP 5xx spike on payment-service" \
+  --symptom "5xx rate above 5% since 14:31 UTC" \
   --severity critical \
-  --since 2h
-```
-
-```
-  ⚡ Dedup check: No similar open investigations found
-  ✓ Investigation created: inv_7f3a2b
-  ↓ Collecting evidence (5 connectors)...
-    ✓ datadog/logs         47 items   0.34s
-    ✓ datadog/metrics      12 items   0.41s
-    ✓ datadog/alerts        3 items   0.28s
-    ✗ grafana/metrics       —         degraded: timeout after 45s
-    ✓ github/deployments    2 items   0.19s
-  ✓ Hypotheses generated (3)
-
-  TOP HYPOTHESIS
-  ──────────────────────────────────────────────────────────────
-  Rank 1  │  Bad Deployment Introduced Regression          ▓▓▓▓▓▓▓▒ 72%
-          │  Deployment a3f8c2d at 14:23 UTC correlates with the
-          │  onset of 5xx errors. Commit message: "Update Stripe
-          │  SDK to v4". Affected evidence: 12 items.
-  ──────────────────────────────────────────────────────────────
-
-  Investigation ID: inv_7f3a2b
-  Run: bugpilot hypotheses list inv_7f3a2b   for all hypotheses
-  Run: bugpilot fix suggest inv_7f3a2b       for remediation options
-```
-
-> **Tip:** BugPilot detected that Grafana timed out but continued with the other 4 connectors. It notes the degraded source and still produced useful hypotheses from logs + metrics + deployment data.
-
----
-
-## Step 3 — Review All Hypotheses
-
-```bash
-bugpilot hypotheses list inv_7f3a2b
-```
-
-```
-  RANK  HYPOTHESIS                              CONFIDENCE  STATUS  SOURCE
-  ────  ──────────────────────────────────────  ──────────  ──────  ──────
-  1     Bad Deployment Introduced Regression    72%         active  rule
-  2     Memory Exhaustion                       58%         active  rule
-  3     Upstream Dependency Degradation         41%         active  graph
-
-  3 hypotheses  │  Evidence from 3 capabilities (LOGS, METRICS, DEPLOYMENTS)
-```
-
-Each hypothesis shows:
-- **Confidence score** — derived from evidence strength and correlation
-- **Source** — `rule` (pattern matching), `graph` (graph analysis), or `llm` (AI synthesis)
-
----
-
-## Step 4 — Investigate a Hypothesis
-
-Check the evidence linked to the top hypothesis:
-
-```bash
-bugpilot evidence list inv_7f3a2b --capability deployments
-```
-
-```
-  ID           SOURCE         CAPABILITY    SUMMARY                          RELIABILITY
-  ev_d1e2f3   github         DEPLOYMENTS   Merge commit a3f8c2d: "Update     0.98
-                                           Stripe SDK to v4" by alice, 14:23
-  ev_a4b5c6   datadog        DEPLOYMENTS   Deployment: payment-service →      0.95
-                                           v2.14.0, duration: 3m12s, 14:23
-```
-
-Timeline view to see the sequence of events:
-
-```bash
-bugpilot investigate get inv_7f3a2b
-```
-
-```
-  TIMELINE
-  ─────────────────────────────────────────────────────────────
-  14:23:00  DEPLOYMENT    Deploy a3f8c2d — payment-service v2.14.0
-  14:31:12  SYMPTOM       HTTP 5xx rate spike — 7.2% error rate
-  14:31:45  ALERT         PagerDuty: P1 incident created
-  14:33:00  SYMPTOM       Latency p99 increased to 8.2s
-  ─────────────────────────────────────────────────────────────
-```
-
-The 8-minute gap between deployment and error onset strongly suggests the deployment is the cause.
-
----
-
-## Step 5 — Reject Unlikely Hypotheses
-
-After reviewing the evidence, hypothesis #2 (Memory Exhaustion) looks unlikely — memory metrics are stable.
-
-```bash
-bugpilot hypotheses reject hyp_mem456 \
-  --reason "Memory metrics stable at 62% usage throughout the incident window"
+  --service payment-service
 ```
 
 ---
 
-## Step 6 — Get Remediation Options
+## Step 2: Add Evidence
+
+Evidence items are normalized snapshots — log excerpts, metric summaries, config diffs, deployment events — that you attach to the investigation. The more evidence from different sources, the higher the confidence in hypotheses.
 
 ```bash
-bugpilot fix suggest inv_7f3a2b
+# Log snapshot from your monitoring tool
+bugpilot evidence collect \
+  --investigation-id inv_7f3a2b \
+  --label "payment-service error logs" \
+  --kind log_snapshot \
+  --source datadog \
+  --summary "47 NullPointerException at UserService.java:142 starting 14:31 UTC. user.preferences was null."
+
+# Deployment event from GitHub
+bugpilot evidence collect \
+  --investigation-id inv_7f3a2b \
+  --label "deployment at 14:23 UTC" \
+  --kind config_diff \
+  --source github \
+  --summary "Commit a3f8c2d by alice: 'Update Stripe SDK v4'. Merged and deployed at 14:23 UTC — 8 minutes before errors began."
+
+# Memory metric snapshot
+bugpilot evidence collect \
+  --investigation-id inv_7f3a2b \
+  --label "heap memory spike" \
+  --kind metric_snapshot \
+  --source datadog \
+  --summary "Heap memory rose from 60% to 92% on payment-service pod-3 between 14:23 and 14:31 UTC."
+```
+
+List what you've added:
+
+```bash
+bugpilot evidence list --investigation-id inv_7f3a2b
 ```
 
 ```
-  SUGGESTED ACTIONS
+  ID          LABEL                         KIND             SOURCE    ADDED
+  ev_9c1d3e   payment-service error logs    log_snapshot     datadog   1m ago
+  ev_a2b4f1   deployment at 14:23 UTC       config_diff      github    45s ago
+  ev_f7d2c3   heap memory spike             metric_snapshot  datadog   20s ago
+```
 
-  #1  Rollback deployment a3f8c2d                                  RISK: low
-      Rationale:   Deployment correlates with 5xx onset at 14:31
-      Effect:      Restore payment-service to v2.13.0 (stable 3 days)
-      Rollback:    git revert a3f8c2d && trigger CI/CD pipeline
-      Approval:    Not required
+**Evidence kinds:** `log_snapshot` · `metric_snapshot` · `trace` · `event` · `config_diff` · `topology` · `custom`
 
-  #2  Disable Stripe SDK v4 feature flag                          RISK: low
-      Rationale:   New SDK may have breaking API changes
-      Effect:      Bypass v4 code path without a full rollback
-      Rollback:    Re-enable feature flag
-      Approval:    Not required
+---
 
-  #3  Increase memory limit to 1Gi                                RISK: medium
-      Rationale:   Memory headroom of 38% — guard against spikes
-      Effect:      Prevent potential OOMKill under load
-      Rollback:    Revert resource quota change
-      Approval:    Required (approver role)
+## Step 3: Review Hypotheses
+
+BugPilot generates hypotheses automatically as evidence is added. The hypothesis engine runs a multi-pass pipeline: rule-based pattern matching → graph correlation → historical reranking → LLM synthesis (when an LLM provider is configured).
+
+```bash
+bugpilot hypotheses list --investigation-id inv_7f3a2b
+```
+
+```
+  RANK  HYPOTHESIS                              CONFIDENCE  STATUS   SOURCE
+   1    Bad deployment introduced regression    72%         active   rule
+   2    Memory exhaustion (OOMKill risk)        58%         active   rule
+   3    Upstream dependency degradation         31%         active   graph
+```
+
+To add a hypothesis manually — for a theory from the team:
+
+```bash
+bugpilot hypotheses create \
+  --investigation-id inv_7f3a2b \
+  "Stripe SDK v4 changed preferences API contract" \
+  --confidence 0.65 \
+  --reasoning "SDK upgrade changed how user.preferences is hydrated, causing NPE on first call" \
+  --evidence ev_9c1d3e \
+  --evidence ev_a2b4f1
 ```
 
 ---
 
-## Step 7 — Dry Run a Safe Action
+## Step 4: Propose a Fix
 
-Always dry-run before executing:
+Create a remediation action. Risk level determines whether approval is required before the action can be run.
 
 ```bash
-bugpilot fix run act_rollback123 --dry-run
+bugpilot fix suggest \
+  --investigation-id inv_7f3a2b \
+  "Rollback deployment a3f8c2d" \
+  --type rollback \
+  --risk low \
+  --description "Revert Stripe SDK v4 update — correlates with onset of 5xx errors" \
+  --hypothesis-id hyp_f3a1d2 \
+  --rollback-plan "git revert a3f8c2d && trigger CI redeploy pipeline"
+```
+
+```
+✓ Action created: act_d2f4e1
+  Title:  Rollback deployment a3f8c2d
+  Risk:   low
+  Status: pending  (no approval required for low-risk actions)
+```
+
+**Risk levels and approval:**
+
+| Risk | Approval required |
+|------|------------------|
+| `safe` / `low` | No |
+| `medium` / `high` / `critical` | Yes — `approver` role required |
+
+---
+
+## Step 5: Dry-Run Before Applying
+
+Always test first:
+
+```bash
+bugpilot fix run act_d2f4e1 --dry-run
 ```
 
 ```
   DRY RUN: Rollback deployment a3f8c2d
-  ─────────────────────────────────────────────────────────────
-  Would execute:
-    1. Trigger rollback pipeline for payment-service
-    2. Set image: payment-service → v2.13.0
-    3. Wait for rollout (estimated: 2-3 minutes)
+  ──────────────────────────────────────
+  Type:          rollback
+  Risk:          low
+  Rollback plan: git revert a3f8c2d && trigger CI redeploy pipeline
 
-  Estimated downtime:    0s  (rolling update strategy)
-  Previous version age:  3 days (stable, no incidents)
-  Risk assessment:       LOW
-
-  To execute: bugpilot fix run act_rollback123
+  No changes made. Remove --dry-run to execute.
 ```
 
 ---
 
-## Step 8 — Execute the Action
+## Step 6: Execute the Fix
 
 ```bash
-bugpilot fix run act_rollback123
+bugpilot fix run act_d2f4e1 --yes
 ```
 
+Watch your monitoring. If the 5xx rate drops, the fix worked.
+
+---
+
+## Step 7: Confirm Root Cause and Close
+
+Confirm the hypothesis that turned out to be correct:
+
+```bash
+bugpilot hypotheses confirm hyp_f3a1d2
 ```
-  ✓ Action executed: Rollback deployment a3f8c2d
-    Status:   completed
-    Output:   Rolling update complete. 3/3 pods ready.
-    Duration: 2m41s
+
+Reject the ones that didn't apply:
+
+```bash
+bugpilot hypotheses reject hyp_8b3c1a
+```
+
+Close the investigation:
+
+```bash
+bugpilot investigate close inv_7f3a2b
 ```
 
 ---
 
-## Step 9 — Confirm the Root Cause and Close
-
-Once the 5xx rate drops back to baseline, confirm the hypothesis and close the investigation.
+## Step 8: Export a Post-Mortem
 
 ```bash
-# Confirm the root cause
-bugpilot hypotheses confirm hyp_deploy789
+# Markdown report for Confluence / Notion / GitHub wiki
+bugpilot export markdown inv_7f3a2b --output postmortem-2026-03-10.md
 
-# Close the investigation with root cause summary
-bugpilot investigate close inv_7f3a2b \
-  --root-cause "Stripe SDK v4 introduced a breaking change in the charge() API. Rolled back to v2.13.0. SDK upgrade to be re-attempted with proper integration tests."
-```
-
-```
-  ✓ Investigation closed
-    Duration:     47 minutes
-    Root cause:   Stripe SDK v4 introduced a breaking change...
-    Actions:      1 executed (rollback a3f8c2d)
-    Evidence:     65 items from 4 sources
+# Full JSON bundle for archiving or integrations
+bugpilot export json inv_7f3a2b --output inv_7f3a2b.json
 ```
 
 ---
 
-## Step 10 — Export the Incident Report
+## Tips
+
+**Add evidence from multiple sources.** Confidence is capped at 40% with a single source. A second source from a different platform significantly improves hypothesis quality.
+
+**Use `--output json` in scripts.** Every command supports `-o json` for pipeline-friendly output:
 
 ```bash
-bugpilot export markdown inv_7f3a2b --output-file incident-report.md
+bugpilot hypotheses list --investigation-id inv_7f3a2b -o json \
+  | jq '.[] | select(.confidence_score > 0.6)'
 ```
 
-The generated Markdown report includes: timeline, root cause, evidence summary, actions taken (with approvals), and outcome. Ready to paste into Confluence, Notion, or a GitHub issue.
-
----
-
-## Tips and Patterns
-
-### Parallel hypothesis testing
-
-Use branches to test multiple hypotheses in parallel without polluting the main investigation:
-
-```bash
-# Create a branch to test the memory hypothesis separately
-bugpilot investigate update inv_7f3a2b --create-branch memory-investigation
-```
-
-### Multi-service incidents
-
-When multiple services are affected, add them to the investigation:
-
-```bash
-bugpilot investigate update inv_7f3a2b \
-  --service checkout-service \
-  --service stripe-gateway
-```
-
-BugPilot will collect evidence for all linked services and look for cross-service causal chains.
-
-### Automating triage from CI/CD
-
-```bash
-# Trigger triage automatically after a failed deployment
-if [ "$DEPLOY_STATUS" = "failed" ]; then
-  bugpilot incident triage \
-    --service "$SERVICE_NAME" \
-    --alert-name "Deployment smoke test failed: $BUILD_ID" \
-    --severity high \
-    --since 15m \
-    --output json > /tmp/triage.json
-
-  # Print top hypothesis to CI logs
-  cat /tmp/triage.json | python3 -c "
-  import json,sys
-  r = json.load(sys.stdin)
-  h = r.get('top_hypothesis')
-  if h:
-      print(f'Top hypothesis: {h[\"title\"]} ({h[\"confidence_score\"]*100:.0f}% confidence)')
-  "
-fi
-```
-
-### When evidence is thin (single-lane warning)
-
-If you see `⚠ Evidence from single source only` — this means only one connector provided data. Confidence scores are capped at 40%.
-
-To improve hypothesis quality:
-1. Check that other connectors are properly configured: `bugpilot auth whoami`
-2. Validate connector health: `curl /api/v1/admin/connectors/validate`
-3. Re-collect with explicit capabilities: `bugpilot evidence collect inv_7f3a2b --since 2h`
+**Reject bad hypotheses early.** This helps BugPilot improve scoring accuracy for your org over time.

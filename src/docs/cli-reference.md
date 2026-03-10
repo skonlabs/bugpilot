@@ -1,6 +1,6 @@
 # CLI Reference
 
-The `bugpilot` CLI is the primary interface for interacting with the BugPilot platform. Every command supports three output formats via the global `--output` / `-o` flag.
+The `bugpilot` CLI is the primary interface for the BugPilot platform. All commands support three output formats via the global `--output` / `-o` flag.
 
 ---
 
@@ -10,24 +10,24 @@ The `bugpilot` CLI is the primary interface for interacting with the BugPilot pl
 bugpilot [OPTIONS] COMMAND [ARGS]...
 ```
 
-| Option | Env var | Default | Description |
-|--------|---------|---------|-------------|
-| `--api-url TEXT` | `BUGPILOT_API_URL` | `https://api.bugpilot.io` | BugPilot API URL |
-| `-o, --output TEXT` | `BUGPILOT_OUTPUT` | `human` | Output format: `human` \| `json` \| `verbose` |
-| `--no-color` | `NO_COLOR` | false | Disable Rich colour output |
-| `-v, --version` | — | — | Print version and exit |
+| Option | Short | Env var | Default | Description |
+|--------|-------|---------|---------|-------------|
+| `--api-url TEXT` | — | `BUGPILOT_API_URL` | `https://api.bugpilot.io` | BugPilot API URL |
+| `--output TEXT` | `-o` | `BUGPILOT_OUTPUT` | `human` | Output format: `human` \| `json` \| `verbose` |
+| `--no-color` | — | `NO_COLOR` | false | Disable colour output |
+| `--version` | `-v` | — | — | Print version and exit |
 
 ### Output Formats
 
-**`human`** (default) — Rich-formatted tables and panels with colour-coded status and severity. Best for terminal use.
+**`human`** (default) — Rich-formatted tables and panels with colour-coded status and severity. Best for interactive terminal use.
 
-**`json`** — Machine-readable JSON on stdout. Every command writes a single JSON object or array. Ideal for scripting and CI pipelines.
+**`json`** — Machine-readable JSON on stdout. Ideal for scripting, CI pipelines, and programmatic use.
 
 ```bash
 bugpilot investigate list -o json | jq '.[] | select(.status == "open")'
 ```
 
-**`verbose`** — Includes all fields including internal metadata, formatted with syntax highlighting. Useful for debugging.
+**`verbose`** — All fields including internal metadata, with syntax highlighting. Useful for debugging.
 
 ---
 
@@ -35,15 +35,15 @@ bugpilot investigate list -o json | jq '.[] | select(.status == "open")'
 
 ### `auth activate`
 
-Activate BugPilot with your license key. You only need to do this once per machine.
+Activate BugPilot with your license key. Only needed once per machine.
 
 ```bash
-bugpilot auth activate --key bp_<KEY> [--email EMAIL] [--name DISPLAY_NAME]
+bugpilot auth activate [--key KEY] [--email EMAIL] [--name NAME]
 ```
 
 | Option | Short | Required | Env var | Description |
 |--------|-------|----------|---------|-------------|
-| `--key` | `-k` | Yes | `BUGPILOT_LICENSE_KEY` | License key (format: `bp_...`) |
+| `--key` | `-k` | Prompted if omitted | `BUGPILOT_LICENSE_KEY` | License key (`bp_...` format) |
 | `--email` | `-e` | Prompted if omitted | — | Your email address |
 | `--name` | — | No | — | Your display name |
 
@@ -52,18 +52,16 @@ bugpilot auth activate --key bp_<KEY> [--email EMAIL] [--name DISPLAY_NAME]
 ```
 $ bugpilot auth activate --key bp_T7zK9mNvXq...
 
-✓ Activated successfully!
-  Org:   acme-corp
-  Role:  investigator
+✓ Activated successfully!  Org: acme-corp | Role: investigator
 ```
 
-Credentials are stored at `~/.config/bugpilot/credentials.json` with permissions `600`.
+Credentials are stored at `~/.config/bugpilot/credentials.json` (permissions `600`).
 
 ---
 
 ### `auth logout`
 
-Revoke the current session and clear local credentials.
+Revoke the current session and clear stored credentials.
 
 ```bash
 bugpilot auth logout
@@ -73,17 +71,18 @@ bugpilot auth logout
 
 ### `auth whoami`
 
-Display the currently authenticated user and org.
+Show the currently authenticated user.
 
 ```bash
 bugpilot auth whoami
 ```
 
 ```
-  User:  alice@acme.com
-  Role:  investigator
-  Org:   acme-corp
-  Tier:  pro
+User:         alice@acme.com
+Display name: Alice Smith
+Role:         investigator
+Org ID:       org_acme
+User ID:      usr_a3f8c2
 ```
 
 ---
@@ -92,27 +91,28 @@ bugpilot auth whoami
 
 ### `investigate list`
 
-List all investigations for your org.
+List investigations for your org.
 
 ```bash
-bugpilot investigate list [--status STATUS] [--service SERVICE] [--limit N]
+bugpilot investigate list [--status STATUS] [--severity SEVERITY] [--page N] [--page-size N]
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--status` | Filter: `open` \| `in_progress` \| `resolved` \| `closed` |
-| `--service` | Filter by service name |
-| `--limit` | Max results (default: 20) |
+| `--severity` | Filter: `critical` \| `high` \| `medium` \| `low` |
+| `--page` | Page number (default: 1) |
+| `--page-size` | Results per page (default: 20) |
 
 **Example:**
 
 ```
 $ bugpilot investigate list --status open
 
-  ID             TITLE                                 SERVICE           STATUS     STARTED
-  inv_7f3a2b...  High error rate on payment-service    payment-service   open       2 hours ago
-  inv_c1d9e0...  Database connection pool exhausted    orders-db         open       45 min ago
-  inv_8a2f1c...  Latency spike - checkout flow         checkout-svc      open       12 min ago
+  ID          TITLE                                  SEVERITY  STATUS     CREATED
+  inv_7f3a2b  High error rate on payment-service     high      open       2h ago
+  inv_c1d9e0  Database connection pool exhausted     critical  open       45m ago
+  inv_8a2f1c  Latency spike - checkout flow          medium    open       12m ago
 ```
 
 ---
@@ -122,17 +122,28 @@ $ bugpilot investigate list --status open
 Open a new investigation.
 
 ```bash
-bugpilot investigate create \
-  --title "TITLE" \
-  --service SERVICE \
-  [--severity critical|high|medium|low]
+bugpilot investigate create TITLE [--symptom TEXT] [--severity LEVEL] [--description TEXT]
 ```
 
-| Option | Required | Description |
-|--------|----------|-------------|
-| `--title` | Yes | Short description of the symptom |
-| `--service` | Yes | Affected service name (must match connector service labels) |
+| Argument/Option | Required | Description |
+|-----------------|----------|-------------|
+| `TITLE` | Yes | Short description of the issue (positional) |
+| `--symptom, -s` | No | Observable symptom text |
 | `--severity` | No | `critical` \| `high` \| `medium` \| `low` (default: `high`) |
+| `--description` | No | Longer context or notes |
+
+**Example:**
+
+```
+$ bugpilot investigate create "High error rate on payment-service" \
+    --symptom "HTTP 5xx rate above 5%" \
+    --severity high
+
+✓ Created  inv_7f3a2b
+  Title:    High error rate on payment-service
+  Severity: high
+  Status:   open
+```
 
 ---
 
@@ -141,7 +152,7 @@ bugpilot investigate create \
 Fetch full details of one investigation.
 
 ```bash
-bugpilot investigate get <INVESTIGATION_ID>
+bugpilot investigate get INVESTIGATION_ID
 ```
 
 ---
@@ -151,21 +162,40 @@ bugpilot investigate get <INVESTIGATION_ID>
 Update investigation fields.
 
 ```bash
-bugpilot investigate update <INVESTIGATION_ID> \
-  [--title "NEW TITLE"] \
-  [--status in_progress|resolved]
+bugpilot investigate update INVESTIGATION_ID \
+  [--title TEXT] [--status STATUS] [--severity LEVEL] [--description TEXT]
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--title` | New title |
+| `--status` | `open` \| `in_progress` \| `resolved` \| `closed` |
+| `--severity` | `critical` \| `high` \| `medium` \| `low` |
+| `--description` | Updated notes |
 
 ---
 
 ### `investigate close`
 
-Mark an investigation as resolved and record the root cause.
+Mark an investigation as closed.
 
 ```bash
-bugpilot investigate close <INVESTIGATION_ID> \
-  --root-cause "Description of what caused the issue"
+bugpilot investigate close INVESTIGATION_ID
 ```
+
+---
+
+### `investigate delete`
+
+Permanently delete an investigation and all its evidence.
+
+```bash
+bugpilot investigate delete INVESTIGATION_ID [--yes]
+```
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--yes` | `-y` | Skip confirmation prompt |
 
 ---
 
@@ -173,122 +203,125 @@ bugpilot investigate close <INVESTIGATION_ID> \
 
 ### `incident triage`
 
-Run automated triage on a new incoming alert or incident. BugPilot checks for existing open investigations (deduplication), creates or updates an investigation, collects initial evidence, and prints the top hypothesis.
+Rapid triage shortcut: creates an investigation, records a timeline event, and triggers initial evidence collection in one step.
 
 ```bash
-bugpilot incident triage \
-  --service SERVICE \
-  --alert-name "ALERT_NAME" \
-  [--severity critical|high|medium|low] \
-  [--since DURATION]
+bugpilot incident triage TITLE [--symptom TEXT] [--severity LEVEL] [--service TEXT]
 ```
 
-| Option | Required | Description |
-|--------|----------|-------------|
-| `--service` | Yes | Affected service |
-| `--alert-name` | Yes | Alert or incident name |
-| `--severity` | No | Incident severity |
-| `--since` | No | How far back to look for evidence (e.g. `2h`, `30m`, `1d`). Default: `1h` |
+| Argument/Option | Required | Description |
+|-----------------|----------|-------------|
+| `TITLE` | Yes | Short incident description (positional) |
+| `--symptom, -s` | No | Observable symptom |
+| `--severity` | No | `critical` \| `high` \| `medium` \| `low` |
+| `--service` | No | Affected service name |
 
 **Example:**
 
 ```
-$ bugpilot incident triage \
-    --service payment-service \
-    --alert-name "HTTP 5xx rate > 5%" \
+$ bugpilot incident triage "HTTP 5xx rate > 5% on payment-service" \
+    --symptom "Started at 14:31 UTC, 847 affected requests" \
     --severity critical \
-    --since 2h
+    --service payment-service
 
-  ⚡ Dedup check: No similar open investigations found
-  ✓ Investigation created: inv_7f3a2b...
-  ↓ Collecting evidence (4 connectors)...
-    ✓ datadog/logs      (47 items, 0.3s)
-    ✓ datadog/metrics   (12 items, 0.4s)
-    ✓ github/deploys    (3 items, 0.2s)
-    ✗ grafana/metrics   degraded: connection timeout
-  ✓ Hypotheses generated (3)
-
-  TOP HYPOTHESIS
-  ───────────────────────────────────────────────────────
-  Rank 1  │  Bad Deployment Introduced Regression      ▓▓▓▓▓▓▓▒ 72%
-          │  A deployment at 14:23 UTC correlates with the onset
-          │  of 5xx errors. Commit a3f8c2d: "Update Stripe SDK v4"
-          │  may have introduced a breaking change.
-  ───────────────────────────────────────────────────────
-  Run: bugpilot fix suggest inv_7f3a2b
+✓ Investigation created: inv_7f3a2b
+  Service: payment-service | Severity: critical
 ```
 
 ---
 
 ### `incident status`
 
-Show the current status and summary of an ongoing incident.
+Show a summary of evidence, hypotheses, and actions for an investigation.
 
 ```bash
-bugpilot incident status <INVESTIGATION_ID>
+bugpilot incident status INVESTIGATION_ID
+```
+
+```
+  Investigation: inv_7f3a2b — High error rate on payment-service
+  Status:        in_progress | Severity: critical
+
+  Evidence:    12 items   Hypotheses: 3   Actions: 2
 ```
 
 ---
 
 ## `bugpilot evidence` — Evidence
 
-### `evidence collect`
-
-Trigger evidence collection from all configured connectors for a given investigation.
-
-```bash
-bugpilot evidence collect <INVESTIGATION_ID> \
-  [--since DURATION] \
-  [--until DATETIME] \
-  [--connector CONNECTOR_ID] \
-  [--capability logs|metrics|traces|alerts|incidents|deployments]
-```
-
-| Option | Description |
-|--------|-------------|
-| `--since` | Duration string: `30m`, `2h`, `1d` (default: `1h`) |
-| `--until` | ISO-8601 datetime. Default: now |
-| `--connector` | Restrict to one connector ID |
-| `--capability` | Restrict to one capability type |
-
-**Example output:**
-
-```
-$ bugpilot evidence collect inv_7f3a2b --since 2h
-
-  Collecting evidence (since 2h ago)...
-
-  CONNECTOR            CAPABILITY    ITEMS    LATENCY    STATUS
-  datadog              logs          47       0.34s      ok
-  datadog              metrics       12       0.41s      ok
-  datadog              alerts        3        0.28s      ok
-  grafana              metrics       —        —          degraded: timeout
-  github               deployments   2        0.19s      ok
-  pagerduty            incidents     1        0.22s      ok
-
-  Total: 65 items collected (1 connector degraded)
-```
-
----
+Evidence items are normalized snapshots attached to an investigation. They can be sourced from your connected monitoring tools or added manually.
 
 ### `evidence list`
 
 List evidence items for an investigation.
 
 ```bash
-bugpilot evidence list <INVESTIGATION_ID> \
-  [--capability logs|metrics|traces|alerts|incidents|deployments] \
-  [--limit N]
+bugpilot evidence list --investigation-id ID [--kind KIND]
+```
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--kind` | `-k` | No | Filter by kind (see kinds below) |
+
+**Evidence kinds:** `log_snapshot` \| `metric_snapshot` \| `trace` \| `event` \| `config_diff` \| `topology` \| `custom`
+
+---
+
+### `evidence collect`
+
+Add an evidence item to an investigation.
+
+```bash
+bugpilot evidence collect \
+  --investigation-id ID \
+  --label LABEL \
+  [--kind KIND] \
+  [--source SOURCE] \
+  [--summary TEXT] \
+  [--connector-id CONNECTOR_ID]
+```
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| `--investigation-id` | `-i` | Yes | Investigation to attach evidence to |
+| `--label` | `-l` | Yes | Human-readable label for this evidence item |
+| `--kind` | `-k` | No | Evidence kind (default: `custom`) |
+| `--source` | — | No | Source system name (e.g. `datadog`, `grafana`) |
+| `--summary` | `-s` | No | Text summary of what this evidence shows |
+| `--connector-id` | — | No | ID of the configured connector that produced this |
+
+**Example:**
+
+```
+$ bugpilot evidence collect \
+    --investigation-id inv_7f3a2b \
+    --label "payment-service error logs" \
+    --kind log_snapshot \
+    --source datadog \
+    --summary "47 NullPointerException at UserService.java:142 since 14:31 UTC"
+
+✓ Evidence added: ev_9c1d3e
 ```
 
 ---
 
 ### `evidence get`
 
-Show the full normalized evidence item.
+Show the full details of one evidence item.
 
 ```bash
-bugpilot evidence get <EVIDENCE_ID>
+bugpilot evidence get EVIDENCE_ID
+```
+
+---
+
+### `evidence delete`
+
+Remove an evidence item.
+
+```bash
+bugpilot evidence delete EVIDENCE_ID
 ```
 
 ---
@@ -297,34 +330,74 @@ bugpilot evidence get <EVIDENCE_ID>
 
 ### `hypotheses list`
 
-List all hypotheses for an investigation, ranked by confidence.
+List hypotheses for an investigation, ranked by confidence.
 
 ```bash
-bugpilot hypotheses list <INVESTIGATION_ID> [--status active|confirmed|rejected]
+bugpilot hypotheses list --investigation-id ID [--status STATUS]
 ```
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--status` | `-s` | No | Filter: `active` \| `confirmed` \| `rejected` |
 
 **Example:**
 
 ```
-$ bugpilot hypotheses list inv_7f3a2b
+$ bugpilot hypotheses list --investigation-id inv_7f3a2b
 
-  RANK  HYPOTHESIS                              CONFIDENCE  STATUS    SOURCE
-  1     Bad Deployment Introduced Regression    72%         active    rule
-  2     Memory Exhaustion                       58%         active    rule
-  3     Upstream Dependency Degradation         41%         active    graph
+  RANK  HYPOTHESIS                              CONFIDENCE  STATUS   SOURCE
+   1    Bad deployment introduced regression    72%         active   rule
+   2    Memory exhaustion                       41%         active   rule
+   3    Upstream dependency degradation         28%         active   graph
+```
 
-  ⚠ Evidence from single source only (logs). Confidence scores are capped at 40%.
-    Collect metrics or traces to improve hypothesis quality.
+---
+
+### `hypotheses create`
+
+Manually add a hypothesis.
+
+```bash
+bugpilot hypotheses create \
+  --investigation-id ID \
+  TITLE \
+  [--description TEXT] \
+  [--confidence FLOAT] \
+  [--reasoning TEXT] \
+  [--evidence EVIDENCE_ID]...
+```
+
+| Argument/Option | Short | Required | Description |
+|-----------------|-------|----------|-------------|
+| `TITLE` | — | Yes | Hypothesis title (positional) |
+| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--description` | `-d` | No | Detailed description |
+| `--confidence` | `-c` | No | Confidence score 0.0–1.0 |
+| `--reasoning` | — | No | Explanation of the reasoning |
+| `--evidence` | — | No | Evidence ID to cite (repeatable) |
+
+**Example:**
+
+```
+$ bugpilot hypotheses create \
+    --investigation-id inv_7f3a2b \
+    "Config change disabled null check" \
+    --confidence 0.65 \
+    --evidence ev_9c1d3e \
+    --evidence ev_a2b4f1
+
+✓ Hypothesis created: hyp_f3a1d2
 ```
 
 ---
 
 ### `hypotheses confirm`
 
-Mark a hypothesis as confirmed (the root cause).
+Mark a hypothesis as the confirmed root cause.
 
 ```bash
-bugpilot hypotheses confirm <HYPOTHESIS_ID>
+bugpilot hypotheses confirm HYPOTHESIS_ID
 ```
 
 ---
@@ -334,67 +407,111 @@ bugpilot hypotheses confirm <HYPOTHESIS_ID>
 Mark a hypothesis as ruled out.
 
 ```bash
-bugpilot hypotheses reject <HYPOTHESIS_ID> [--reason "REASON"]
+bugpilot hypotheses reject HYPOTHESIS_ID
+```
+
+---
+
+### `hypotheses update`
+
+Update a hypothesis.
+
+```bash
+bugpilot hypotheses update HYPOTHESIS_ID \
+  [--title TEXT] [--confidence FLOAT] [--reasoning TEXT]
 ```
 
 ---
 
 ## `bugpilot fix` — Remediation Actions
 
-### `fix suggest`
+### `fix list`
 
-Generate safe remediation actions for an investigation.
+List actions for an investigation.
 
 ```bash
-bugpilot fix suggest <INVESTIGATION_ID> [--hypothesis-id HYPOTHESIS_ID]
+bugpilot fix list INVESTIGATION_ID [--status STATUS]
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--status` | Filter: `pending` \| `approved` \| `running` \| `completed` \| `cancelled` |
+
+---
+
+### `fix suggest`
+
+Create a proposed remediation action for an investigation.
+
+```bash
+bugpilot fix suggest \
+  --investigation-id ID \
+  TITLE \
+  --type TYPE \
+  [--risk LEVEL] \
+  [--description TEXT] \
+  [--hypothesis-id ID] \
+  [--rollback-plan TEXT]
+```
+
+| Argument/Option | Short | Required | Description |
+|-----------------|-------|----------|-------------|
+| `TITLE` | — | Yes | Action title (positional) |
+| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--type` | `-t` | Yes | Action type (e.g. `rollback`, `config_change`, `restart`, `scale`) |
+| `--risk` | — | No | `safe` \| `low` \| `medium` \| `high` \| `critical` (default: `low`) |
+| `--description` | `-d` | No | Detailed description of what the action does |
+| `--hypothesis-id` | — | No | Hypothesis this action targets |
+| `--rollback-plan` | — | No | How to undo this action if needed |
+
+**Risk levels and approval:**
+
+| Risk | Approval required |
+|------|------------------|
+| `safe` / `low` | No — can run immediately |
+| `medium` / `high` / `critical` | Yes — requires `approver` role |
 
 **Example:**
 
 ```
-$ bugpilot fix suggest inv_7f3a2b
+$ bugpilot fix suggest \
+    --investigation-id inv_7f3a2b \
+    "Rollback deployment a3f8c2d" \
+    --type rollback \
+    --risk low \
+    --description "Revert Stripe SDK v4 update that correlates with error onset" \
+    --rollback-plan "git revert a3f8c2d && redeploy"
 
-  SUGGESTED ACTIONS
-
-  #1  Rollback deployment a3f8c2d                         RISK: low
-      Expected effect: Restore previous stable version
-      Rollback path:   git revert a3f8c2d && redeploy
-      Approval needed: No
-
-  #2  Increase memory limit to 1Gi                        RISK: medium
-      Expected effect: Prevent OOMKill recurrence
-      Rollback path:   Revert resource quota change
-      Approval needed: Yes (approver role)
-
-  #3  Temporarily disable Stripe SDK v4 feature flag      RISK: low
-      Expected effect: Bypass potentially broken code path
-      Rollback path:   Re-enable feature flag
-      Approval needed: No
+✓ Action created: act_d2f4e1
+  Title:  Rollback deployment a3f8c2d
+  Risk:   low
+  Status: pending
 ```
 
 ---
 
 ### `fix approve`
 
-Approve a medium/high-risk action (requires `approver` role).
+Approve a medium/high/critical-risk action (requires `approver` role).
 
 ```bash
-bugpilot fix approve <ACTION_ID> [--note "APPROVAL_NOTE"]
+bugpilot fix approve ACTION_ID
 ```
 
 ---
 
 ### `fix run`
 
-Execute an approved action.
+Execute an action.
 
 ```bash
-bugpilot fix run <ACTION_ID> [--dry-run]
+bugpilot fix run ACTION_ID [--yes] [--dry-run]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--dry-run` | Simulate the action without making changes. Prints what would happen. |
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--yes` | `-y` | Skip confirmation prompt |
+| `--dry-run` | — | Simulate the action without making any changes |
 
 **Dry-run example:**
 
@@ -402,16 +519,12 @@ bugpilot fix run <ACTION_ID> [--dry-run]
 $ bugpilot fix run act_d2f4e1 --dry-run
 
   DRY RUN: Rollback deployment a3f8c2d
-  ─────────────────────────────────────
-  Would execute:
-    1. git revert a3f8c2d
-    2. docker build -t payment-service:rollback .
-    3. kubectl set image deployment/payment-service app=payment-service:rollback
+  ──────────────────────────────────────
+  Type:         rollback
+  Risk:         low
+  Rollback plan: git revert a3f8c2d && redeploy
 
-  Estimated downtime: 0s (rolling update)
-  Risk assessment:    LOW — previous version was stable for 3 days
-
-  To apply: bugpilot fix run act_d2f4e1
+  No changes made. Remove --dry-run to execute.
 ```
 
 ---
@@ -421,17 +534,7 @@ $ bugpilot fix run act_d2f4e1 --dry-run
 Cancel a pending or approved action.
 
 ```bash
-bugpilot fix cancel <ACTION_ID>
-```
-
----
-
-### `fix list`
-
-List all actions for an investigation.
-
-```bash
-bugpilot fix list <INVESTIGATION_ID> [--status pending|approved|running|completed|cancelled]
+bugpilot fix cancel ACTION_ID
 ```
 
 ---
@@ -440,43 +543,52 @@ bugpilot fix list <INVESTIGATION_ID> [--status pending|approved|running|complete
 
 ### `export json`
 
-Export a complete investigation as structured JSON.
+Export a complete investigation bundle as structured JSON.
 
 ```bash
-bugpilot export json <INVESTIGATION_ID> [--output-file FILE]
+bugpilot export json INVESTIGATION_ID [--output FILE]
 ```
 
-The exported JSON includes: investigation metadata, timeline, evidence summary (redacted, no raw payloads), all hypotheses with rankings, all actions and approval decisions, and outcome.
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--output` | `-o` | Write to file instead of stdout |
+
+The JSON bundle includes: investigation metadata, evidence summary, all hypotheses with confidence scores, all actions and approval decisions, timeline, and outcome.
 
 ---
 
 ### `export markdown`
 
-Export a human-readable incident report in Markdown format suitable for wikis, Confluence, or GitHub.
+Export a human-readable incident report in Markdown format.
 
 ```bash
-bugpilot export markdown <INVESTIGATION_ID> [--output-file FILE]
+bugpilot export markdown INVESTIGATION_ID [--output FILE]
 ```
 
-**Sample output (truncated):**
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--output` | `-o` | Write to file instead of stdout |
+
+Suitable for Confluence, Notion, GitHub wikis, and incident post-mortems.
+
+**Example output (truncated):**
 
 ```markdown
 # Incident Report: High error rate on payment-service
-**ID:** inv_7f3a2b  **Severity:** critical  **Resolved:** 2024-01-15 16:42 UTC
+**ID:** inv_7f3a2b  **Severity:** critical
 
 ## Timeline
 | Time (UTC) | Event |
 |------------|-------|
-| 14:23      | Deployment a3f8c2d merged by alice@acme.com |
-| 14:31      | HTTP 5xx rate exceeded 5% threshold |
-| 14:33      | PagerDuty incident created |
-| 14:35      | BugPilot investigation opened |
+| 14:23      | Deployment a3f8c2d merged |
+| 14:31      | HTTP 5xx rate exceeded 5% |
+| 14:35      | Investigation opened |
 
 ## Root Cause
-Bad Deployment Introduced Regression (confidence: 72%)
+Bad deployment introduced regression (confidence: 72%)
 
 ## Actions Taken
-1. ✓ Rollback deployment a3f8c2d (approved by bob@acme.com)
+1. ✓ Rollback deployment a3f8c2d
 ```
 
 ---
@@ -500,7 +612,7 @@ bugpilot --install-completion fish
 
 ## Using with CI/CD
 
-In CI pipelines, use `--output json` and the `BUGPILOT_LICENSE_KEY` environment variable:
+Set `BUGPILOT_LICENSE_KEY` as a secret and use `--output json` for machine-readable output:
 
 ```yaml
 # GitHub Actions example
@@ -509,11 +621,20 @@ In CI pipelines, use `--output json` and the `BUGPILOT_LICENSE_KEY` environment 
     BUGPILOT_LICENSE_KEY: ${{ secrets.BUGPILOT_LICENSE_KEY }}
   run: |
     bugpilot auth activate --key "$BUGPILOT_LICENSE_KEY"
-    bugpilot incident triage \
+    bugpilot incident triage "Deployment smoke test failed" \
       --service "$SERVICE" \
-      --alert-name "Deployment smoke test failed" \
       --severity high \
-      --since 15m \
       --output json > triage-result.json
-    cat triage-result.json | jq '.top_hypothesis'
+    cat triage-result.json | jq '.id'
 ```
+
+---
+
+## Environment Variables Summary
+
+| Variable | Description |
+|----------|-------------|
+| `BUGPILOT_API_URL` | Override the API endpoint (default: `https://api.bugpilot.io`) |
+| `BUGPILOT_LICENSE_KEY` | License key used by `auth activate --key` |
+| `BUGPILOT_OUTPUT` | Default output format: `human` \| `json` \| `verbose` |
+| `NO_COLOR` | Set to any value to disable colour output |

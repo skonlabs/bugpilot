@@ -1,6 +1,6 @@
 # How to Configure Webhooks
 
-BugPilot can receive webhooks from monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
+BugPilot can receive webhooks from your monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
 
 ---
 
@@ -8,231 +8,150 @@ BugPilot can receive webhooks from monitoring platforms to automatically create 
 
 ```
 Monitoring platform fires alert
-        │
-        ▼
-POST /api/v1/webhooks/{source}
-        │
-        ▼
-BugPilot verifies HMAC-SHA256 signature
-        │
-        ├── invalid signature → 401, metric incremented, logged
-        │
-        ▼
-Dedup check: is there already an open investigation?
-        │
-        ├── duplicate found → attach evidence to existing investigation
-        │
-        ▼
-Create new investigation (if no duplicate)
-        │
-        ▼
-Enqueue evidence collection
+          │
+          ▼
+BugPilot receives webhook POST
+          │
+          ▼
+Signature verified (HMAC-SHA256)
+          │
+          ▼
+Dedup check — does a similar open investigation already exist?
+          │
+    ┌─────┴──────┐
+  New alert    Duplicate
+    │              │
+    ▼              ▼
+Create new     Update existing
+investigation  investigation
+          │
+          ▼
+Evidence collection enqueued
 ```
 
 ---
 
-## Supported Webhook Sources
+## Supported Sources
 
-| Source | Path | Signature header |
-|--------|------|-----------------|
+| Source | Webhook path | Signature header |
+|--------|-------------|-----------------|
 | Datadog | `/api/v1/webhooks/datadog` | `X-Hub-Signature` (hex HMAC) |
-| Grafana | `/api/v1/webhooks/grafana` | `X-Grafana-Signature` (`sha256=HMAC`) |
-| AWS CloudWatch (SNS) | `/api/v1/webhooks/cloudwatch` | Certificate-based SNS signature |
-| PagerDuty | `/api/v1/webhooks/pagerduty` | `X-PagerDuty-Signature` (`v1=HMAC`) |
+| Grafana | `/api/v1/webhooks/grafana` | `X-Grafana-Signature` (`sha256=` prefix) |
+| AWS CloudWatch (SNS) | `/api/v1/webhooks/cloudwatch` | SNS certificate verification |
+| PagerDuty | `/api/v1/webhooks/pagerduty` | `X-PagerDuty-Signature` (`v1=` prefix) |
 
 ---
 
-## Registering a Webhook Secret
+## Step 1: Register a Webhook Secret
+
+Each webhook source requires a secret (minimum 32 characters) used to verify incoming request signatures.
+
+Via the dashboard: **Settings → Webhooks → Add Webhook**
+
+Via the API:
 
 ```bash
-# Register a new webhook for Datadog
-curl -X POST http://localhost:8000/api/v1/admin/webhooks \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
+curl -X POST https://api.bugpilot.io/api/v1/admin/webhooks \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "datadog",
-    "secret": "YOUR_SHARED_SECRET_MIN_32_CHARS",
-    "description": "Production Datadog webhook"
+    "secret": "your-webhook-secret-min-32-chars-long",
+    "description": "Production Datadog alerts"
   }'
-
-# Returns: { "webhook_id": "wh_abc123", "source": "datadog" }
 ```
 
 ---
 
-## Setting Up Each Source
+## Step 2: Configure Your Monitoring Platform
 
 ### Datadog
 
-1. In Datadog → Integrations → Webhooks → Add Webhook
-2. **URL:** `https://your-bugpilot.example.com/api/v1/webhooks/datadog?org_id=YOUR_ORG_ID`
-3. **Payload:** Default (or custom JSON)
-4. **Custom Headers:**
-   ```
-   X-Hub-Signature: sha256=${signature}
-   ```
-5. In Datadog, set the Webhook secret to match the one you registered with BugPilot
-
-**Sample payload sent by Datadog:**
-
-```json
-{
-  "title": "High 5xx error rate on payment-service",
-  "alert_id": "1234567",
-  "severity": "critical",
-  "tags": ["service:payment-service", "env:production"],
-  "date": 1705330271,
-  "org": { "id": "abc123", "name": "ACME Corp" }
-}
-```
-
----
+1. Go to **Integrations → Webhooks**
+2. Add a new webhook:
+   - **URL:** `https://api.bugpilot.io/api/v1/webhooks/datadog`
+   - **Payload:** Leave as default (standard Datadog format)
+   - **Secret:** Use the secret you registered in Step 1
+3. Add the webhook to any monitor under **Notify your team**
 
 ### Grafana
 
-1. In Grafana → Alerting → Contact points → Add contact point
-2. **Integration:** Webhook
-3. **URL:** `https://your-bugpilot.example.com/api/v1/webhooks/grafana?org_id=YOUR_ORG_ID`
-4. **Authorization Header:** Leave blank (Grafana uses `X-Grafana-Signature`)
-5. Under **Settings** → **Webhook secret**, set the same secret registered in BugPilot
-
-**Sample payload:**
-
-```json
-{
-  "alerts": [
-    {
-      "status": "firing",
-      "labels": { "alertname": "HighLatency", "service": "checkout-svc" },
-      "annotations": { "summary": "p99 latency > 5s" },
-      "startsAt": "2024-01-15T14:31:00Z",
-      "fingerprint": "abc123def456"
-    }
-  ],
-  "receiver": "bugpilot",
-  "externalURL": "https://grafana.example.com"
-}
-```
-
-The `fingerprint` field is used for deduplication.
-
----
+1. Go to **Alerting → Contact points → New contact point**
+2. Select type **Webhook**
+3. Set URL to `https://api.bugpilot.io/api/v1/webhooks/grafana`
+4. Under **Optional Webhook settings**, set the Authorization header using your secret
+5. Save and assign to an alert rule via a notification policy
 
 ### AWS CloudWatch (via SNS)
 
-1. In AWS → SNS → Create topic → HTTPS subscription
-2. **Endpoint:** `https://your-bugpilot.example.com/api/v1/webhooks/cloudwatch?org_id=YOUR_ORG_ID`
-3. Confirm the SNS subscription (BugPilot auto-confirms `SubscriptionConfirmation` messages)
-4. Attach the SNS topic to your CloudWatch alarm
-
-BugPilot verifies SNS messages using AWS certificate-based signature validation. The certificate URL must match `*.amazonaws.com` to prevent SSRF attacks.
-
-**Sample alarm notification:**
-
-```json
-{
-  "Type": "Notification",
-  "MessageId": "abc123",
-  "Subject": "ALARM: \"payment-service-5xx\" in us-east-1",
-  "Message": "{\"AlarmName\":\"payment-service-5xx\",\"NewStateValue\":\"ALARM\",\"NewStateReason\":\"Threshold Crossed: 1 out of the last 1 datapoints (7.8%) was greater than the threshold (5.0%)\"}",
-  "Timestamp": "2024-01-15T14:31:00.000Z",
-  "Signature": "...",
-  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-..."
-}
-```
-
----
+1. Create an SNS topic
+2. Add an HTTPS subscription pointing to `https://api.bugpilot.io/api/v1/webhooks/cloudwatch`
+3. BugPilot will automatically confirm the subscription on first delivery
+4. Configure your CloudWatch alarms to send to the SNS topic
 
 ### PagerDuty
 
-1. In PagerDuty → Service → Webhooks → Add Webhook
-2. **Delivery URL:** `https://your-bugpilot.example.com/api/v1/webhooks/pagerduty?org_id=YOUR_ORG_ID`
-3. **Event types:** `incident.triggered`, `incident.acknowledged`, `incident.resolved`
-4. Copy the webhook secret from PagerDuty and register it in BugPilot
-
-PagerDuty sends multiple signatures in a comma-separated header for key rotation. BugPilot accepts any valid signature from the list.
-
-**Sample payload:**
-
-```json
-{
-  "event": {
-    "id": "evt_abc",
-    "event_type": "incident.triggered",
-    "data": {
-      "id": "P1ABC12",
-      "title": "High 5xx rate - payment-service",
-      "urgency": "high",
-      "service": { "id": "SVC001", "summary": "payment-service" },
-      "created_at": "2024-01-15T14:31:00Z"
-    }
-  }
-}
-```
+1. Go to **Integrations → Generic Webhooks (v3)**
+2. Add endpoint: `https://api.bugpilot.io/api/v1/webhooks/pagerduty`
+3. Select events: **incident.triggered**, **incident.acknowledged**, **incident.resolved**
+4. Set the webhook secret to match what you registered in Step 1
 
 ---
 
-## Secret Rotation (Zero-downtime)
+## Deduplication
 
-BugPilot supports a **dual-secret grace window** for rotating webhook secrets without downtime:
+When a webhook arrives, BugPilot checks for existing open investigations using a weighted similarity score:
+
+| Signal | Weight |
+|--------|--------|
+| Service name match | 40% |
+| Time proximity (within 30 min) | 30% |
+| Alert signature match | 20% |
+| Symptom text similarity | 10% |
+
+If similarity exceeds the threshold, the webhook updates the existing investigation rather than creating a new one.
+
+---
+
+## Secret Rotation
+
+BugPilot supports dual-secret rotation — both the current and previous secret are valid during a grace window, so you can rotate without downtime.
 
 ```bash
-# 1. Register the new secret as the "previous" secret on your webhook
-curl -X PATCH http://localhost:8000/api/v1/admin/webhooks/wh_abc123 \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"secret": "NEW_SECRET", "previous_secret": "OLD_SECRET"}'
-
-# 2. Update the secret in your monitoring platform
-
-# 3. After all platforms are updated, clear the previous secret
-curl -X PATCH http://localhost:8000/api/v1/admin/webhooks/wh_abc123 \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"previous_secret": null}'
+# Update with new secret (old secret remains valid for 1 hour)
+curl -X PATCH https://api.bugpilot.io/api/v1/admin/webhooks/{webhook_id} \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"secret": "your-new-secret-min-32-chars-long"}'
 ```
-
-During the grace window, BugPilot accepts signatures from either the current or previous secret.
 
 ---
 
 ## Rate Limiting
 
-Webhook endpoints enforce **100 requests per minute per source IP + org combination**. When exceeded, BugPilot returns `429 Too Many Requests` and logs the event.
-
-Legitimate monitoring platforms typically send far fewer webhooks than this limit. If you exceed it, consider consolidating multiple alert rules into fewer webhook calls.
+Webhook endpoints are rate-limited to **100 requests per minute** per IP + org combination. Requests exceeding this return `429 Too Many Requests`.
 
 ---
 
-## Testing Webhooks Locally
+## Troubleshooting
 
-Use the sample payloads in `fixtures/sample_configs/sample_webhook_payloads/`:
+**401 Unauthorized on delivery**
+- The signature header is missing or the secret doesn't match
+- Verify the secret in your monitoring platform matches the registered secret exactly
+- Check for encoding differences (URL-encoding, extra whitespace)
+
+**Webhook received but no investigation created**
+- Check the structured logs: `bugpilot_webhook_verification_failures_total` Prometheus metric
+- Verify the webhook payload format matches the expected schema for your source
+
+**Testing with sample payloads**
+
+Use the sample webhook payloads to test your setup:
 
 ```bash
-# Test Datadog webhook locally
-SIGNATURE=$(echo -n '{"title":"Test Alert"}' | openssl dgst -sha256 -hmac "YOUR_SECRET" | awk '{print $2}')
-
-curl -X POST http://localhost:8000/api/v1/webhooks/datadog?org_id=YOUR_ORG_ID \
+# Datadog sample
+curl -X POST https://api.bugpilot.io/api/v1/webhooks/datadog \
   -H "Content-Type: application/json" \
-  -H "X-Hub-Signature: sha256=$SIGNATURE" \
-  -d @fixtures/sample_configs/sample_webhook_payloads/datadog.json
-```
-
----
-
-## Webhook Verification Failures
-
-If a webhook fails signature verification, BugPilot:
-1. Returns `401 Unauthorized`
-2. Increments `bugpilot_webhook_verification_failures_total{source="datadog"}` Prometheus counter
-3. Logs at `warning` level with `event=webhook_verification_failed`
-
-Monitor for verification failures to detect misconfigured secrets or potential replay attacks:
-
-```yaml
-# Prometheus alert
-- alert: WebhookVerificationFailures
-  expr: increase(bugpilot_webhook_verification_failures_total[5m]) > 10
-  labels:
-    severity: warning
-  annotations:
-    summary: "Webhook signature verification failures — check secret configuration"
+  -H "X-Hub-Signature: sha256=<computed_hmac>" \
+  -d @sample_webhook_payloads/datadog.json
 ```

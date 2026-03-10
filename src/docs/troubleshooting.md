@@ -8,277 +8,155 @@ Common issues and how to resolve them.
 
 ### `bugpilot: command not found`
 
-The CLI is not installed or not on `PATH`.
+The CLI binary is not on your `PATH`.
 
+**macOS (Homebrew):** Homebrew adds the binary automatically. Try opening a new terminal window, or run:
 ```bash
-pip install -e ./cli
-# or
-pip install bugpilot
+brew link bugpilot
 ```
 
-Check your Python bin directory is on PATH:
-
+**macOS (.pkg installer):** The installer places the binary at `/usr/local/bin/bugpilot`. If it's not found, check that `/usr/local/bin` is in your PATH:
 ```bash
-python3 -c "import sys; print(sys.prefix + '/bin')"
-export PATH="$PATH:$(python3 -c 'import sys; print(sys.prefix + "/bin")')"
+echo $PATH | tr ':' '\n' | grep /usr/local/bin
 ```
+
+**Windows (Scoop):** Scoop adds its shims directory to PATH automatically. Try opening a new PowerShell or Command Prompt window.
+
+**Windows (.msi installer):** Open a new terminal window after installation. If still not found, add the install directory to your PATH manually in **System Properties → Environment Variables**.
 
 ---
 
-### `Error: Could not connect to BugPilot API at http://localhost:8000`
+### `Error: Could not connect to BugPilot API`
 
-The backend is not running or the URL is wrong.
+The CLI cannot reach `https://api.bugpilot.io`.
 
+- Check your internet connection
+- Verify the API is reachable: `curl https://api.bugpilot.io/health`
+- If you're using a custom API URL (self-hosted), check `BUGPILOT_API_URL` is set correctly
+- Check if a corporate firewall or proxy is blocking outbound HTTPS
+
+---
+
+### `401 Unauthorized`
+
+Your session has expired or credentials are invalid.
+
+Re-activate the CLI:
 ```bash
-# Check the backend
-curl http://localhost:8000/health
-# Should return: {"status":"ok"}
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY
+```
 
-# Check what URL the CLI is using
+Or check who you're currently logged in as:
+```bash
 bugpilot auth whoami
-# Look for: connecting to: http://...
-
-# Override the URL
-export BUGPILOT_API_URL=https://your-bugpilot.example.com
 ```
 
----
-
-### `Error: 401 Unauthorized — session expired`
-
-Your JWT has expired. The CLI automatically refreshes tokens, but if the refresh token has also expired (sessions last 30 days), you need to re-activate.
-
+If credentials are corrupted, clear them and re-activate:
 ```bash
-bugpilot auth activate --license-key bp_YOUR_KEY
+rm ~/.config/bugpilot/credentials.json
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY
 ```
 
 ---
 
-### `Error: 403 Forbidden — insufficient role`
+### `403 Forbidden — insufficient role`
 
-You don't have the required role for this action.
-
-| Command | Required role |
-|---------|--------------|
-| `bugpilot fix approve` | `approver` |
-| `bugpilot auth whoami` → admin routes | `admin` |
-
-Contact your org admin to update your role.
-
----
-
-## Backend / API Issues
-
-### `sqlalchemy.exc.OperationalError: could not connect to server`
-
-PostgreSQL is not reachable.
-
-```bash
-# Check PostgreSQL is running
-pg_isready -h localhost -p 5432
-
-# Check the connection string
-psql "$DATABASE_URL"
-
-# For Docker Compose
-docker compose ps postgres
-docker compose logs postgres
-```
-
----
-
-### `alembic.util.exc.CommandError: Can't locate revision`
-
-The database has not been migrated.
-
-```bash
-cd backend
-alembic upgrade head
-```
-
----
-
-### `cryptography.fernet.InvalidToken`
-
-The `FERNET_KEY` in the environment doesn't match the key used to encrypt stored credentials. This happens if you rotated the key without re-encrypting stored data.
-
-```bash
-# Check the key format
-python3 -c "
-from cryptography.fernet import Fernet
-import base64, os
-key = os.environ['FERNET_KEY'].encode()
-# Should not raise:
-Fernet(key)
-print('Key is valid')
-"
-```
-
-If you have changed the key, you need to re-enter credentials for all configured connectors via the admin API.
-
----
-
-### `ValueError: SECURITY: Attempted to send non-redacted GraphSlice to LLM provider`
-
-This is a safety check — BugPilot is preventing raw (potentially sensitive) evidence from being sent to an LLM. This should not appear in normal use. If you see it:
-
-1. Check that evidence collection is calling the redaction pipeline before passing data to the hypothesis engine
-2. In tests, ensure `GraphSlice.is_redacted=True` when testing LLM-related code paths
-
----
-
-### Pydantic validation error on startup
+Your account role does not have permission for this action.
 
 ```
-pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
+✗ Error: 403 Forbidden — insufficient role for this action
+  Your role: investigator
+  Required:  approver
 ```
 
-A required environment variable is missing. BugPilot will tell you which one. Common missing variables:
-
-- `DATABASE_URL` — PostgreSQL connection string
-- `JWT_SECRET` — must be at least 32 characters
-- `FERNET_KEY` — must be a valid Fernet key (base64-encoded 32 bytes)
+Ask your admin to assign you the required role. See [Manage Users and Roles](./how-to-rbac.md).
 
 ---
 
-## Connector Issues
+### `--dry-run` shows nothing happening
 
-### `Connector degraded: timeout after 45s`
-
-A connector didn't respond within the 45-second collection window.
-
-**Check:**
-1. Is the target system reachable from the BugPilot host?
-   ```bash
-   curl -I https://api.datadoghq.com/api/v1/validate -H "DD-API-KEY: $KEY"
-   ```
-2. Are credentials valid?
-   ```bash
-   curl http://localhost:8000/api/v1/admin/connectors/validate \
-     -H "Authorization: Bearer $TOKEN"
-   ```
-3. Is the network allowing outbound HTTPS from the container?
+`--dry-run` simulates the action without making changes. No output means the action would have no observable side effects. Add `--yes` to actually run it.
 
 ---
 
-### `401 Unauthorized` from Datadog/Grafana connector
+## Evidence Issues
 
-Credentials have expired or permissions are insufficient.
+### Hypotheses have low confidence or are capped at 40%
 
-- **Datadog:** Verify `DD-API-KEY` and `DD-APPLICATION-KEY` in the Datadog portal. Check that the App key has `logs_read_data` and `metrics_read` scopes.
-- **Grafana:** Check the service account token hasn't expired (Grafana → Administration → Service accounts).
-
----
-
-### `CloudWatch: SignatureDoesNotMatch`
-
-The AWS credentials are invalid or the request is being made too long after the timestamp in the signature.
-
-```bash
-# Verify your credentials
-aws sts get-caller-identity \
-  --access-key-id "$AWS_ACCESS_KEY_ID" \
-  --secret-access-key "$AWS_SECRET_ACCESS_KEY" \
-  --region us-east-1
+```
+⚠ Evidence from a single source only. Confidence scores capped at 40%.
+  Add evidence from a second source to improve hypothesis quality.
 ```
 
-Ensure the BugPilot host's system clock is accurate (within 5 minutes of AWS time). Use NTP.
-
----
-
-## Webhook Issues
-
-### `401 Unauthorized` on webhook endpoint
-
-The HMAC signature doesn't match. Common causes:
-
-1. **Wrong secret** — The secret registered in BugPilot doesn't match the one configured in your monitoring platform.
-2. **Encoding mismatch** — The payload is being modified in transit (e.g. by a proxy that normalises JSON whitespace). BugPilot computes the HMAC over the exact raw bytes received.
-3. **Stale secret** — You rotated the secret in the monitoring platform but forgot to update BugPilot (or vice versa).
-
-Use the dual-secret rotation feature to rotate without downtime.
-
----
-
-### Webhook received but no investigation created
-
-Check the webhook delivery logs:
-
-```bash
-curl http://localhost:8000/api/v1/admin/webhooks/deliveries \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-```
-
-Also check the structured logs:
-
-```bash
-docker compose logs backend | grep webhook | jq '.'
-```
-
----
-
-## Evidence / Hypothesis Issues
-
-### `⚠ Evidence from single source only — confidence capped at 40%`
-
-This is a warning, not an error. BugPilot has evidence from only one connector capability type. The hypothesis engine is working correctly but with less data.
-
-**Fix:** Configure additional connectors (e.g. if you only have Datadog logs, add Datadog metrics, or configure GitHub for deployment data).
+Add evidence from at least one additional source. Even a brief metric snapshot or deployment event significantly improves hypothesis accuracy.
 
 ---
 
 ### No hypotheses generated
 
-The hypothesis engine has minimum requirements before generating:
-- At least 1 symptom node in the graph
-- At least 1 service/component node
-- At least 2 evidence items
+Hypotheses require:
+1. At least one evidence item attached to the investigation
+2. At least one service name recorded (via `--service` on triage or in evidence)
+3. Evidence with sufficient content in the summary field
 
-Check evidence was collected:
-
+If you have evidence but still see no hypotheses, try updating the investigation to set a service:
 ```bash
-bugpilot evidence list INVESTIGATION_ID
-```
-
-If evidence is empty, re-collect:
-
-```bash
-bugpilot evidence collect INVESTIGATION_ID --since 2h
+bugpilot investigate update inv_7f3a2b --description "Affects: payment-service"
 ```
 
 ---
 
-## Performance Issues
+## Webhook Issues
 
-### Slow evidence collection
+### `401` on webhook delivery
 
-Evidence collection runs concurrently across all connectors. A slow connector drags out the total time. Check which connector is slow:
+The webhook signature does not match.
 
-```bash
-bugpilot evidence collect INVESTIGATION_ID --since 1h
-# Look at per-connector latency in the output table
-```
-
-If one connector is consistently slow, consider increasing its timeout or investigating the root cause on the source system.
+- Verify the webhook secret registered in BugPilot matches the secret configured in your monitoring platform exactly (no extra spaces or encoding differences)
+- If you recently rotated the secret, allow up to 1 hour for the grace window to expire
+- Check the `bugpilot_webhook_verification_failures_total` metric for patterns
 
 ---
 
-### High database memory usage
+### Webhook received but no investigation created
 
-BugPilot stores JSONB payloads in PostgreSQL. Run the retention purge to clean up old data:
+- Check the BugPilot API structured logs for the webhook receipt event
+- Verify the payload format matches the expected schema for your source (Datadog, Grafana, CloudWatch, or PagerDuty)
+- If the dedup check matched an existing open investigation, the webhook will have updated it rather than creating a new one — check `bugpilot investigate list --status open`
+
+---
+
+## Action Approval Issues
+
+### `fix run` fails with "approval required"
+
+Actions with risk level `medium`, `high`, or `critical` require approval from an `approver` or `admin` before they can be run.
 
 ```bash
-docker compose exec backend python3 -c "
-import asyncio
-from app.services.retention_service import RetentionService
-..."
+# Ask an approver to run:
+bugpilot fix approve act_d2f4e1
+
+# Then run:
+bugpilot fix run act_d2f4e1 --yes
 ```
 
 ---
 
-## Getting Help
+## Export Issues
 
+### `export markdown` produces empty sections
+
+Sections like **Root Cause** are empty if no hypothesis has been confirmed. Confirm the root cause hypothesis first:
+
+```bash
+bugpilot hypotheses confirm hyp_f3a1d2
+bugpilot export markdown inv_7f3a2b
+```
+
+---
+
+## Getting More Help
+
+- **Verbose output:** Add `-o verbose` to any command to see full request/response details
 - **GitHub Issues:** https://github.com/skonlabs/bugpilot/issues
-- **API Docs (local):** http://localhost:8000/docs
-- **Health check:** `curl http://localhost:8000/health/ready`
-- **Verbose logging:** Set `LOG_LEVEL=debug` in your environment
+- **Docs:** [bugpilot.io/docs](https://bugpilot.io/docs)

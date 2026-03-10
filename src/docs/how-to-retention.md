@@ -1,177 +1,114 @@
 # How to Configure Data Retention
 
-BugPilot implements a three-phase data retention policy that is configurable per organisation. This guide explains the phases, defaults, and how to tune them.
+BugPilot implements a three-phase data retention policy, configurable per organisation. A daily purge job runs automatically at 02:00 UTC.
 
 ---
 
 ## Retention Phases
 
-BugPilot retains data in three progressively smaller windows:
+Data moves through three progressively smaller retention windows:
 
-| Phase | Default | What happens |
-|-------|---------|-------------|
-| **Investigation archive** | 365 days | Resolved/closed investigations are archived after this period |
-| **Evidence metadata** | 90 days | Evidence rows (normalized_summary, reliability_score, etc.) are deleted |
-| **Raw payload expiry** | 30 days | `payload_ref` column is set to `NULL` — the actual raw payload in external storage is no longer referenced |
-
-The retention service runs a **three-phase idempotent purge** daily. Each phase writes an `AuditLog` entry *before* making any deletions, ensuring full auditability.
+```
+Investigation created
+        │
+        ▼
+Phase 1: Investigation archive
+  Resolved/closed investigations retained for N days
+  Default: 365 days
+        │
+        ▼
+Phase 2: Evidence metadata
+  Evidence rows (metadata only) retained for N days
+  Default: 90 days
+        │
+        ▼
+Phase 3: Raw payload
+  Raw evidence payloads purged after N days
+  Default: 30 days
+  (evidence row remains, payload_ref set to null)
+```
 
 ---
 
-## Configuring Retention
+## Defaults
 
-Set retention policy per organisation via the admin API:
+| Phase | Default retention |
+|-------|-----------------|
+| Investigation archive | 365 days |
+| Evidence metadata | 90 days |
+| Raw payload | 30 days |
+
+---
+
+## Preset Configurations
+
+### Compliance (longer retention)
+
+```json
+{
+  "investigation_archive_days": 365,
+  "evidence_metadata_days": 365,
+  "raw_payload_days": 7
+}
+```
+
+### Cost-optimised
+
+```json
+{
+  "investigation_archive_days": 90,
+  "evidence_metadata_days": 30,
+  "raw_payload_days": 7
+}
+```
+
+### Development / low-cost
+
+```json
+{
+  "investigation_archive_days": 30,
+  "evidence_metadata_days": 7,
+  "raw_payload_days": 1
+}
+```
+
+---
+
+## Updating Retention Settings
+
+Admins can update the retention policy via the API or the dashboard under **Settings → Data Retention**:
 
 ```bash
-curl -X PATCH http://localhost:8000/api/v1/admin/org/settings \
+curl -X PATCH https://api.bugpilot.io/api/v1/admin/org/settings \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "retention": {
-      "investigations_days": 180,
+      "investigation_archive_days": 180,
       "evidence_metadata_days": 60,
       "raw_payload_days": 14
     }
   }'
 ```
 
-Changes take effect on the next daily purge run.
-
 ---
 
-## Common Retention Configurations
+## How the Purge Works
 
-### Compliance-heavy (HIPAA / SOC 2)
+Each purge phase is fully idempotent — safe to run multiple times. Every deletion writes an entry to the audit log before data is removed, so you have a record of what was purged and when.
 
-```json
-{
-  "investigations_days": 365,
-  "evidence_metadata_days": 365,
-  "raw_payload_days": 7
-}
-```
-
-Keep investigation and evidence metadata for a full year for audit purposes. Expire raw payloads quickly since they may contain PII.
-
-### Cost-optimised
-
-```json
-{
-  "investigations_days": 90,
-  "evidence_metadata_days": 30,
-  "raw_payload_days": 7
-}
-```
-
-Shorter windows reduce database size and storage costs.
-
-### Development / testing
-
-```json
-{
-  "investigations_days": 30,
-  "evidence_metadata_days": 7,
-  "raw_payload_days": 1
-}
-```
-
-Aggressive purging for dev environments.
-
----
-
-## What Each Phase Deletes
-
-### Phase 1 — Investigation archive
-
-```sql
--- Archive investigations resolved > N days ago
-UPDATE investigations
-SET status = 'archived'
-WHERE status IN ('resolved', 'closed')
-  AND resolved_at < NOW() - INTERVAL 'N days';
-```
-
-Before archiving, an `AuditLog` entry is written:
-
-```json
-{
-  "event_type": "retention_phase1_archive",
-  "entity_type": "investigation",
-  "metadata": { "count": 12, "cutoff": "2023-10-12T02:00:00Z" }
-}
-```
-
-### Phase 2 — Evidence metadata deletion
-
-```sql
--- Delete evidence for archived investigations older than evidence_metadata_days
-DELETE FROM evidence_items
-WHERE investigation_id IN (
-  SELECT id FROM investigations WHERE status = 'archived'
-)
-AND fetched_at < NOW() - INTERVAL 'N days';
-```
-
-### Phase 3 — Raw payload expiry
-
-```sql
--- Null the payload_ref for evidence older than raw_payload_days
-UPDATE evidence_items
-SET payload_ref = NULL
-WHERE fetched_at < NOW() - INTERVAL 'N days'
-  AND payload_ref IS NOT NULL;
-```
-
-The evidence row is kept (normalized_summary and metadata are preserved). Only the reference to the external raw payload is cleared.
-
----
-
-## Running the Purge Manually
+The purge runs automatically on a daily schedule. You can view recent purge activity in the audit log:
 
 ```bash
-# In a container or locally
-cd backend
-python3 -c "
-import asyncio
-from app.services.retention_service import RetentionService
-from app.core.db import get_async_session
-
-async def run():
-    async with get_async_session() as db:
-        service = RetentionService(db)
-        await service.run_daily_purge()
-        print('Purge complete')
-
-asyncio.run(run())
-"
-```
-
----
-
-## Idempotency
-
-The purge is fully idempotent. Running it twice produces the same result as running it once. This makes it safe to retry on failure or run from multiple processes (with appropriate database-level concurrency controls).
-
----
-
-## Monitoring Retention
-
-The purge writes to the audit log, which you can query:
-
-```bash
-curl "http://localhost:8000/api/v1/admin/audit-logs?event_type=retention_phase1_archive" \
+curl "https://api.bugpilot.io/api/v1/admin/audit-logs?action=retention_purge" \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
-You can also alert on absence of purge runs:
+---
 
-```yaml
-# Prometheus — alert if no retention log entries in 25h
-- alert: BugPilotRetentionNotRunning
-  expr: |
-    (time() - bugpilot_last_retention_run_timestamp) > 90000
-  labels:
-    severity: warning
-  annotations:
-    summary: "BugPilot retention job has not run in > 25 hours"
-```
+## Notes
+
+- Retention settings apply org-wide; per-investigation overrides are not currently supported
+- Reducing retention takes effect on the next daily purge run
+- Increasing retention is effective immediately (existing data is not retroactively deleted)
+- The audit log itself is not subject to retention purges — it is permanent

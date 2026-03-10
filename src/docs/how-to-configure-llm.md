@@ -6,171 +6,113 @@ BugPilot uses LLMs to synthesize additional hypotheses when evidence is complex 
 
 ## Overview
 
-When an LLM is configured, BugPilot uses it in the 4th pass of the hypothesis pipeline:
+When an LLM is configured, it runs as the 4th pass of the hypothesis pipeline:
 
-1. Rule-based pass (always runs)
-2. Graph correlation pass (always runs)
-3. Historical reranking (runs if DB context available)
-4. **LLM synthesis** ← only runs if configured and slice is redacted
-5. Dedup + rank (always runs)
+```
+Pass 1: Rule-based pattern matching     (always runs)
+Pass 2: Graph correlation               (always runs)
+Pass 3: Historical reranking            (always runs)
+Pass 4: LLM synthesis                  (runs only when LLM_PROVIDER is set)
+Pass 5: Deduplication
+Pass 6: Final ranking
+```
 
-The LLM is given the redacted investigation graph and asked to suggest hypotheses not already identified by earlier passes. **No raw evidence, no PII, no secrets are ever sent to the LLM.**
+The LLM receives a **redacted** evidence summary — all PII, credentials, tokens, and keys are stripped before anything is sent. This is enforced in code; a safety check raises an error if non-redacted data reaches the LLM boundary.
 
 ---
 
 ## Supported Providers
 
-| Provider | Model | Notes |
-|----------|-------|-------|
-| OpenAI | gpt-4o (default) | Best hypothesis quality |
-| Anthropic | claude-sonnet-4-6 (default) | Strong reasoning, supports prompt caching |
-| Azure OpenAI | Your deployment | GPT-4 family via your Azure resource |
-| Ollama | Any local model | No external API calls; privacy-first |
+| Provider | Models | Notes |
+|----------|--------|-------|
+| OpenAI | `gpt-4o` (default) | Requires `OPENAI_API_KEY` |
+| Anthropic | `claude-sonnet-4-6` (default) | Requires `ANTHROPIC_API_KEY`. Supports prompt caching. |
+| Azure OpenAI | Any deployed model | Requires endpoint, key, and deployment name |
+| Ollama | Any locally hosted model | No external API calls — fully on-premise |
 
 ---
 
-## OpenAI
+## Configuration
+
+LLM providers are configured via environment variables on the BugPilot backend. If you are using the hosted BugPilot service, configure this in **Settings → LLM Provider** in the dashboard.
+
+### OpenAI
 
 ```bash
-export LLM_PROVIDER=openai
-export OPENAI_API_KEY=sk-...
-```
-
-Or in `backend/.env`:
-
-```env
 LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-proj-...
+OPENAI_API_KEY=sk-...
 ```
 
-**Supported models:** `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`. Default: `gpt-4o`.
+### Anthropic
 
-To change the model, set `LLM_MODEL=gpt-4o-mini` in your environment.
-
----
-
-## Anthropic
-
-```env
+```bash
 LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-**Supported models:** `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`. Default: `claude-sonnet-4-6`.
-
-BugPilot takes advantage of Anthropic's **prompt caching** for repeated investigation context, reducing token costs on follow-up hypothesis refinements.
-
----
-
-## Azure OpenAI
-
-```env
-LLM_PROVIDER=azure_openai
-AZURE_OPENAI_ENDPOINT=https://YOUR-RESOURCE.openai.azure.com
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_DEPLOYMENT=gpt-4o-deployment
-```
-
-Azure OpenAI is recommended for organisations with data residency requirements or enterprise agreements.
-
----
-
-## Ollama (Local / Air-gapped)
-
-For privacy-sensitive environments where data cannot leave your network:
+### Azure OpenAI
 
 ```bash
-# Install and start Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull llama3.2
-
-# Configure BugPilot
-export LLM_PROVIDER=ollama
-export OLLAMA_BASE_URL=http://localhost:11434
-export LLM_MODEL=llama3.2
+LLM_PROVIDER=azure_openai
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_API_KEY=your-azure-key
+AZURE_OPENAI_DEPLOYMENT=your-deployment-name
 ```
 
-**Recommended models for hypothesis generation:**
-- `llama3.2` — Good balance of quality and speed
-- `mixtral` — Higher quality, higher resource usage
-- `codellama` — Better for code-related incidents
+### Ollama (on-premise, no external calls)
 
-> **Note:** Ollama models are typically less capable at complex reasoning than GPT-4o or Claude. Consider using them for lower-severity incidents or as a complement to rule-based hypotheses.
+```bash
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3                        # or any model you have pulled
+```
+
+### No LLM (rule-based only)
+
+Simply leave `LLM_PROVIDER` unset. BugPilot will use rule-based and graph correlation only. This is the default.
 
 ---
 
 ## Privacy Guarantee
 
-Regardless of which LLM provider you use, BugPilot enforces a strict privacy boundary in code:
+Before any evidence is sent to an LLM, BugPilot's privacy redactor strips:
 
-```python
-# In app/llm/llm_service.py — enforced at runtime, not configuration
-if not getattr(slice, 'is_redacted', False):
-    raise ValueError(
-        "SECURITY: Attempted to send non-redacted GraphSlice to LLM provider."
-    )
-```
+- Email addresses
+- Phone numbers
+- JWT and Bearer tokens
+- Payment card numbers
+- AWS access keys and secrets
+- PEM private keys
+- IP addresses (configurable)
+- Custom regex patterns (configurable per org)
 
-Before a `GraphSlice` is sent to any LLM, the privacy pipeline:
-1. Scrubs emails, phone numbers, JWTs, bearer tokens, payment cards, AWS keys, PEM keys
-2. Sets `is_redacted=True` on the slice
-3. Records a `RedactionManifest` with what was removed
-
-The LLM never sees raw log lines, actual error messages with PII, or secrets.
+This redaction happens in code before the LLM boundary. A safety check in the hypothesis engine raises a `ValueError` if it detects non-redacted content about to be sent — this is a hard stop, not a warning.
 
 ---
 
-## Token Budget and Caching
+## Token Budget
 
-BugPilot enforces a **token budget** per LLM call to prevent runaway costs:
-
-| Setting | Default |
-|---------|---------|
+| Limit | Value |
+|-------|-------|
 | Max prompt tokens | 8,000 |
 | Max completion tokens | 2,000 |
-| Max total tokens per investigation | 40,000 |
+| Max tokens per investigation | 40,000 |
 
-The LLM service maintains an **in-memory cache** keyed by a SHA-256 hash of the graph content, task description, model name, and prompt version. Identical investigation states return cached results without a new API call.
-
-Cache entries are invalidated when new evidence is added to an investigation via `invalidate_cache_for_investigation(investigation_id)`.
+When the investigation token budget is exhausted, LLM synthesis is skipped for subsequent hypothesis passes. Rule-based and graph results are still produced.
 
 ---
 
-## LLM Usage Tracking
+## Caching
 
-All LLM calls are logged to the `llm_usage_logs` table:
-
-```bash
-curl http://localhost:8000/api/v1/admin/llm-usage \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-
-# {
-#   "total_requests": 142,
-#   "total_tokens": 287450,
-#   "total_cost_usd": 8.62,
-#   "by_provider": {
-#     "openai": {"requests": 142, "tokens": 287450, "cost_usd": 8.62}
-#   }
-# }
-```
-
-A Prometheus counter also tracks usage:
-
-```
-bugpilot_llm_requests_total{provider="openai"} 142
-bugpilot_llm_tokens_total{provider="openai",type="prompt"} 245230
-bugpilot_llm_tokens_total{provider="openai",type="completion"} 42220
-```
+LLM responses are cached in-memory keyed by SHA-256 hash of the graph content. The cache is invalidated when new evidence is added to the investigation.
 
 ---
 
-## Disabling LLM (Rule-based only mode)
+## Usage Tracking
 
-To run BugPilot entirely without an LLM:
+LLM usage is logged and exposed via Prometheus metrics:
 
-```env
-# Simply don't set LLM_PROVIDER
-# BugPilot will use rule-based + graph correlation only
-```
-
-Rule-based and graph correlation hypotheses are available instantly without any API calls, latency, or cost.
+| Metric | Description |
+|--------|-------------|
+| `bugpilot_llm_requests_total` | Total LLM requests, labelled by provider |
+| `bugpilot_llm_tokens_total` | Prompt and completion token counts |

@@ -1,300 +1,311 @@
 # Connector Setup Guide
 
-BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a real-world monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, or code changes).
+BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, code changes).
 
-The more connectors you configure, the better BugPilot's hypotheses will be. A single-source investigation is marked as a **single-lane investigation** and confidence scores are automatically capped at 40% — prompting you to add more evidence sources.
+The more connectors you configure, the better BugPilot's hypotheses will be. Single-source investigations are marked as **single-lane** and confidence scores are capped at 40% until additional sources are added.
 
 ---
 
-## Overview
+## Supported Connectors
 
 | Connector | Capabilities | Auth method |
 |-----------|-------------|-------------|
 | Datadog | Logs, Metrics, Traces, Alerts | API key + App key |
-| Grafana | Metrics, Alerts | API token |
-| AWS CloudWatch | Logs, Metrics, Alerts | Access key + Secret key |
-| GitHub | Code changes, Deployments | Personal access token |
-| Kubernetes | Infrastructure state, Deployments | Bearer token |
+| Grafana | Metrics, Alerts | Service account token |
+| AWS CloudWatch | Logs, Metrics, Alarms | IAM access key + secret |
+| GitHub | Code changes, Deployments | Personal access token or GitHub App |
+| Kubernetes | Pod state, Events, Logs | Service account bearer token |
 | PagerDuty | Incidents, Alerts | REST API key |
 
 ---
 
-## Configuring Connectors via the Admin API
+## Adding a Connector
+
+Connectors are configured by your admin in the dashboard under **Settings → Connectors**. Credentials are encrypted at rest using Fernet encryption and never returned in API responses.
+
+You can also manage connectors via the API:
 
 ```bash
-# Configure a Datadog connector
-curl -X POST http://localhost:8000/api/v1/admin/connectors \
+# Add a connector
+curl -X POST https://api.bugpilot.io/api/v1/admin/connectors \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "connector_type": "datadog",
     "env_label": "production",
-    "credentials": {
-      "api_key": "YOUR_DATADOG_API_KEY",
-      "app_key": "YOUR_DATADOG_APP_KEY",
-      "base_url": "https://api.datadoghq.com"
-    }
+    "credentials": { ... }
   }'
+
+# List configured connectors
+curl https://api.bugpilot.io/api/v1/admin/connectors \
+  -H "Authorization: Bearer $TOKEN"
+
+# Validate all connectors
+curl https://api.bugpilot.io/api/v1/admin/connectors/validate \
+  -H "Authorization: Bearer $TOKEN"
 ```
-
-Credentials are encrypted at rest using Fernet symmetric encryption before being stored in the database. The plaintext key is never persisted.
-
-See [`fixtures/sample_configs/sample_connector_config.yaml`](../fixtures/sample_configs/sample_connector_config.yaml) for a complete example.
 
 ---
 
 ## Datadog
 
-### Required credentials
+**Capabilities:** Logs, Metrics, Traces, Alerts
+
+### Credentials
 
 | Field | Description |
 |-------|-------------|
-| `api_key` | Datadog API key (read-only is sufficient) |
+| `api_key` | Datadog API key |
 | `app_key` | Datadog Application key |
-| `base_url` | US: `https://api.datadoghq.com` · EU: `https://api.datadoghq.eu` |
-| `service_tag` | (Optional) Default Datadog service tag filter |
+| `site` | Your Datadog site: `datadoghq.com`, `datadoghq.eu`, `us3.datadoghq.com` |
 
-### Capabilities
+### Required permissions
 
-| Capability | API endpoint used |
-|-----------|-------------------|
-| `LOGS` | `POST /api/v2/logs/events/search` with `service:NAME` filter |
-| `METRICS` | `GET /api/v1/query` — CPU user, request rate |
-| `TRACES` | `GET /api/v2/spans/events` for the service |
-| `ALERTS` | `GET /api/v1/monitor` filtered by service tag |
-
-### Minimum Datadog permissions
-
+Your API key must have:
 - `logs_read_data`
 - `metrics_read`
 - `apm_read`
 - `monitors_read`
 
+### Example credentials object
+
+```json
+{
+  "api_key": "your_datadog_api_key",
+  "app_key": "your_datadog_app_key",
+  "site": "datadoghq.com"
+}
+```
+
 ---
 
 ## Grafana
 
-### Required credentials
+**Capabilities:** Metrics, Alerts
+
+### Credentials
 
 | Field | Description |
 |-------|-------------|
-| `base_url` | Grafana instance URL (e.g. `https://grafana.example.com`) |
+| `url` | Your Grafana instance URL (e.g. `https://grafana.example.com`) |
 | `api_token` | Service account token (Viewer role) |
-| `datasource_uid` | (Optional) Prometheus datasource UID; auto-discovered if omitted |
+| `org_id` | Grafana org ID (default: 1) |
+| `prometheus_datasource_uid` | UID of your Prometheus datasource (auto-discovered if omitted) |
 
-### Capabilities
+### Creating a service account token
 
-| Capability | API endpoint used |
-|-----------|-------------------|
-| `METRICS` | `/api/datasources/proxy/:uid/api/v1/query_range` |
-| `ALERTS` | `/api/v1/provisioning/alert-rules` |
+1. Go to **Administration → Service Accounts → Add service account**
+2. Set role to **Viewer**
+3. Click **Add token** — copy the token immediately
 
-### Setup
+### Example credentials object
 
-1. Grafana → Administration → Service accounts → Create service account (Viewer role).
-2. Generate a service account token.
-3. Copy your Prometheus datasource UID from Administration → Data sources.
+```json
+{
+  "url": "https://grafana.example.com",
+  "api_token": "glsa_example_token",
+  "org_id": 1
+}
+```
 
 ---
 
 ## AWS CloudWatch
 
-### Required credentials
+**Capabilities:** Logs, Metrics, Alarms
+
+### Credentials
 
 | Field | Description |
 |-------|-------------|
-| `access_key_id` | AWS access key ID |
-| `secret_access_key` | AWS secret access key |
+| `aws_access_key_id` | IAM access key ID |
+| `aws_secret_access_key` | IAM secret access key |
 | `region` | AWS region (e.g. `us-east-1`) |
-| `log_group_prefix` | (Optional) CloudWatch log group name or prefix |
+| `log_group_names` | List of CloudWatch log group names to query |
+| `role_arn` | (Optional) IAM role ARN to assume |
 
-### Capabilities
-
-| Capability | AWS API used |
-|-----------|--------------|
-| `LOGS` | `StartQuery` + `GetQueryResults` (CloudWatch Insights) |
-| `METRICS` | `GetMetricData` (CPUUtilization, RequestCount) |
-| `ALERTS` | `DescribeAlarms` (state=ALARM) |
-
-### Minimum IAM permissions
+### Required IAM permissions
 
 ```json
 {
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": [
-      "logs:StartQuery",
-      "logs:GetQueryResults",
-      "cloudwatch:GetMetricData",
-      "cloudwatch:DescribeAlarms"
-    ],
-    "Resource": "*"
-  }]
+  "Effect": "Allow",
+  "Action": [
+    "logs:StartQuery",
+    "logs:GetQueryResults",
+    "logs:DescribeLogGroups",
+    "cloudwatch:GetMetricData",
+    "cloudwatch:DescribeAlarms"
+  ],
+  "Resource": "*"
 }
 ```
 
-> BugPilot uses manual SigV4 signing (no boto3) to keep the image minimal. For production, prefer an IAM role on your EC2/ECS instance.
+### Example credentials object
+
+```json
+{
+  "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
+  "aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+  "region": "us-east-1",
+  "log_group_names": [
+    "/aws/lambda/payment-service",
+    "/ecs/checkout-service"
+  ]
+}
+```
 
 ---
 
 ## GitHub
 
-### Required credentials
+**Capabilities:** Code changes, Deployments
+
+### Credentials
 
 | Field | Description |
 |-------|-------------|
 | `token` | Personal access token or GitHub App installation token |
-| `owner` | GitHub organisation or username |
-| `repo` | Default repository name |
+| `org` | GitHub organization name |
+| `repos` | List of repository names to watch |
+| `api_base_url` | (Optional) GitHub Enterprise base URL |
 
-### Capabilities
+### Token scopes required
 
-| Capability | API endpoint used |
-|-----------|-------------------|
-| `CODE_CHANGES` | `GET /repos/{owner}/{repo}/commits` with since/until |
-| `DEPLOYMENTS` | `GET /repos/{owner}/{repo}/deployments` |
+- `repo:status`
+- `read:repo_hook`
 
-### Minimum token scopes
+### Creating a personal access token
 
-- `repo:status` (read commit statuses)
-- `read:repo_hook` (optional, deployment events)
+1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
+2. Generate new token with `repo:status` and `read:repo_hook` scopes
 
-> **Tip:** Pass `owner/repo` as the service name in `investigate create` to target a specific repository.
+### Example credentials object
+
+```json
+{
+  "token": "ghp_example_token",
+  "org": "mycompany",
+  "repos": ["payment-service", "checkout-service", "auth-service"]
+}
+```
 
 ---
 
 ## Kubernetes
 
-### Required credentials
+**Capabilities:** Pod state, Events, Logs
+
+### Credentials
 
 | Field | Description |
 |-------|-------------|
-| `base_url` | API server URL (e.g. `https://k8s.example.com:6443`) |
+| `api_server` | Kubernetes API server URL |
 | `token` | Service account bearer token |
-| `namespace` | Namespace to query (default: `default`) |
-| `ca_cert_pem` | (Optional) PEM CA cert for TLS verification |
-| `verify_ssl` | `false` to skip TLS (not recommended in production) |
+| `namespace` | Primary namespace to watch |
+| `extra_namespaces` | (Optional) Additional namespaces |
+| `ca_cert_path` | (Optional) Path to CA certificate |
 
-### Capabilities
+### Creating a service account
 
-| Capability | Kubernetes resources |
-|-----------|---------------------|
-| `INFRASTRUCTURE_STATE` | Pods, Nodes, Events (namespaced) |
-| `DEPLOYMENTS` | `apps/v1` Deployments matching service label |
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bugpilot
+  namespace: production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: bugpilot-reader
+rules:
+- apiGroups: ["", "apps"]
+  resources: ["pods", "nodes", "events", "deployments"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: bugpilot-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: bugpilot-reader
+subjects:
+- kind: ServiceAccount
+  name: bugpilot
+  namespace: production
+```
 
-### Creating a read-only service account
+Get the token:
 
 ```bash
-kubectl create serviceaccount bugpilot-reader -n default
+kubectl create token bugpilot -n production
+```
 
-kubectl create clusterrole bugpilot-reader \
-  --verb=get,list \
-  --resource=pods,nodes,events,deployments
+### Example credentials object
 
-kubectl create clusterrolebinding bugpilot-reader \
-  --clusterrole=bugpilot-reader \
-  --serviceaccount=default:bugpilot-reader
-
-# Get a long-lived token
-kubectl create token bugpilot-reader -n default --duration=8760h
+```json
+{
+  "api_server": "https://kubernetes.example.com:6443",
+  "token": "eyJhbGciOiJSUzI1NiJ9...",
+  "namespace": "production",
+  "extra_namespaces": ["staging"]
+}
 ```
 
 ---
 
 ## PagerDuty
 
-### Required credentials
+**Capabilities:** Incidents, Alerts
+
+### Credentials
 
 | Field | Description |
 |-------|-------------|
 | `api_key` | PagerDuty REST API key (read-only) |
-| `service_id` | (Optional) Filter incidents to one service |
+| `from_email` | Email address for API requests |
+| `service_ids` | (Optional) Limit to specific PagerDuty service IDs |
 
-### Capabilities
+### Creating a read-only API key
 
-| Capability | API endpoint used |
-|-----------|-------------------|
-| `INCIDENTS` | `GET /incidents` filtered by service and date range |
-| `ALERTS` | `GET /incidents/{id}/alerts` for each matching incident |
+1. Go to **PagerDuty → Integrations → API Access Keys**
+2. Create a key with **Read-only** access
+
+### Example credentials object
+
+```json
+{
+  "api_key": "u+xxxxxxxxxxxxxxxxxxxx",
+  "from_email": "oncall@example.com",
+  "service_ids": ["PXXXXXX", "PYYYYYY"]
+}
+```
 
 ---
 
-## Retry and Timeout Behaviour
-
-All connectors share a consistent policy:
+## Connection Behaviour
 
 | Setting | Value |
 |---------|-------|
-| Request timeout | 30 seconds |
-| Collection timeout (per connector) | 45 seconds |
-| Retry on | 429, 500, 502, 503, 504 |
-| Max attempts | 3 |
-| Backoff strategy | Exponential with jitter |
-| Retry-After header | Respected |
+| Request timeout per connector | 30 seconds |
+| Max collection time per connector | 45 seconds |
+| Retry on HTTP status | 429, 500, 502, 503, 504 |
+| Max retry attempts | 3 |
+| Retry backoff | Exponential with jitter |
 
-If a connector exceeds the collection timeout or exhausts retries, it is marked **degraded**. The investigation continues with data from other connectors. Degraded connectors are listed in evidence output:
-
-```
-  grafana/metrics   —   degraded: connection timeout after 45s
-```
+If a connector times out or errors, BugPilot marks it **degraded** for that run and continues with the remaining connectors. Results are partial rather than blocked.
 
 ---
 
-## Validating Connector Connectivity
+## Validating Connectors
+
+After adding connectors, validate all credentials are working:
 
 ```bash
-curl http://localhost:8000/api/v1/admin/connectors/validate \
+curl https://api.bugpilot.io/api/v1/admin/connectors/validate \
   -H "Authorization: Bearer $TOKEN"
-
-# [
-#   {"connector_id":"c1d9...","type":"datadog","valid":true,"latency_ms":210},
-#   {"connector_id":"a2f8...","type":"grafana","valid":false,"error":"401 Unauthorized"}
-# ]
 ```
 
----
-
-## Adding a Custom Connector
-
-Subclass `BaseConnector` from `app.connectors.base`:
-
-```python
-from app.connectors.base import (
-    BaseConnector, ConnectorCapability, RawEvidenceItem, ValidationResult
-)
-from datetime import datetime
-
-class MyConnector(BaseConnector):
-    def __init__(self, config: dict):
-        self.base_url = config["base_url"]
-        self.api_key  = config["api_key"]
-
-    def capabilities(self) -> list[ConnectorCapability]:
-        return [ConnectorCapability.LOGS]
-
-    async def validate(self) -> ValidationResult:
-        import httpx
-        async with httpx.AsyncClient() as c:
-            try:
-                r = await c.get(f"{self.base_url}/health",
-                                headers={"X-Api-Key": self.api_key}, timeout=5)
-                return ValidationResult(
-                    is_valid=(r.status_code == 200),
-                    latency_ms=r.elapsed.total_seconds() * 1000,
-                )
-            except Exception as e:
-                return ValidationResult(is_valid=False, error=str(e))
-
-    async def fetch_evidence(
-        self,
-        capability: ConnectorCapability,
-        service: str,
-        since: datetime,
-        until: datetime,
-        limit: int = 500,
-    ) -> list[RawEvidenceItem]:
-        # implement per capability
-        return []
-```
-
-Register it in `ConnectorType` enum (`app/models/all_models.py`) and add factory logic in the connector admin router.
+Returns a per-connector status: `ok`, `degraded`, or `error` with a message.
