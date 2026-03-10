@@ -11,7 +11,7 @@ import typer
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_error, print_success
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError, api_post
+from bugpilot.session import APIError, api_patch
 
 app = typer.Typer(help="Mark the current investigation as resolved")
 
@@ -43,12 +43,12 @@ def cmd_resolve(
         raise typer.Exit(1)
 
     async def _run():
-        body: dict = {}
+        body: dict = {"status": "resolved"}
         if outcome:
             body["outcome"] = outcome
 
         try:
-            data = await api_post(app_ctx, f"/api/v1/investigations/{inv_id}/resolve", body=body or None)
+            data = await api_patch(app_ctx, f"/api/v1/investigations/{inv_id}", body=body)
             if app_ctx.output_format == "json":
                 print_json(data)
             else:

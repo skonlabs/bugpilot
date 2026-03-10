@@ -11,7 +11,7 @@ import typer
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_error, print_hypothesis_list, print_success
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError, api_get, api_patch, api_post
+from bugpilot.session import APIError, api_get, api_patch, api_post, api_post_analysis
 
 app = typer.Typer(help="Hypothesis management commands")
 
@@ -37,7 +37,7 @@ def cmd_list(
     async def _run():
         if refresh:
             try:
-                await api_post(
+                await api_post_analysis(
                     app_ctx,
                     f"/api/v1/investigations/{investigation_id}/hypotheses/refresh",
                 )

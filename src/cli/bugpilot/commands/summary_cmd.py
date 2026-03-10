@@ -11,7 +11,7 @@ import typer
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_error
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError, api_get
+from bugpilot.session import APIError, api_get_analysis
 
 app = typer.Typer(help="Show LLM-generated summary of the current investigation", invoke_without_command=True)
 
@@ -43,7 +43,7 @@ def cmd_summary(
 
     async def _run():
         try:
-            data = await api_get(app_ctx, f"/api/v1/investigations/{inv_id}/summary")
+            data = await api_get_analysis(app_ctx, f"/api/v1/investigations/{inv_id}/summary")
             if app_ctx.output_format == "json":
                 print_json(data)
             else:

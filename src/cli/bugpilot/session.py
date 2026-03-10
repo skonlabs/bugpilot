@@ -79,6 +79,28 @@ async def api_delete(ctx: AppContext, path: str) -> None:
         _handle_connect_error(exc)
 
 
+async def api_get_analysis(ctx: AppContext, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    """GET against the analysis engine (always BugPilot-hosted)."""
+    try:
+        async with ctx.make_analysis_client() as client:
+            r = await client.get(path, params=params)
+            _raise_for_status(r)
+            return r.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _handle_connect_error(exc)
+
+
+async def api_post_analysis(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] = None) -> Any:
+    """POST against the analysis engine (always BugPilot-hosted)."""
+    try:
+        async with ctx.make_analysis_client() as client:
+            r = await client.post(path, json=body)
+            _raise_for_status(r)
+            return r.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _handle_connect_error(exc)
+
+
 async def refresh_token_if_needed(ctx: AppContext) -> bool:
     """
     Attempt to refresh the access token using the stored refresh token.

@@ -3,7 +3,7 @@ Investigations API - core investigation CRUD and lifecycle management.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -111,7 +111,7 @@ async def _get_investigation_or_404(
 async def list_investigations(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status_filter: Optional[InvestigationStatus] = Query(None, alias="status"),
+    status_filter: Optional[List[InvestigationStatus]] = Query(None, alias="status"),
     severity_filter: Optional[Severity] = Query(None, alias="severity"),
     current_user: TokenPayload = Depends(require_permission(Permission.read_investigation)),
     db: AsyncSession = Depends(get_db),
@@ -120,7 +120,7 @@ async def list_investigations(
     query = select(Investigation).where(Investigation.org_id == org_id)
 
     if status_filter:
-        query = query.where(Investigation.status == status_filter)
+        query = query.where(Investigation.status.in_(status_filter))
     if severity_filter:
         query = query.where(Investigation.severity == severity_filter)
 

@@ -11,7 +11,7 @@ import typer
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_error
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError, api_post
+from bugpilot.session import APIError, api_post_analysis
 
 app = typer.Typer(help="Ask an open-ended question about the current investigation")
 
@@ -44,7 +44,7 @@ def cmd_ask(
 
     async def _run():
         try:
-            data = await api_post(
+            data = await api_post_analysis(
                 app_ctx,
                 f"/api/v1/investigations/{inv_id}/ask",
                 body={"question": question},

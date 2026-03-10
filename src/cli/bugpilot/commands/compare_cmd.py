@@ -13,7 +13,7 @@ from rich import box
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_error
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError, api_get
+from bugpilot.session import APIError, api_get_analysis
 
 app = typer.Typer(help="Compare current investigation state against a healthy baseline")
 
@@ -57,7 +57,7 @@ def cmd_compare(
 
     async def _run():
         try:
-            data = await api_get(
+            data = await api_get_analysis(
                 app_ctx,
                 f"/api/v1/investigations/{inv_id}/baseline-comparison",
                 params={"strategy": strategy},
