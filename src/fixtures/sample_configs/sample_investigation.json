@@ -1,0 +1,272 @@
+{
+  "export_format_version": "1.0",
+  "exported_at": "2024-01-15T16:45:00Z",
+  "investigation": {
+    "id": "a3f7c2d1-4e89-4b5a-9c1d-3f8e2a1b6c5d",
+    "org_id": "b1e4d8f2-7a3c-4d9e-8b2f-5c1a7e9d3f6b",
+    "title": "High error rate and latency spike on payment-service",
+    "description": "Payment service began returning 15% HTTP 500 errors and p99 latency exceeded 5s at 14:32 UTC. Downstream impact on checkout and order-service observed. No deployment in preceding 4 hours.",
+    "status": "resolved",
+    "severity": "critical",
+    "service_name": "payment-service",
+    "created_at": "2024-01-15T14:35:00Z",
+    "resolved_at": "2024-01-15T16:20:00Z",
+    "duration_minutes": 105
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "node-inv-001",
+        "node_type": "investigation",
+        "label": "Payment Service Degradation - Jan 15",
+        "properties": {
+          "status": "resolved",
+          "severity": "critical",
+          "opened_at": "2024-01-15T14:35:00Z"
+        }
+      },
+      {
+        "id": "node-symptom-001",
+        "node_type": "symptom",
+        "label": "15% HTTP 500 error rate",
+        "properties": {
+          "observed_at": "2024-01-15T14:32:00Z",
+          "metric_value": 15.3,
+          "metric_unit": "percent",
+          "baseline": 0.2
+        }
+      },
+      {
+        "id": "node-symptom-002",
+        "node_type": "symptom",
+        "label": "p99 latency > 5s",
+        "properties": {
+          "observed_at": "2024-01-15T14:33:00Z",
+          "metric_value": 5420,
+          "metric_unit": "milliseconds",
+          "baseline": 180
+        }
+      },
+      {
+        "id": "node-service-001",
+        "node_type": "service_or_component",
+        "label": "payment-service",
+        "properties": {
+          "language": "Java",
+          "version": "2.14.1",
+          "replicas": 4,
+          "namespace": "production"
+        }
+      },
+      {
+        "id": "node-service-002",
+        "node_type": "service_or_component",
+        "label": "postgres-payments",
+        "properties": {
+          "type": "postgresql",
+          "version": "14.8",
+          "instance_class": "db.r6g.xlarge"
+        }
+      },
+      {
+        "id": "node-evidence-001",
+        "node_type": "evidence",
+        "label": "Connection pool exhaustion logs",
+        "properties": {
+          "kind": "log_snapshot",
+          "source_system": "datadog",
+          "collected_at": "2024-01-15T14:38:00Z",
+          "normalized_summary": "HikariCP connection pool at 100% utilization. 847 threads waiting for connection. Pool size: 20, timeout: 30000ms. Errors: HikariPool-1 - Connection is not available, request timed out after 30001ms."
+        }
+      },
+      {
+        "id": "node-evidence-002",
+        "node_type": "evidence",
+        "label": "Database CPU metrics",
+        "properties": {
+          "kind": "metric_snapshot",
+          "source_system": "cloudwatch",
+          "collected_at": "2024-01-15T14:38:00Z",
+          "normalized_summary": "RDS CPUUtilization averaged 98.4% over the 14:25-14:45 UTC window. Maximum: 99.8%. Alarm threshold (80%) breached at 14:28 UTC. Concurrent connections: 487 (max: 500)."
+        }
+      },
+      {
+        "id": "node-evidence-003",
+        "node_type": "evidence",
+        "label": "Slow query log spike",
+        "properties": {
+          "kind": "log_snapshot",
+          "source_system": "cloudwatch",
+          "collected_at": "2024-01-15T14:40:00Z",
+          "normalized_summary": "RDS slow query log shows 2,841 queries exceeding 5s threshold between 14:25-14:40 UTC. Top query: SELECT ... FROM payments JOIN payment_methods WHERE status = 'pending' ORDER BY created_at DESC LIMIT 100 - avg 12.4s. Table: payments row count increased from 8M to 47M since last VACUUM."
+        }
+      },
+      {
+        "id": "node-hypothesis-001",
+        "node_type": "hypothesis",
+        "label": "Missing index causing full table scan on payments table",
+        "properties": {
+          "confidence_score": 0.92,
+          "status": "confirmed",
+          "generated_by_llm": true,
+          "reasoning": "Slow query log shows full sequential scan on the payments table (47M rows) for status-filtered queries. No index on (status, created_at). Connection pool exhaustion is a downstream effect of long-running queries blocking threads."
+        }
+      },
+      {
+        "id": "node-hypothesis-002",
+        "node_type": "hypothesis",
+        "label": "Table bloat due to unvacuumed dead tuples",
+        "properties": {
+          "confidence_score": 0.71,
+          "status": "proposed",
+          "generated_by_llm": true,
+          "reasoning": "Payments table grew from 8M to 47M rows in slow query logs, suggesting table bloat from dead tuples. VACUUM not run since last deployment 3 weeks ago. Contributing factor to query slowness."
+        }
+      },
+      {
+        "id": "node-action-001",
+        "node_type": "action",
+        "label": "Create index on payments(status, created_at)",
+        "properties": {
+          "risk_level": "low",
+          "status": "completed",
+          "command": "CREATE INDEX CONCURRENTLY idx_payments_status_created ON payments(status, created_at) WHERE status IN ('pending', 'processing');",
+          "approved_by": "jane.smith@example.com",
+          "executed_at": "2024-01-15T15:45:00Z",
+          "duration_seconds": 342
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-001",
+        "from_node_id": "node-inv-001",
+        "to_node_id": "node-symptom-001",
+        "edge_type": "contains",
+        "properties": {}
+      },
+      {
+        "id": "edge-002",
+        "from_node_id": "node-inv-001",
+        "to_node_id": "node-symptom-002",
+        "edge_type": "contains",
+        "properties": {}
+      },
+      {
+        "id": "edge-003",
+        "from_node_id": "node-symptom-001",
+        "to_node_id": "node-service-001",
+        "edge_type": "affects",
+        "properties": {}
+      },
+      {
+        "id": "edge-004",
+        "from_node_id": "node-service-001",
+        "to_node_id": "node-service-002",
+        "edge_type": "depends_on",
+        "properties": {"relationship": "primary_datastore"}
+      },
+      {
+        "id": "edge-005",
+        "from_node_id": "node-evidence-001",
+        "to_node_id": "node-hypothesis-001",
+        "edge_type": "supports",
+        "properties": {"weight": 0.85}
+      },
+      {
+        "id": "edge-006",
+        "from_node_id": "node-evidence-002",
+        "to_node_id": "node-hypothesis-001",
+        "edge_type": "supports",
+        "properties": {"weight": 0.90}
+      },
+      {
+        "id": "edge-007",
+        "from_node_id": "node-evidence-003",
+        "to_node_id": "node-hypothesis-001",
+        "edge_type": "supports",
+        "properties": {"weight": 0.95}
+      },
+      {
+        "id": "edge-008",
+        "from_node_id": "node-hypothesis-001",
+        "to_node_id": "node-action-001",
+        "edge_type": "supports",
+        "properties": {}
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "ev-001",
+      "node_id": "node-evidence-001",
+      "kind": "log_snapshot",
+      "source_system": "datadog",
+      "service": "payment-service",
+      "collected_at": "2024-01-15T14:38:00Z",
+      "normalized_summary": "HikariCP connection pool at 100% utilization. 847 threads waiting for connection. Pool size: 20, timeout: 30000ms.",
+      "severity": "error"
+    },
+    {
+      "id": "ev-002",
+      "node_id": "node-evidence-002",
+      "kind": "metric_snapshot",
+      "source_system": "cloudwatch",
+      "service": "postgres-payments",
+      "collected_at": "2024-01-15T14:38:00Z",
+      "normalized_summary": "RDS CPUUtilization averaged 98.4% over 14:25-14:45 UTC. Concurrent connections: 487/500.",
+      "severity": "critical"
+    },
+    {
+      "id": "ev-003",
+      "node_id": "node-evidence-003",
+      "kind": "log_snapshot",
+      "source_system": "cloudwatch",
+      "service": "postgres-payments",
+      "collected_at": "2024-01-15T14:40:00Z",
+      "normalized_summary": "2,841 slow queries exceeding 5s. Full table scan on payments (47M rows). Missing index on status+created_at columns.",
+      "severity": "critical"
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "hyp-001",
+      "node_id": "node-hypothesis-001",
+      "title": "Missing index causing full table scan on payments table",
+      "description": "The payments table (47M rows) is missing a composite index on (status, created_at). Queries filtering by status and ordering by created_at execute as sequential scans, taking 12+ seconds each. With high traffic, these long-running queries exhaust the HikariCP connection pool (max: 20), causing all incoming requests to queue and timeout.",
+      "confidence_score": 0.92,
+      "status": "confirmed",
+      "generated_by_llm": true,
+      "llm_model": "claude-3-5-sonnet",
+      "supporting_evidence_ids": ["ev-001", "ev-002", "ev-003"]
+    },
+    {
+      "id": "hyp-002",
+      "node_id": "node-hypothesis-002",
+      "title": "Table bloat due to unvacuumed dead tuples increasing scan cost",
+      "description": "The payments table appears to have significant dead tuple bloat. VACUUM has not been run since the last deployment 3 weeks ago. Dead tuples inflate the table size, increasing sequential scan cost and buffer cache pressure.",
+      "confidence_score": 0.71,
+      "status": "proposed",
+      "generated_by_llm": true,
+      "llm_model": "claude-3-5-sonnet",
+      "supporting_evidence_ids": ["ev-003"]
+    }
+  ],
+  "actions": [
+    {
+      "id": "act-001",
+      "node_id": "node-action-001",
+      "title": "Create composite index on payments(status, created_at)",
+      "description": "Create a partial composite index covering the most common query pattern. Uses CONCURRENTLY to avoid locking the table during index creation.",
+      "risk_level": "low",
+      "status": "completed",
+      "hypothesis_id": "hyp-001",
+      "command": "CREATE INDEX CONCURRENTLY idx_payments_status_created ON payments(status, created_at) WHERE status IN ('pending', 'processing');",
+      "approved_by": "jane.smith@example.com",
+      "approved_at": "2024-01-15T15:40:00Z",
+      "executed_at": "2024-01-15T15:45:00Z",
+      "completed_at": "2024-01-15T15:51:00Z",
+      "outcome": "Index created successfully in 342s. Query p99 latency returned to 180ms baseline within 3 minutes. Connection pool utilization dropped to 12%. Error rate returned to 0.1%."
+    }
+  ]
+}
