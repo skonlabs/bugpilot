@@ -218,7 +218,7 @@ def cmd_test(
 
     async def _run():
         results = {}
-        async with app_ctx.make_client() as client:
+        async with app_ctx.make_analysis_client() as client:
             for name, entry in to_test.items():
                 label = name if name == entry.kind else f"{name} ({entry.kind})"
                 console.print(f"  Testing [bold]{label}[/bold]...", end=" ")

@@ -74,7 +74,14 @@ def main(
         None,
         "--api-url",
         envvar="BUGPILOT_API_URL",
-        help="BugPilot API URL",
+        help="BugPilot data API URL (self-hostable)",
+    ),
+    analysis_url: Optional[str] = typer.Option(
+        None,
+        "--analysis-url",
+        envvar="BUGPILOT_ANALYSIS_URL",
+        help="BugPilot analysis engine URL (default: https://api.bugpilot.io)",
+        hidden=True,
     ),
     output_format: str = typer.Option(
         "human",
@@ -116,6 +123,8 @@ def main(
     )
     if api_url:
         app_ctx.api_url = api_url
+    if analysis_url:
+        app_ctx.analysis_api_url = analysis_url
     if investigation:
         app_ctx.current_investigation_id = investigation
 

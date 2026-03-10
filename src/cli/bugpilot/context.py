@@ -21,10 +21,18 @@ def _default_api_url() -> str:
     return os.environ.get("BUGPILOT_API_URL", "https://api.bugpilot.io")
 
 
+def _default_analysis_url() -> str:
+    # The analysis engine is always BugPilot-hosted. Customers cannot override
+    # this to point at their own instance — the IP-sensitive connector logic
+    # and LLM analysis live here.
+    return os.environ.get("BUGPILOT_ANALYSIS_URL", "https://api.bugpilot.io")
+
+
 @dataclass
 class AppContext:
     """Shared application context passed to all commands."""
     api_url: str = field(default_factory=_default_api_url)
+    analysis_api_url: str = field(default_factory=_default_analysis_url)
     output_format: str = "human"  # "human" | "json" | "verbose"
     no_color: bool = False
     current_investigation_id: Optional[str] = field(default=None)
@@ -132,6 +140,7 @@ class AppContext:
         return self._user_id
 
     def make_client(self) -> httpx.AsyncClient:
+        """Client for the data API (self-hostable CRUD layer)."""
         headers = {"User-Agent": "bugpilot-cli/0.1.0"}
         if self._access_token:
             headers["Authorization"] = f"Bearer {self._access_token}"
@@ -139,4 +148,15 @@ class AppContext:
             base_url=self.api_url,
             headers=headers,
             timeout=30.0,
+        )
+
+    def make_analysis_client(self) -> httpx.AsyncClient:
+        """Client for the analysis engine (always BugPilot-hosted)."""
+        headers = {"User-Agent": "bugpilot-cli/0.1.0"}
+        if self._access_token:
+            headers["Authorization"] = f"Bearer {self._access_token}"
+        return httpx.AsyncClient(
+            base_url=self.analysis_api_url,
+            headers=headers,
+            timeout=60.0,
         )
