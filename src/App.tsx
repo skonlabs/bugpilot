@@ -67,20 +67,24 @@ const App = () => (
             </Route>
 
             {/* Dashboard (Protected) */}
-            <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/dashboard/credentials" element={<Credentials />} />
-              <Route path="/dashboard/settings" element={<Settings />} />
-              <Route path="/dashboard/downloads" element={<Downloads />} />
+            <Route element={<ProtectedRoute />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard/credentials" element={<Credentials />} />
+                <Route path="/dashboard/settings" element={<Settings />} />
+                <Route path="/dashboard/downloads" element={<Downloads />} />
+              </Route>
             </Route>
 
             {/* Admin (Protected + Admin Only) */}
-            <Route element={<ProtectedRoute adminOnly><AdminLayout /></ProtectedRoute>}>
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/users" element={<AdminUsers />} />
-              <Route path="/admin/credentials" element={<AdminCredentials />} />
-              <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
-              <Route path="/admin/releases" element={<AdminReleases />} />
+            <Route element={<ProtectedRoute adminOnly />}>
+              <Route element={<AdminLayout />}>
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/credentials" element={<AdminCredentials />} />
+                <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+                <Route path="/admin/releases" element={<AdminReleases />} />
+              </Route>
             </Route>
 
             <Route path="*" element={<NotFound />} />
