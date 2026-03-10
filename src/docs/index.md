@@ -1,81 +1,49 @@
 # BugPilot Documentation
 
-BugPilot is a CLI tool you download and run from your terminal (macOS or Windows). It connects to the BugPilot cloud service and your existing monitoring tools, collects evidence from logs, metrics, traces, and deployments, and uses a multi-pass AI engine to generate ranked, actionable root cause hypotheses.
+BugPilot is a developer CLI tool for debugging production incidents. Install it on your machine, connect it to your existing observability tools, and use it to find the root cause of issues — on demand when something breaks, or automatically when monitoring alerts fire.
 
 ---
 
-## Getting Started
+## Two Modes
+
+**On-Demand** — You notice something wrong. You open a terminal, describe the symptom, and BugPilot queries your connected data sources to pull relevant evidence. It analyses what it finds and surfaces ranked hypotheses with suggested next steps.
+
+**Automatic** — Your monitoring tool fires an alert. BugPilot receives it via webhook, creates an investigation immediately, and starts collecting evidence. When you pick it up in the terminal, the evidence trail is already there.
+
+---
+
+## Get Started
 
 | Guide | Description |
 |-------|-------------|
-| [Getting Started](./getting-started.md) | Download, install, activate, and run your first investigation |
+| [Getting Started](./getting-started.md) | Install, activate, connect data sources, and run your first investigation |
 | [CLI Reference](./cli-reference.md) | Every command, flag, and output format |
 
 ---
 
-## How-To Guides
+## Investigating Incidents
 
 | Guide | Description |
 |-------|-------------|
-| [Investigate an Incident](./how-to-investigate.md) | End-to-end walkthrough: alert → evidence → hypotheses → fix → close |
-| [Configure Connectors](./connectors.md) | Connect Datadog, Grafana, CloudWatch, GitHub, Kubernetes, PagerDuty |
-| [Configure Webhooks](./how-to-webhooks.md) | Auto-triage from incoming monitoring alerts |
-| [Configure LLM Providers](./how-to-configure-llm.md) | OpenAI, Anthropic, Azure OpenAI, Ollama |
-| [Manage Users and Roles](./how-to-rbac.md) | RBAC roles, approval workflow, audit log |
-| [Configure Data Retention](./how-to-retention.md) | Retention phases and compliance configurations |
+| [On-Demand Investigation](./how-to-investigate.md) | Investigate a live incident step by step |
+| [Automatic Mode — Webhooks](./how-to-webhooks.md) | Auto-triage from Datadog, Grafana, CloudWatch, PagerDuty alerts |
+| [Connect Data Sources](./connectors.md) | Datadog, Grafana, CloudWatch, GitHub, Kubernetes, PagerDuty |
 
 ---
 
-## Reference
+## Administration
 
-| Reference | Description |
-|-----------|-------------|
-| [API Reference](./api-reference.md) | REST API endpoints, request/response schemas |
-| [Architecture](./architecture.md) | System design, data flow, and key decisions |
+| Guide | Description |
+|-------|-------------|
+| [Manage Users and Roles](./how-to-rbac.md) | Team access, roles, and approval workflow |
+| [Data Retention](./how-to-retention.md) | How long investigation data is stored |
+| [AI Analysis Settings](./how-to-configure-llm.md) | Configure the AI engine for deeper hypothesis generation |
+
+---
+
+## Help
+
+| Resource | |
+|----------|--|
 | [Troubleshooting](./troubleshooting.md) | Common problems and how to fix them |
-
----
-
-## Self-Hosting (Advanced)
-
-Run BugPilot on your own infrastructure instead of the cloud service.
-
-| Guide | Description |
-|-------|-------------|
-| [Deployment Guide](./deployment.md) | Docker Compose, Kubernetes, and AWS ECS |
-| [Developer Setup](./developer_setup.md) | Local dev environment for contributors |
-
----
-
-## Support
-
-| Resource | Link |
-|----------|------|
-| Issues | https://github.com/skonlabs/bugpilot/issues |
-| Troubleshooting | [Troubleshooting Guide](./troubleshooting.md) |
-
----
-
-## How It Works
-
-```
-Alert / Symptom
-      │
-      ▼
-[Investigation Created]
-      │
-      ▼
-[Evidence Collection] ──── Datadog · Grafana · CloudWatch
-      │                     GitHub · Kubernetes · PagerDuty
-      ▼
-[Investigation Graph] ──── Causal links, timeline, service map
-      │
-      ▼
-[Hypothesis Engine]  ──── Rule-based → Graph correlation
-      │                   → Historical reranking → LLM synthesis
-      ▼
-[Ranked Hypotheses]  ──── Confidence scores, evidence citations
-      │
-      ▼
-[Safe Actions]       ──── Risk-rated, approval-gated, dry-run capable
-```
+| GitHub Issues | https://github.com/skonlabs/bugpilot/issues |

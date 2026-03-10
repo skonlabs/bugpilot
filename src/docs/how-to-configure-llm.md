@@ -34,7 +34,7 @@ The LLM receives a **redacted** evidence summary — all PII, credentials, token
 
 ## Configuration
 
-LLM providers are configured via environment variables on the BugPilot backend. If you are using the hosted BugPilot service, configure this in **Settings → LLM Provider** in the dashboard.
+LLM providers are configured via environment variables on the BugPilot backend server. If you are using the hosted BugPilot service, contact your account team to enable LLM synthesis for your organisation.
 
 ### OpenAI
 

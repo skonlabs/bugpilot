@@ -145,37 +145,29 @@ bugpilot fix suggest \
 
 ---
 
-## Step 5: Dry-Run Before Applying
+## Step 5: Execute the Fix
 
-Always test first:
-
-```bash
-bugpilot fix run act_d2f4e1 --dry-run
-```
-
-```
-  DRY RUN: Rollback deployment a3f8c2d
-  ──────────────────────────────────────
-  Type:          rollback
-  Risk:          low
-  Rollback plan: git revert a3f8c2d && trigger CI redeploy pipeline
-
-  No changes made. Remove --dry-run to execute.
-```
-
----
-
-## Step 6: Execute the Fix
+Run the action. BugPilot will show the action details and ask for confirmation before executing:
 
 ```bash
-bugpilot fix run act_d2f4e1 --yes
+bugpilot fix run act_d2f4e1
 ```
+
+```
+  Action:     Rollback deployment a3f8c2d
+  Risk level: LOW
+Execute this action? [y/N]: y
+
+✓ Action executed: act_d2f4e1
+```
+
+Use `--yes` / `-y` to skip the confirmation prompt in scripts.
 
 Watch your monitoring. If the 5xx rate drops, the fix worked.
 
 ---
 
-## Step 7: Confirm Root Cause and Close
+## Step 6: Confirm Root Cause and Close
 
 Confirm the hypothesis that turned out to be correct:
 
@@ -197,7 +189,7 @@ bugpilot investigate close inv_7f3a2b
 
 ---
 
-## Step 8: Export a Post-Mortem
+## Step 7: Export a Post-Mortem
 
 ```bash
 # Markdown report for Confluence / Notion / GitHub wiki

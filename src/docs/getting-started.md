@@ -1,16 +1,18 @@
 # Getting Started with BugPilot
 
-BugPilot is a CLI tool you download and run from your terminal. It connects to the BugPilot cloud service to analyze logs, metrics, traces, deployments, and code changes — turning a vague production symptom into ranked, actionable root cause hypotheses.
+BugPilot is a CLI tool that helps you debug production incidents. You install it on your machine, connect it to your observability tools, and use it to find root causes — either on demand when something breaks, or automatically when alerts fire.
 
 ---
 
-## Step 1: Create an Account
+## Step 1: Register
 
-Go to [bugpilot.io](https://bugpilot.io) and create a free account. After sign-up, your admin will issue you a license key from the **API Credentials** section of the dashboard.
+Go to [bugpilot.io](https://bugpilot.io) and create an account. After registration, copy your **license key** and **API secret** from the credentials page.
 
 ---
 
-## Step 2: Download and Install the CLI
+## Step 2: Install the CLI
+
+Choose your operating system:
 
 ### macOS (Intel & Apple Silicon, macOS 12+)
 
@@ -20,9 +22,9 @@ Go to [bugpilot.io](https://bugpilot.io) and create a free account. After sign-u
 brew install bugpilot/tap/bugpilot
 ```
 
-**Direct download:**
+**Installer package:**
 
-Go to [bugpilot.io/download](https://bugpilot.io/download) and download the `.pkg` installer, then open it and follow the prompts.
+Download the `.pkg` file from [bugpilot.io/download](https://bugpilot.io/download), open it, and follow the on-screen steps.
 
 ### Windows (64-bit, Windows 10+)
 
@@ -32,40 +34,59 @@ Go to [bugpilot.io/download](https://bugpilot.io/download) and download the `.pk
 scoop install bugpilot
 ```
 
-**Direct download:**
+**Installer:**
 
-Go to [bugpilot.io/download](https://bugpilot.io/download) and download the `.msi` installer, then run it and follow the prompts.
+Download the `.msi` file from [bugpilot.io/download](https://bugpilot.io/download), run it, and follow the prompts.
 
-### Verify the installation
+### Confirm the install
 
-Open a new terminal window and run:
+Open a new terminal and run:
 
 ```bash
 bugpilot --version
-# bugpilot 0.1.0
 ```
 
 ---
 
-## Step 3: Activate the CLI
+## Step 3: Activate
 
-Activate BugPilot with your license key from the dashboard. You only need to do this once per machine.
+Activation links the CLI to your account. The first time you run this command, BugPilot displays its Terms of Service — you must accept them to proceed.
 
 ```bash
-bugpilot auth activate --key bp_YOUR_LICENSE_KEY
+bugpilot auth activate --key YOUR_LICENSE_KEY --secret YOUR_API_SECRET
 ```
 
-You will be prompted for your email address if not supplied:
+You will be prompted to accept the Terms of Service and enter your email:
 
 ```
+┌─ Terms of Service ───────────────────────────────────────────┐
+│ BugPilot Terms of Service                                     │
+│                                                               │
+│ By activating BugPilot you agree to the following:           │
+│   1. BugPilot accesses your monitoring data only with the    │
+│      credentials you explicitly provide.                      │
+│   ...                                                         │
+│                                                               │
+│ Full Terms: https://bugpilot.io/terms                        │
+└───────────────────────────────────────────────────────────────┘
+
+Do you accept the Terms of Service? [y/N]: y
+
+✓ Terms of Service accepted.
+
 Enter your email address: alice@acme.com
 
-✓ Activated successfully!  Org: acme-corp | Role: investigator
+✓ BugPilot activated!
+
+Next steps:
+  1. Set up a connector   bugpilot connector add datadog
+  2. Test connectivity    bugpilot connector test
+  3. Start investigating  bugpilot incident triage "..."
 ```
 
-Credentials are stored at `~/.config/bugpilot/credentials.json` (permissions `600`).
+BugPilot stores your session at `~/.config/bugpilot/credentials.json` (`600` permissions). You only need to activate once per machine.
 
-To check who you're logged in as at any time:
+Check who you're logged in as at any time:
 
 ```bash
 bugpilot auth whoami
@@ -73,88 +94,133 @@ bugpilot auth whoami
 
 ---
 
-## Step 4: Connect Your Observability Tools
+## Step 4: Connect Your Data Sources
 
-Log into [bugpilot.io](https://bugpilot.io) → **Settings → Connectors** and add credentials for the tools your team uses:
+BugPilot reads connector credentials from `~/.config/bugpilot/config.yaml`. There are two ways to configure it:
 
-| Connector | What BugPilot collects |
-|-----------|----------------------|
-| Datadog | Logs, metrics, traces, alerts |
-| Grafana | Metrics, alerts |
-| AWS CloudWatch | Logs, metrics, alarms |
-| GitHub | Code commits, deployments |
-| Kubernetes | Pod state, events, logs |
-| PagerDuty | Incidents, alerts |
+### Option A: Interactive wizard (recommended)
 
-BugPilot works with a single connector, but produces the most accurate hypotheses when evidence comes from multiple sources.
+The `connector add` command walks you through each required field for the connector type you choose:
 
-See [Connector Setup](./connectors.md) for step-by-step credential instructions for each platform.
+```bash
+bugpilot connector add datadog
+bugpilot connector add grafana
+bugpilot connector add cloudwatch
+bugpilot connector add github
+bugpilot connector add kubernetes
+bugpilot connector add pagerduty
+```
+
+Example:
+
+```
+Configure datadog connector
+
+  API Key: ••••••••••••••••••••
+  Application Key: ••••••••••••••••••••
+  Site (e.g. datadoghq.com) [datadoghq.com]:
+
+✓ Connector 'datadog' saved to ~/.config/bugpilot/config.yaml
+i Run 'bugpilot connector test' to verify connectivity.
+```
+
+### Option B: Edit the config file directly
+
+Create a starter config with all connector templates:
+
+```bash
+bugpilot config init
+```
+
+Then open `~/.config/bugpilot/config.yaml` in your editor and fill in your credentials. You can use `${VAR_NAME}` syntax to read values from environment variables:
+
+```yaml
+connectors:
+  datadog:
+    api_key: "${DD_API_KEY}"
+    app_key: "${DD_APP_KEY}"
+    site: "datadoghq.com"
+  grafana:
+    url: "https://grafana.example.com"
+    api_token: "${GRAFANA_TOKEN}"
+    org_id: "1"
+```
+
+### Verify connectivity
+
+```bash
+bugpilot connector test
+```
+
+```
+  Testing datadog...  ✓ OK
+  Testing grafana...  ✓ OK
+```
+
+| Connector | Data BugPilot can access |
+|-----------|--------------------------|
+| **Datadog** | Logs, metrics, traces, monitor alerts |
+| **Grafana** | Metrics, alert notifications |
+| **AWS CloudWatch** | Logs, metrics, alarms |
+| **GitHub** | Commits, deployments, pull requests |
+| **Kubernetes** | Pod status, events, logs |
+| **PagerDuty** | Incident and alert history |
+
+See [Connect Data Sources](./connectors.md) for required permissions and field details for each platform.
 
 ---
 
-## Step 5: Run Your First Investigation
+## Step 5: Investigate
+
+BugPilot has two usage modes:
+
+### On-Demand
+
+When you notice an issue, open a terminal and describe what you're seeing. BugPilot queries your connected sources, builds a picture of what happened, and tells you what it thinks the root cause is.
 
 ```bash
-# 1. Open a new investigation for the affected service
-bugpilot investigate create "High error rate on payment-service" \
-  --symptom "HTTP 5xx rate above 5% since 14:30 UTC" \
-  --severity high
+# Start an investigation
+bugpilot incident triage "Payment service errors spiking" \
+  --symptom "HTTP 5xx rate above 5% since 14:31 UTC" \
+  --severity critical \
+  --service payment-service
 
-# Output:
-# ✓ Created  inv_7f3a2b
-#   Title:    High error rate on payment-service
-#   Severity: high
-#   Status:   open
-
-# 2. Add evidence — attach a log snapshot you've already retrieved
+# Attach evidence you've collected
 bugpilot evidence collect \
   --investigation-id inv_7f3a2b \
-  --label "payment-service errors" \
+  --label "error logs" \
   --kind log_snapshot \
   --source datadog \
-  --summary "47 NullPointerException errors at UserService.java:142 since 14:31 UTC"
+  --summary "NullPointerException at UserService.java:142, started 14:31 UTC"
 
-# 3. List the hypotheses BugPilot generated
+# See what BugPilot thinks the root cause is
 bugpilot hypotheses list --investigation-id inv_7f3a2b
 
-# Output:
-# RANK  HYPOTHESIS                          CONFIDENCE  STATUS
-#  1    Bad deployment introduced regression  72%       active
-#  2    Memory exhaustion                     41%       active
-
-# 4. Suggest a fix action for the top hypothesis
-bugpilot fix suggest \
-  --investigation-id inv_7f3a2b \
-  "Rollback deployment a3f8c2d" \
-  --type rollback \
-  --risk low \
-  --description "Revert Stripe SDK v4 update that correlates with error onset" \
-  --rollback-plan "git revert a3f8c2d && redeploy"
-
-# 5. Dry-run the action before applying
-bugpilot fix run act_d2f4e1 --dry-run
-
-# 6. When resolved, close the investigation
+# When resolved, close the investigation
 bugpilot investigate close inv_7f3a2b
 ```
 
----
+See [On-Demand Investigation](./how-to-investigate.md) for the full workflow.
 
-## Key Concepts
+### Automatic
 
-| Concept | Description |
-|---------|-------------|
-| **Investigation** | A named workspace for a single incident. Holds evidence, hypotheses, and actions. |
-| **Evidence** | A normalized snapshot from a monitoring source — log, metric, trace, config diff, etc. |
-| **Hypothesis** | A ranked root cause candidate with a confidence score and supporting evidence citations. |
-| **Action** | A proposed remediation step, risk-rated and approval-gated before execution. |
+Set up webhooks so that when your monitoring tool fires an alert, BugPilot automatically creates an investigation. You open the terminal to find it already has evidence collected.
+
+```bash
+# Check what's waiting for you
+bugpilot investigate list --status open
+
+# Pick up an auto-created investigation
+bugpilot incident status inv_7f3a2b
+```
+
+See [Automatic Mode — Webhooks](./how-to-webhooks.md) to set this up.
 
 ---
 
 ## Next Steps
 
+- [On-Demand Investigation](./how-to-investigate.md) — full incident walkthrough
+- [Automatic Mode — Webhooks](./how-to-webhooks.md) — auto-create investigations from alerts
+- [Connect Data Sources](./connectors.md) — connector setup for each platform
 - [CLI Reference](./cli-reference.md) — every command and flag
-- [Connector Setup](./connectors.md) — configure Datadog, Grafana, CloudWatch, etc.
-- [How to Investigate an Incident](./how-to-investigate.md) — full end-to-end walkthrough
-- [Architecture Overview](./architecture.md) — how evidence, graphs, and hypotheses work
-- [Self-Hosting](./deployment.md) — run BugPilot on your own infrastructure (advanced)

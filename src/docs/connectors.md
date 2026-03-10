@@ -19,30 +19,47 @@ The more connectors you configure, the better BugPilot's hypotheses will be. Sin
 
 ---
 
-## Adding a Connector
+## Configuring Connectors
 
-Connectors are configured by your admin in the dashboard under **Settings → Connectors**. Credentials are encrypted at rest using Fernet encryption and never returned in API responses.
+All connector credentials are stored in `~/.config/bugpilot/config.yaml` (permissions `600`). Credentials are never sent anywhere except the BugPilot service for evidence collection.
 
-You can also manage connectors via the API:
+### Option A: Interactive wizard (recommended)
 
 ```bash
-# Add a connector
-curl -X POST https://api.bugpilot.io/api/v1/admin/connectors \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "connector_type": "datadog",
-    "env_label": "production",
-    "credentials": { ... }
-  }'
+bugpilot connector add datadog
+bugpilot connector add grafana
+bugpilot connector add cloudwatch
+bugpilot connector add github
+bugpilot connector add kubernetes
+bugpilot connector add pagerduty
+```
 
-# List configured connectors
-curl https://api.bugpilot.io/api/v1/admin/connectors \
-  -H "Authorization: Bearer $TOKEN"
+Each command prompts for the required fields. Secret values are masked during input.
 
-# Validate all connectors
-curl https://api.bugpilot.io/api/v1/admin/connectors/validate \
-  -H "Authorization: Bearer $TOKEN"
+### Option B: Edit config.yaml directly
+
+Generate a starter file:
+
+```bash
+bugpilot config init
+```
+
+Then edit `~/.config/bugpilot/config.yaml`. Use `${VAR_NAME}` to pull values from environment variables.
+
+### Listing and removing connectors
+
+```bash
+bugpilot connector list          # show all configured connectors (secrets masked)
+bugpilot connector remove datadog  # remove a connector
+bugpilot connector test          # test all connectors
+bugpilot connector test grafana  # test a specific connector
+```
+
+### Checking your config for errors
+
+```bash
+bugpilot config validate
+bugpilot config show
 ```
 
 ---
@@ -51,13 +68,13 @@ curl https://api.bugpilot.io/api/v1/admin/connectors/validate \
 
 **Capabilities:** Logs, Metrics, Traces, Alerts
 
-### Credentials
+### Fields
 
-| Field | Description |
-|-------|-------------|
-| `api_key` | Datadog API key |
-| `app_key` | Datadog Application key |
-| `site` | Your Datadog site: `datadoghq.com`, `datadoghq.eu`, `us3.datadoghq.com` |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `api_key` | Yes | Datadog API key |
+| `app_key` | Yes | Datadog Application key |
+| `site` | No | Your Datadog site — default: `datadoghq.com` |
 
 ### Required permissions
 
@@ -67,14 +84,14 @@ Your API key must have:
 - `apm_read`
 - `monitors_read`
 
-### Example credentials object
+### Config file example
 
-```json
-{
-  "api_key": "your_datadog_api_key",
-  "app_key": "your_datadog_app_key",
-  "site": "datadoghq.com"
-}
+```yaml
+connectors:
+  datadog:
+    api_key: "${DD_API_KEY}"
+    app_key: "${DD_APP_KEY}"
+    site: "datadoghq.com"
 ```
 
 ---
@@ -83,14 +100,14 @@ Your API key must have:
 
 **Capabilities:** Metrics, Alerts
 
-### Credentials
+### Fields
 
-| Field | Description |
-|-------|-------------|
-| `url` | Your Grafana instance URL (e.g. `https://grafana.example.com`) |
-| `api_token` | Service account token (Viewer role) |
-| `org_id` | Grafana org ID (default: 1) |
-| `prometheus_datasource_uid` | UID of your Prometheus datasource (auto-discovered if omitted) |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` | Yes | Your Grafana instance URL (e.g. `https://grafana.example.com`) |
+| `api_token` | Yes | Service account token (Viewer role minimum) |
+| `org_id` | No | Grafana org ID — default: `1` |
+| `prometheus_datasource_uid` | No | UID of your Prometheus datasource (auto-discovered if omitted) |
 
 ### Creating a service account token
 
@@ -98,14 +115,14 @@ Your API key must have:
 2. Set role to **Viewer**
 3. Click **Add token** — copy the token immediately
 
-### Example credentials object
+### Config file example
 
-```json
-{
-  "url": "https://grafana.example.com",
-  "api_token": "glsa_example_token",
-  "org_id": 1
-}
+```yaml
+connectors:
+  grafana:
+    url: "https://grafana.example.com"
+    api_token: "${GRAFANA_TOKEN}"
+    org_id: "1"
 ```
 
 ---
@@ -114,15 +131,14 @@ Your API key must have:
 
 **Capabilities:** Logs, Metrics, Alarms
 
-### Credentials
+### Fields
 
-| Field | Description |
-|-------|-------------|
-| `aws_access_key_id` | IAM access key ID |
-| `aws_secret_access_key` | IAM secret access key |
-| `region` | AWS region (e.g. `us-east-1`) |
-| `log_group_names` | List of CloudWatch log group names to query |
-| `role_arn` | (Optional) IAM role ARN to assume |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `aws_access_key_id` | Yes | IAM access key ID |
+| `aws_secret_access_key` | Yes | IAM secret access key |
+| `region` | Yes | AWS region (e.g. `us-east-1`) |
+| `log_group_names` | No | List of CloudWatch log group names to query |
 
 ### Required IAM permissions
 
@@ -140,18 +156,17 @@ Your API key must have:
 }
 ```
 
-### Example credentials object
+### Config file example
 
-```json
-{
-  "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
-  "aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-  "region": "us-east-1",
-  "log_group_names": [
-    "/aws/lambda/payment-service",
-    "/ecs/checkout-service"
-  ]
-}
+```yaml
+connectors:
+  cloudwatch:
+    aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
+    aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
+    region: "us-east-1"
+    log_group_names:
+      - "/aws/lambda/payment-service"
+      - "/ecs/checkout-service"
 ```
 
 ---
@@ -160,14 +175,13 @@ Your API key must have:
 
 **Capabilities:** Code changes, Deployments
 
-### Credentials
+### Fields
 
-| Field | Description |
-|-------|-------------|
-| `token` | Personal access token or GitHub App installation token |
-| `org` | GitHub organization name |
-| `repos` | List of repository names to watch |
-| `api_base_url` | (Optional) GitHub Enterprise base URL |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `token` | Yes | Personal access token or GitHub App installation token |
+| `org` | Yes | GitHub organization name |
+| `repos` | No | List of repository names to watch |
 
 ### Token scopes required
 
@@ -179,14 +193,16 @@ Your API key must have:
 1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
 2. Generate new token with `repo:status` and `read:repo_hook` scopes
 
-### Example credentials object
+### Config file example
 
-```json
-{
-  "token": "ghp_example_token",
-  "org": "mycompany",
-  "repos": ["payment-service", "checkout-service", "auth-service"]
-}
+```yaml
+connectors:
+  github:
+    token: "${GITHUB_TOKEN}"
+    org: "mycompany"
+    repos:
+      - "payment-service"
+      - "checkout-service"
 ```
 
 ---
@@ -195,15 +211,15 @@ Your API key must have:
 
 **Capabilities:** Pod state, Events, Logs
 
-### Credentials
+### Fields
 
-| Field | Description |
-|-------|-------------|
-| `api_server` | Kubernetes API server URL |
-| `token` | Service account bearer token |
-| `namespace` | Primary namespace to watch |
-| `extra_namespaces` | (Optional) Additional namespaces |
-| `ca_cert_path` | (Optional) Path to CA certificate |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `api_server` | Yes | Kubernetes API server URL |
+| `token` | Yes | Service account bearer token |
+| `namespace` | No | Primary namespace — default: `production` |
+| `extra_namespaces` | No | Additional namespaces to watch |
+| `ca_cert_path` | No | Path to CA certificate for TLS verification |
 
 ### Creating a service account
 
@@ -243,15 +259,16 @@ Get the token:
 kubectl create token bugpilot -n production
 ```
 
-### Example credentials object
+### Config file example
 
-```json
-{
-  "api_server": "https://kubernetes.example.com:6443",
-  "token": "eyJhbGciOiJSUzI1NiJ9...",
-  "namespace": "production",
-  "extra_namespaces": ["staging"]
-}
+```yaml
+connectors:
+  kubernetes:
+    api_server: "https://kubernetes.example.com:6443"
+    token: "${K8S_TOKEN}"
+    namespace: "production"
+    extra_namespaces:
+      - "staging"
 ```
 
 ---
@@ -260,27 +277,28 @@ kubectl create token bugpilot -n production
 
 **Capabilities:** Incidents, Alerts
 
-### Credentials
+### Fields
 
-| Field | Description |
-|-------|-------------|
-| `api_key` | PagerDuty REST API key (read-only) |
-| `from_email` | Email address for API requests |
-| `service_ids` | (Optional) Limit to specific PagerDuty service IDs |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `api_key` | Yes | PagerDuty REST API key (read-only) |
+| `from_email` | Yes | Email address for API requests |
+| `service_ids` | No | Limit to specific PagerDuty service IDs |
 
 ### Creating a read-only API key
 
 1. Go to **PagerDuty → Integrations → API Access Keys**
 2. Create a key with **Read-only** access
 
-### Example credentials object
+### Config file example
 
-```json
-{
-  "api_key": "u+xxxxxxxxxxxxxxxxxxxx",
-  "from_email": "oncall@example.com",
-  "service_ids": ["PXXXXXX", "PYYYYYY"]
-}
+```yaml
+connectors:
+  pagerduty:
+    api_key: "${PD_API_KEY}"
+    from_email: "oncall@example.com"
+    service_ids:
+      - "PXXXXXX"
 ```
 
 ---
@@ -296,16 +314,3 @@ kubectl create token bugpilot -n production
 | Retry backoff | Exponential with jitter |
 
 If a connector times out or errors, BugPilot marks it **degraded** for that run and continues with the remaining connectors. Results are partial rather than blocked.
-
----
-
-## Validating Connectors
-
-After adding connectors, validate all credentials are working:
-
-```bash
-curl https://api.bugpilot.io/api/v1/admin/connectors/validate \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-Returns a per-connector status: `ok`, `degraded`, or `error` with a message.

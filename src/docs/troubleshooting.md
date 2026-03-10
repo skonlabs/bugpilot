@@ -43,7 +43,7 @@ Your session has expired or credentials are invalid.
 
 Re-activate the CLI:
 ```bash
-bugpilot auth activate --key bp_YOUR_LICENSE_KEY
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY --secret YOUR_API_SECRET
 ```
 
 Or check who you're currently logged in as:
@@ -54,7 +54,7 @@ bugpilot auth whoami
 If credentials are corrupted, clear them and re-activate:
 ```bash
 rm ~/.config/bugpilot/credentials.json
-bugpilot auth activate --key bp_YOUR_LICENSE_KEY
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY --secret YOUR_API_SECRET
 ```
 
 ---
@@ -73,9 +73,13 @@ Ask your admin to assign you the required role. See [Manage Users and Roles](./h
 
 ---
 
-### `--dry-run` shows nothing happening
+### `fix run` asks for confirmation before executing
 
-`--dry-run` simulates the action without making changes. No output means the action would have no observable side effects. Add `--yes` to actually run it.
+`bugpilot fix run` always shows the action details and prompts before executing. Use `--yes` / `-y` to skip the prompt:
+
+```bash
+bugpilot fix run act_d2f4e1 --yes
+```
 
 ---
 
