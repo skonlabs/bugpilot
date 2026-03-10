@@ -926,7 +926,7 @@ Before going to production:
   "how-to-investigate": {
     slug: "how-to-investigate",
     title: "Investigate an Incident",
-    category: "How-To Guides",
+    category: "Investigating Incidents",
     content: `# How to Investigate an Incident with BugPilot
 
 This guide walks through a realistic incident scenario from alert to resolution using BugPilot.
