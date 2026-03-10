@@ -6,9 +6,12 @@ export interface DocPage {
 }
 
 export const docsCategories = [
-  { label: "Getting Started", items: ["introduction", "getting-started", "developer-setup", "deployment"] },
-  { label: "How-To Guides", items: ["how-to-investigate", "connectors", "webhooks", "llm-providers", "rbac", "data-retention"] },
+  { label: "Getting Started", items: ["introduction", "getting-started"] },
+  { label: "Investigating Incidents", items: ["how-to-investigate", "webhooks", "connectors"] },
+  { label: "Configuration", items: ["llm-providers"] },
+  { label: "Administration", items: ["rbac", "data-retention"] },
   { label: "Reference", items: ["cli-reference", "api-reference", "architecture"] },
+  { label: "Self-Hosting", items: ["deployment", "developer-setup"] },
   { label: "Support", items: ["troubleshooting"] },
 ];
 
@@ -241,7 +244,7 @@ bugpilot fix run act_d2f4... --dry-run
   "developer-setup": {
     slug: "developer-setup",
     title: "Developer Setup",
-    category: "Getting Started",
+    category: "Self-Hosting",
     content: `# Developer Setup Guide
 
 This guide covers setting up a full local development environment for contributing to BugPilot.
@@ -599,7 +602,7 @@ pip install aiosqlite
   deployment: {
     slug: "deployment",
     title: "Deployment",
-    category: "Getting Started",
+    category: "Self-Hosting",
     content: `# Deployment Guide
 
 This guide covers production deployment of BugPilot. The architecture is stateless (API) + stateful (PostgreSQL), making it straightforward to run on any container platform.
@@ -923,7 +926,7 @@ Before going to production:
   "how-to-investigate": {
     slug: "how-to-investigate",
     title: "Investigate an Incident",
-    category: "How-To Guides",
+    category: "Investigating Incidents",
     content: `# How to Investigate an Incident with BugPilot
 
 This guide walks through a realistic incident scenario from alert to resolution using BugPilot.
@@ -1230,7 +1233,7 @@ To improve hypothesis quality:
   connectors: {
     slug: "connectors",
     title: "Connector Setup",
-    category: "How-To Guides",
+    category: "Investigating Incidents",
     content: `# Connector Setup Guide
 
 BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a real-world monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, or code changes).
@@ -1537,7 +1540,7 @@ Register it in \`ConnectorType\` enum (\`app/models/all_models.py\`) and add fac
   webhooks: {
     slug: "webhooks",
     title: "Configure Webhooks",
-    category: "How-To Guides",
+    category: "Investigating Incidents",
     content: `# How to Configure Webhooks
 
 BugPilot can receive webhooks from monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
@@ -1780,7 +1783,7 @@ Monitor for verification failures to detect misconfigured secrets or potential r
   "llm-providers": {
     slug: "llm-providers",
     title: "LLM Providers",
-    category: "How-To Guides",
+    category: "Configuration",
     content: `# How to Configure LLM Providers
 
 BugPilot uses LLMs to synthesize additional hypotheses when evidence is complex or when rule-based patterns don't fully explain an incident. LLM usage is **optional** — BugPilot works without one using its rule-based and graph correlation engines.
@@ -1963,7 +1966,7 @@ Rule-based and graph correlation hypotheses are available instantly without any 
   rbac: {
     slug: "rbac",
     title: "Users & Roles",
-    category: "How-To Guides",
+    category: "Administration",
     content: `# How to Manage Users and Roles
 
 BugPilot uses role-based access control (RBAC) with four roles. This guide covers role assignments, permissions, and common administration tasks.
@@ -2125,7 +2128,7 @@ Retention changes apply to the next daily purge run.`,
   "data-retention": {
     slug: "data-retention",
     title: "Data Retention",
-    category: "How-To Guides",
+    category: "Administration",
     content: `# How to Configure Data Retention
 
 BugPilot implements a three-phase data retention policy that is configurable per organisation. This guide explains the phases, defaults, and how to tune them.
