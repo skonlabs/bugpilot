@@ -67,6 +67,16 @@ class ActionListResponse(BaseModel):
     total: int
 
 
+class DryRunOut(BaseModel):
+    action_id: str
+    action_type: str
+    title: str
+    parameters: Dict[str, Any]
+    risk_level: str
+    predicted_changes: str
+    dry_run: bool = True
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -80,8 +90,8 @@ def _serialize(a: Action) -> ActionOut:
         description=a.description,
         action_type=a.action_type,
         parameters=a.parameters or {},
-        risk_level=a.risk_level.value,
-        status=a.status.value,
+        risk_level=a.risk_level,
+        status=a.status,
         approved_by=str(a.approved_by) if a.approved_by else None,
         approved_at=a.approved_at,
         executed_by=str(a.executed_by) if a.executed_by else None,
@@ -191,7 +201,7 @@ async def update_action(
     if a.status not in (ActionStatus.pending,):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot update action in status '{a.status.value}'",
+            detail=f"Cannot update action in status '{a.status}'",
         )
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(a, field, value)
@@ -210,7 +220,7 @@ async def approve_action(
     if a.status != ActionStatus.pending:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Action must be in 'pending' status to approve, got '{a.status.value}'",
+            detail=f"Action must be in 'pending' status to approve, got '{a.status}'",
         )
     a.status = ActionStatus.approved
     a.approved_by = uuid.UUID(current_user.sub)
@@ -219,6 +229,37 @@ async def approve_action(
     await db.refresh(a)
     logger.info("action_approved", action_id=str(action_id), approver=current_user.sub)
     return _serialize(a)
+
+
+@router.post("/{action_id}/dry-run", response_model=DryRunOut, summary="Simulate action without executing")
+async def dry_run_action(
+    action_id: uuid.UUID,
+    current_user: TokenPayload = Depends(require_permission(Permission.read_investigation)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Simulate an action and return predicted changes without executing anything."""
+    a = await _get_action_or_404(action_id, uuid.UUID(current_user.org_id), db)
+
+    predicted = (
+        a.dry_run_output
+        or f"[Simulation] Would execute '{a.title}' (type: {a.action_type}) "
+           f"with parameters: {a.parameters or {}}"
+    )
+
+    # Persist the simulated output so subsequent dry-runs are consistent
+    if not a.dry_run_output:
+        a.dry_run_output = predicted
+        await db.commit()
+
+    logger.info("action_dry_run", action_id=str(action_id), user=current_user.sub)
+    return DryRunOut(
+        action_id=str(a.id),
+        action_type=a.action_type,
+        title=a.title,
+        parameters=a.parameters or {},
+        risk_level=a.risk_level,
+        predicted_changes=predicted,
+    )
 
 
 @router.post("/{action_id}/run", response_model=ActionOut, summary="Execute an approved action")
@@ -231,7 +272,7 @@ async def run_action(
     if a.status != ActionStatus.approved:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Action must be approved before running, got '{a.status.value}'",
+            detail=f"Action must be approved before running, got '{a.status}'",
         )
     a.status = ActionStatus.running
     a.executed_by = uuid.UUID(current_user.sub)
@@ -258,7 +299,7 @@ async def cancel_action(
     if a.status not in (ActionStatus.pending, ActionStatus.approved):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot cancel action in status '{a.status.value}'",
+            detail=f"Cannot cancel action in status '{a.status}'",
         )
     a.status = ActionStatus.cancelled
     await db.commit()

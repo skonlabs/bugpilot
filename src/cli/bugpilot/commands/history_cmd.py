@@ -39,6 +39,8 @@ def cmd_history(
         params: dict = {"page": page, "page_size": page_size, "status": ["resolved", "closed"]}
         if severity:
             params["severity"] = severity
+        if service:
+            params["service"] = service
         try:
             data = await api_get(app_ctx, "/api/v1/investigations", params=params)
             if app_ctx.output_format == "json":

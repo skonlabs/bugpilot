@@ -77,8 +77,8 @@ def _serialize_investigation(inv: Investigation) -> InvestigationOut:
         title=inv.title,
         description=inv.description,
         symptom=inv.symptom,
-        severity=inv.severity.value,
-        status=inv.status.value,
+        severity=inv.severity,
+        status=inv.status,
         tags=inv.tags or [],
         context=inv.context or {},
         resolved_at=inv.resolved_at,
@@ -113,6 +113,7 @@ async def list_investigations(
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[List[InvestigationStatus]] = Query(None, alias="status"),
     severity_filter: Optional[Severity] = Query(None, alias="severity"),
+    service: Optional[str] = Query(None, description="Filter by linked service name"),
     current_user: TokenPayload = Depends(require_permission(Permission.read_investigation)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -123,6 +124,8 @@ async def list_investigations(
         query = query.where(Investigation.status.in_(status_filter))
     if severity_filter:
         query = query.where(Investigation.severity == severity_filter)
+    if service:
+        query = query.where(Investigation.linked_services.contains([service]))
 
     # Count total
     from sqlalchemy import func as sqlfunc

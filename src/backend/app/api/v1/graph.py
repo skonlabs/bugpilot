@@ -29,6 +29,7 @@ class TimelineEventCreate(BaseModel):
     source: Optional[str] = Field(None, max_length=255)
     description: str = Field(..., min_length=1)
     payload: Optional[Dict[str, Any]] = None
+    clock_skew_warning: bool = False
 
 
 class TimelineEventOut(BaseModel):
@@ -40,6 +41,7 @@ class TimelineEventOut(BaseModel):
     source: Optional[str]
     description: str
     payload: Optional[Dict[str, Any]]
+    clock_skew_warning: bool
     created_at: datetime
 
 
@@ -81,8 +83,9 @@ def _serialize_event(e: TimelineEvent) -> TimelineEventOut:
         occurred_at=e.occurred_at,
         event_type=e.event_type,
         source=e.source,
-        description=e.description,
-        payload=e.payload,
+        description=e.summary,           # model field is 'summary'
+        payload=e.timeline_metadata,     # model field is 'timeline_metadata'
+        clock_skew_warning=e.clock_skew_warning,
         created_at=e.created_at,
     )
 
@@ -142,8 +145,9 @@ async def add_timeline_event(
         occurred_at=body.occurred_at,
         event_type=body.event_type,
         source=body.source,
-        description=body.description,
-        payload=body.payload,
+        summary=body.description,              # model field is 'summary'
+        timeline_metadata=body.payload,        # model field is 'timeline_metadata'
+        clock_skew_warning=body.clock_skew_warning,
     )
     db.add(event)
     await db.commit()
@@ -190,7 +194,7 @@ async def get_causal_graph(
         kind="investigation",
         occurred_at=inv.created_at,
         event_type="symptom",
-        metadata={"severity": inv.severity.value, "status": inv.status.value},
+        metadata={"severity": inv.severity, "status": inv.status},
     ))
 
     prev_node_id = f"inv_{str(investigation_id)}"
