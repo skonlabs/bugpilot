@@ -29,11 +29,11 @@ export default function Index() {
               CLI-first debugging platform
             </div>
             <h1 className="text-balance text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
-              Debug faster.{" "}
-              <span className="text-primary">Ship with confidence.</span>
+              Your AI Copilot for{" "}
+              <span className="text-primary">Production Incidents</span>
             </h1>
             <p className="mx-auto mt-6 max-w-xl text-lg text-muted-foreground">
-              BugPilot is the investigation and debugging platform built for engineers who live in the terminal. Trace, analyze, and resolve issues without leaving your workflow.
+              BugPilot is an AI-powered CLI that analyzes logs, metrics, traces, deployments, and code changes to identify the most likely cause of an issue — and help engineers resolve it faster.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Button size="lg" asChild>
