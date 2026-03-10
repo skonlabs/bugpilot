@@ -90,7 +90,7 @@ Return the current user's identity.
 
 List investigations.
 
-**Query params:** `status`, `severity`, `limit` (default: 20), `offset` (default: 0)
+**Query params:** `status`, `severity`, `page` (default: 1), `page_size` (default: 20)
 
 **Response `200`:** Array of investigation objects.
 
@@ -277,14 +277,13 @@ Approve an action (requires `approver` or `admin` role). Returns `200`.
 
 ### `POST /api/v1/actions/{action_id}/run`
 
-Execute an action.
+Execute an action. Returns `200` with the updated action object.
 
-**Request:**
-```json
-{ "dry_run": false }
-```
+---
 
-Set `dry_run: true` to simulate without making changes.
+### `POST /api/v1/actions/{action_id}/dry-run`
+
+Simulate an action without making any changes. Returns the same response shape as `/run` but no side effects are applied.
 
 ---
 
@@ -296,9 +295,11 @@ Cancel a pending or approved action. Returns `200`.
 
 ## Graph Endpoints
 
-### `GET /api/v1/graph/timeline/{investigation_id}`
+### `GET /api/v1/graph/timeline`
 
 Return the investigation timeline as an ordered list of events.
+
+**Query params:** `investigation_id` (required)
 
 ### `GET /api/v1/graph/causal/{investigation_id}`
 

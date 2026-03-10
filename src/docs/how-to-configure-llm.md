@@ -23,48 +23,84 @@ The LLM receives a **redacted** evidence summary — all PII, credentials, token
 
 ## Supported Providers
 
-| Provider | Models | Notes |
-|----------|--------|-------|
-| OpenAI | `gpt-4o` (default) | Requires `OPENAI_API_KEY` |
-| Anthropic | `claude-sonnet-4-6` (default) | Requires `ANTHROPIC_API_KEY`. Supports prompt caching. |
-| Azure OpenAI | Any deployed model | Requires endpoint, key, and deployment name |
-| Ollama | Any locally hosted model | No external API calls — fully on-premise |
+| Provider key | Models | Notes |
+|---|---|---|
+| `openai` | `gpt-4o` (default) | Requires `LLM_API_KEY` |
+| `anthropic` | `claude-sonnet-4-6` (default) | Requires `LLM_API_KEY`. Supports prompt caching. |
+| `azure_openai` | Any deployed model | Requires `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_AZURE_DEPLOYMENT` |
+| `gemini` | `gemini-1.5-pro` (default) | Requires `LLM_API_KEY` |
+| `ollama` | Any locally hosted model | Requires `LLM_BASE_URL`. No external API calls — fully on-premise. |
+| `openai_compatible` | Any model | For OpenAI-compatible APIs (e.g. vLLM, LM Studio). Requires `LLM_BASE_URL` and `LLM_API_KEY`. |
 
 ---
 
 ## Configuration
 
-LLM providers are configured via environment variables on the BugPilot backend server. If you are using the hosted BugPilot service, contact your account team to enable LLM synthesis for your organisation.
+LLM providers are configured via environment variables on the BugPilot analysis engine server. All providers share the same variable names — only the values differ.
+
+### Common Variables
+
+| Variable | Description |
+|---|---|
+| `LLM_PROVIDER` | Provider key (see table above) |
+| `LLM_API_KEY` | API key for the selected provider |
+| `LLM_MODEL` | Model name override (uses provider default if unset) |
+| `LLM_BASE_URL` | Base URL for Azure OpenAI, Ollama, or OpenAI-compatible providers |
+| `LLM_AZURE_DEPLOYMENT` | Azure OpenAI deployment name (Azure only) |
+| `LLM_AZURE_API_VERSION` | Azure OpenAI API version (Azure only) |
 
 ### OpenAI
 
 ```bash
 LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
+LLM_API_KEY=sk-...
+# Optional: override the default model
+LLM_MODEL=gpt-4o
 ```
 
 ### Anthropic
 
 ```bash
 LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
+LLM_API_KEY=sk-ant-...
+# Optional: override the default model
+LLM_MODEL=claude-sonnet-4-6
 ```
 
 ### Azure OpenAI
 
 ```bash
 LLM_PROVIDER=azure_openai
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
-AZURE_OPENAI_API_KEY=your-azure-key
-AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+LLM_BASE_URL=https://your-resource.openai.azure.com
+LLM_API_KEY=your-azure-key
+LLM_AZURE_DEPLOYMENT=your-deployment-name
+LLM_AZURE_API_VERSION=2024-02-01
+```
+
+### Google Gemini
+
+```bash
+LLM_PROVIDER=gemini
+LLM_API_KEY=AIzaSy...
+# Optional: override the default model
+LLM_MODEL=gemini-1.5-pro
 ```
 
 ### Ollama (on-premise, no external calls)
 
 ```bash
 LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
+LLM_BASE_URL=http://localhost:11434
 LLM_MODEL=llama3                        # or any model you have pulled
+```
+
+### OpenAI-Compatible (vLLM, LM Studio, etc.)
+
+```bash
+LLM_PROVIDER=openai_compatible
+LLM_BASE_URL=http://localhost:8080/v1
+LLM_API_KEY=your-api-key               # use "none" if auth is not required
+LLM_MODEL=your-model-name
 ```
 
 ### No LLM (rule-based only)

@@ -14,17 +14,17 @@ Investigation created
         ▼
 Phase 1: Investigation archive
   Resolved/closed investigations retained for N days
-  Default: 365 days
+  Default: 90 days
         │
         ▼
 Phase 2: Evidence metadata
   Evidence rows (metadata only) retained for N days
-  Default: 90 days
+  Default: 30 days
         │
         ▼
 Phase 3: Raw payload
   Raw evidence payloads purged after N days
-  Default: 30 days
+  Default: 7 days
   (evidence row remains, payload_ref set to null)
 ```
 
@@ -34,9 +34,9 @@ Phase 3: Raw payload
 
 | Phase | Default retention |
 |-------|-----------------|
-| Investigation archive | 365 days |
-| Evidence metadata | 90 days |
-| Raw payload | 30 days |
+| Investigation archive | 90 days |
+| Evidence metadata | 30 days |
+| Raw payload | 7 days |
 
 ---
 
