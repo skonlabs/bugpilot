@@ -189,3 +189,31 @@ def cmd_whoami(ctx: typer.Context) -> None:
             raise typer.Exit(1)
 
     anyio.run(_run)
+
+
+@app.command("status")
+def cmd_status(ctx: typer.Context) -> None:
+    """Show current session status (validity, expiry, role)."""
+    app_ctx = _get_ctx(ctx)
+    if not app_ctx.load_credentials():
+        if app_ctx.output_format == "json":
+            print_json({"authenticated": False})
+        else:
+            print_info("Not authenticated. Run: bugpilot auth activate")
+        return
+
+    async def _run():
+        try:
+            data = await whoami(app_ctx)
+            if app_ctx.output_format == "json":
+                print_json({"authenticated": True, **data})
+            else:
+                console.print(f"[green]✓[/green] Authenticated")
+                console.print(f"[bold]User:[/bold] {data.get('email')}")
+                console.print(f"[bold]Role:[/bold] {data.get('role')}")
+                console.print(f"[bold]Org:[/bold] {data.get('org_id')}")
+        except APIError as e:
+            print_error(f"Session check failed: {e.detail}")
+            raise typer.Exit(1)
+
+    anyio.run(_run)

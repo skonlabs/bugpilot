@@ -16,6 +16,52 @@ from bugpilot.session import APIError, api_get, api_post
 app = typer.Typer(help="Incident triage commands")
 
 
+@app.command("list")
+def cmd_list(
+    ctx: typer.Context,
+    status: Optional[str] = typer.Option("open", "--status", "-s", help="Filter by status (default: open)"),
+    severity: Optional[str] = typer.Option(None, "--severity", help="Filter by severity"),
+    page: int = typer.Option(1, "--page", "-p"),
+    page_size: int = typer.Option(20, "--page-size"),
+) -> None:
+    """List open investigations (active incidents)."""
+    app_ctx = _get_ctx(ctx)
+
+    async def _run():
+        params: dict = {"page": page, "page_size": page_size}
+        if status:
+            params["status"] = status
+        if severity:
+            params["severity"] = severity
+        try:
+            data = await api_get(app_ctx, "/api/v1/investigations", params=params)
+            if app_ctx.output_format == "json":
+                print_json(data)
+            else:
+                from bugpilot.output.human import print_investigation_list
+                print_investigation_list(data["items"], data["total"])
+        except APIError as e:
+            print_error(f"Failed to list incidents: {e.detail}")
+            raise typer.Exit(1)
+
+    anyio.run(_run)
+
+
+@app.command("open")
+def cmd_open(
+    ctx: typer.Context,
+    investigation_id: str = typer.Argument(..., help="Investigation ID to set as current context"),
+) -> None:
+    """Set an investigation as the current context for subsequent commands."""
+    app_ctx = _get_ctx(ctx)
+    app_ctx.save_investigation_context(investigation_id)
+    if app_ctx.output_format == "json":
+        print_json({"current_investigation_id": investigation_id})
+    else:
+        print_success(f"Current investigation set to: {investigation_id}")
+        console.print(f"[dim]You can now run commands without --investigation-id.[/dim]")
+
+
 def _get_ctx(typer_ctx: typer.Context) -> AppContext:
     ctx: AppContext = typer_ctx.obj
     if not ctx.load_credentials():

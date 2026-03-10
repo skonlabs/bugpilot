@@ -7,6 +7,7 @@ import json
 from typing import Any, Dict, Optional
 
 import httpx
+import typer
 
 from .context import AppContext
 
@@ -18,6 +19,10 @@ class APIError(Exception):
         super().__init__(f"API error {status_code}: {detail}")
 
 
+class BackendUnavailableError(Exception):
+    """Raised when the backend cannot be reached."""
+
+
 def _raise_for_status(response: httpx.Response) -> None:
     if response.is_error:
         try:
@@ -27,31 +32,51 @@ def _raise_for_status(response: httpx.Response) -> None:
         raise APIError(status_code=response.status_code, detail=str(detail))
 
 
+def _handle_connect_error(exc: Exception) -> None:
+    """Print backend unavailable message and exit with code 2."""
+    from bugpilot.output.human import error_console
+    error_console.print("[bold red][BugPilot] Backend unavailable.[/bold red] "
+                        "Check your network connection and API URL.")
+    raise typer.Exit(2)
+
+
 async def api_get(ctx: AppContext, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
-    async with ctx.make_client() as client:
-        r = await client.get(path, params=params)
-        _raise_for_status(r)
-        return r.json()
+    try:
+        async with ctx.make_client() as client:
+            r = await client.get(path, params=params)
+            _raise_for_status(r)
+            return r.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _handle_connect_error(exc)
 
 
 async def api_post(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] = None) -> Any:
-    async with ctx.make_client() as client:
-        r = await client.post(path, json=body)
-        _raise_for_status(r)
-        return r.json()
+    try:
+        async with ctx.make_client() as client:
+            r = await client.post(path, json=body)
+            _raise_for_status(r)
+            return r.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _handle_connect_error(exc)
 
 
 async def api_patch(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] = None) -> Any:
-    async with ctx.make_client() as client:
-        r = await client.patch(path, json=body)
-        _raise_for_status(r)
-        return r.json()
+    try:
+        async with ctx.make_client() as client:
+            r = await client.patch(path, json=body)
+            _raise_for_status(r)
+            return r.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _handle_connect_error(exc)
 
 
 async def api_delete(ctx: AppContext, path: str) -> None:
-    async with ctx.make_client() as client:
-        r = await client.delete(path)
-        _raise_for_status(r)
+    try:
+        async with ctx.make_client() as client:
+            r = await client.delete(path)
+            _raise_for_status(r)
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        _handle_connect_error(exc)
 
 
 async def refresh_token_if_needed(ctx: AppContext) -> bool:

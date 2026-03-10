@@ -119,6 +119,56 @@ def cmd_get(
     anyio.run(_run)
 
 
+@app.command("show")
+def cmd_show(
+    ctx: typer.Context,
+    evidence_id: str = typer.Argument(..., help="Evidence ID"),
+) -> None:
+    """Show evidence details (alias for get)."""
+    app_ctx = _get_ctx(ctx)
+
+    async def _run():
+        try:
+            data = await api_get(app_ctx, f"/api/v1/evidence/{evidence_id}")
+            if app_ctx.output_format == "json":
+                print_json(data)
+            else:
+                from bugpilot.output.human import print_json_data
+                print_json_data(data)
+        except APIError as e:
+            print_error(f"Evidence not found: {e.detail}")
+            raise typer.Exit(1)
+
+    anyio.run(_run)
+
+
+@app.command("refresh")
+def cmd_refresh(
+    ctx: typer.Context,
+    investigation_id: str = typer.Option(..., "--investigation-id", "-i", help="Investigation ID"),
+) -> None:
+    """Re-fetch and re-normalize all evidence for an investigation."""
+    app_ctx = _get_ctx(ctx)
+
+    async def _run():
+        try:
+            data = await api_post(
+                app_ctx,
+                f"/api/v1/investigations/{investigation_id}/evidence/refresh",
+            )
+            if app_ctx.output_format == "json":
+                print_json(data)
+            else:
+                print_success(f"Evidence refresh triggered for investigation {investigation_id}.")
+                if isinstance(data, dict) and data.get("refreshed"):
+                    console.print(f"[dim]Refreshed:[/dim] {data['refreshed']} items")
+        except APIError as e:
+            print_error(f"Evidence refresh failed: {e.detail}")
+            raise typer.Exit(1)
+
+    anyio.run(_run)
+
+
 @app.command("delete")
 def cmd_delete(
     ctx: typer.Context,

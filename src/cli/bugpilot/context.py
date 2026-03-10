@@ -14,6 +14,7 @@ import httpx
 CONFIG_DIR = Path.home() / ".config" / "bugpilot"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 CREDENTIALS_FILE = CONFIG_DIR / "credentials.json"
+CONTEXT_FILE = CONFIG_DIR / "context.json"
 
 
 def _default_api_url() -> str:
@@ -26,6 +27,7 @@ class AppContext:
     api_url: str = field(default_factory=_default_api_url)
     output_format: str = "human"  # "human" | "json" | "verbose"
     no_color: bool = False
+    current_investigation_id: Optional[str] = field(default=None)
     _access_token: Optional[str] = field(default=None, repr=False)
     _refresh_token: Optional[str] = field(default=None, repr=False)
     _org_id: Optional[str] = field(default=None, repr=False)
@@ -77,6 +79,41 @@ class AppContext:
         self._refresh_token = None
         self._org_id = None
         self._user_id = None
+
+    def load_investigation_context(self) -> Optional[str]:
+        """Load current investigation ID from disk. Returns None if not set."""
+        if not CONTEXT_FILE.exists():
+            return None
+        try:
+            import json
+            data = json.loads(CONTEXT_FILE.read_text())
+            return data.get("current_investigation_id")
+        except Exception:
+            return None
+
+    def save_investigation_context(self, investigation_id: str) -> None:
+        """Persist current investigation ID to disk."""
+        import json
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        CONTEXT_FILE.write_text(
+            json.dumps({"current_investigation_id": investigation_id}, indent=2)
+        )
+        CONTEXT_FILE.chmod(0o600)
+        self.current_investigation_id = investigation_id
+
+    def clear_investigation_context(self) -> None:
+        """Remove current investigation ID from disk."""
+        if CONTEXT_FILE.exists():
+            CONTEXT_FILE.unlink()
+        self.current_investigation_id = None
+
+    def resolve_investigation_id(self, explicit_id: Optional[str] = None) -> Optional[str]:
+        """Return the investigation ID to use: explicit flag > stored context."""
+        if explicit_id:
+            return explicit_id
+        if self.current_investigation_id:
+            return self.current_investigation_id
+        return self.load_investigation_context()
 
     @property
     def is_authenticated(self) -> bool:

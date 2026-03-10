@@ -29,12 +29,24 @@ def cmd_list(
     ctx: typer.Context,
     investigation_id: str = typer.Option(..., "--investigation-id", "-i"),
     status: Optional[str] = typer.Option(None, "--status", "-s"),
+    refresh: bool = typer.Option(False, "--refresh", help="Trigger hypothesis regeneration before listing"),
 ) -> None:
-    """List hypotheses for an investigation."""
+    """List hypotheses for an investigation. Use --refresh to trigger regeneration."""
     app_ctx = _get_ctx(ctx)
 
     async def _run():
-        params = {"investigation_id": investigation_id}
+        if refresh:
+            try:
+                await api_post(
+                    app_ctx,
+                    f"/api/v1/investigations/{investigation_id}/hypotheses/refresh",
+                )
+                console.print("[dim]Hypothesis regeneration triggered...[/dim]")
+            except APIError as e:
+                print_error(f"Failed to trigger refresh: {e.detail}")
+                raise typer.Exit(1)
+
+        params: dict = {"investigation_id": investigation_id}
         if status:
             params["status"] = status
         try:

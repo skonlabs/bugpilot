@@ -159,6 +159,31 @@ def cmd_run(
     anyio.run(_run)
 
 
+@app.command("dry-run")
+def cmd_dry_run(
+    ctx: typer.Context,
+    action_id: str = typer.Argument(..., help="Action ID to simulate"),
+) -> None:
+    """Simulate an action without executing it — show predicted changes."""
+    app_ctx = _get_ctx(ctx)
+
+    async def _run():
+        try:
+            data = await api_post(app_ctx, f"/api/v1/actions/{action_id}/dry-run")
+            if app_ctx.output_format == "json":
+                print_json(data)
+            else:
+                console.print(f"[bold]Dry-run result for:[/bold] {action_id}")
+                console.print(f"[dim]Predicted changes:[/dim]")
+                changes = data.get("predicted_changes") or data.get("dry_run_output") or str(data)
+                console.print(changes)
+        except APIError as e:
+            print_error(f"Dry-run failed: {e.detail}")
+            raise typer.Exit(1)
+
+    anyio.run(_run)
+
+
 @app.command("cancel")
 def cmd_cancel(
     ctx: typer.Context,
