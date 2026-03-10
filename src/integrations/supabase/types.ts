@@ -14,16 +14,165 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action_type: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata_json: Json | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action_type: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata_json?: Json | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      bugpilot_credentials: {
+        Row: {
+          api_key: string
+          created_at: string
+          created_by: string | null
+          id: string
+          last_used_at: string | null
+          revoked_at: string | null
+          rotated_at: string | null
+          secret_hash: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          rotated_at?: string | null
+          secret_hash: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          rotated_at?: string | null
+          secret_hash?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      releases: {
+        Row: {
+          checksum: string | null
+          created_at: string
+          file_path: string | null
+          id: string
+          platform: string
+          status: string
+          version: string
+        }
+        Insert: {
+          checksum?: string | null
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          platform: string
+          status?: string
+          version: string
+        }
+        Update: {
+          checksum?: string | null
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          platform?: string
+          status?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +299,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
