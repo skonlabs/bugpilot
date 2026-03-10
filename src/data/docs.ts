@@ -602,7 +602,7 @@ pip install aiosqlite
   deployment: {
     slug: "deployment",
     title: "Deployment",
-    category: "Getting Started",
+    category: "Self-Hosting",
     content: `# Deployment Guide
 
 This guide covers production deployment of BugPilot. The architecture is stateless (API) + stateful (PostgreSQL), making it straightforward to run on any container platform.
