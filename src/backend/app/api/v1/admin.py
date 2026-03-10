@@ -358,13 +358,45 @@ async def delete_connector(
     await db.commit()
 
 
-@router.post("/connectors/{connector_id}/test", summary="Test connector connectivity")
+class ConnectorTestRequest(BaseModel):
+    kind: str
+    config: Dict[str, Any]
+
+
+@router.post("/connectors/test", summary="Test connector credentials without saving")
+async def test_connector_config(
+    body: ConnectorTestRequest,
+    current_user: TokenPayload = Depends(require_permission(Permission.manage_connectors)),
+):
+    """
+    Validate credentials on-the-fly (used by the CLI's 'bugpilot connector test'
+    which sends kind + config from the local config.yaml without a connector_id).
+    """
+    from app.connectors import build_connector
+
+    try:
+        connector = build_connector(body.kind, body.config)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    result = await connector.validate()
+    if not result.is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.error or "Connector validation failed",
+        )
+    return {"status": "ok", "kind": body.kind, "latency_ms": result.latency_ms}
+
+
+@router.post("/connectors/{connector_id}/test", summary="Test a stored connector")
 async def test_connector(
     connector_id: uuid.UUID,
     current_user: TokenPayload = Depends(require_permission(Permission.manage_connectors)),
     db: AsyncSession = Depends(get_db),
 ):
     from datetime import datetime, timezone
+    from app.connectors import build_connector
+    from app.core.security import decrypt_credentials
 
     result = await db.execute(
         select(Connector).where(Connector.id == connector_id, Connector.org_id == uuid.UUID(current_user.org_id))
@@ -373,11 +405,26 @@ async def test_connector(
     if not c:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connector not found")
 
-    # Placeholder connectivity test - in production this would dispatch to connector-specific logic
+    config = dict(c.config or {})
+    if c.credentials_enc:
+        config.update(decrypt_credentials(c.credentials_enc))
+
+    try:
+        connector = build_connector(c.kind.value, config)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+    validation = await connector.validate()
     c.last_tested_at = datetime.now(timezone.utc)
-    c.last_test_success = True
+    c.last_test_success = validation.is_valid
     await db.commit()
-    return {"status": "ok", "connector_id": str(connector_id), "kind": c.kind.value}
+
+    if not validation.is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=validation.error or "Connector validation failed",
+        )
+    return {"status": "ok", "connector_id": str(connector_id), "kind": c.kind.value, "latency_ms": validation.latency_ms}
 
 
 # ---------------------------------------------------------------------------
