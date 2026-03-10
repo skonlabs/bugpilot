@@ -17,7 +17,7 @@ CREDENTIALS_FILE = CONFIG_DIR / "credentials.json"
 
 
 def _default_api_url() -> str:
-    return os.environ.get("BUGPILOT_API_URL", "http://localhost:8000")
+    return os.environ.get("BUGPILOT_API_URL", "https://api.bugpilot.io")
 
 
 @dataclass
