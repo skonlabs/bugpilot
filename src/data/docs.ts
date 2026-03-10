@@ -1540,7 +1540,7 @@ Register it in \`ConnectorType\` enum (\`app/models/all_models.py\`) and add fac
   webhooks: {
     slug: "webhooks",
     title: "Configure Webhooks",
-    category: "How-To Guides",
+    category: "Investigating Incidents",
     content: `# How to Configure Webhooks
 
 BugPilot can receive webhooks from monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
