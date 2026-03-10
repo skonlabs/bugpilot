@@ -3,6 +3,21 @@ BugPilot config file loader.
 
 Reads ~/.config/bugpilot/config.yaml and exposes connector / webhook settings.
 Supports ${VAR_NAME} substitution from environment variables.
+
+Connector config format (named — supports multiple instances of the same type):
+
+    connectors:
+      grafana-prod:
+        kind: grafana
+        url: https://grafana.prod.example.com
+        api_token: ${GRAFANA_PROD_TOKEN}
+      grafana-staging:
+        kind: grafana
+        url: https://grafana.staging.example.com
+        api_token: ${GRAFANA_STAGING_TOKEN}
+
+Backward-compatible: old configs where the key equals the connector type
+(e.g. "grafana:") and no explicit "kind:" field are loaded transparently.
 """
 from __future__ import annotations
 
@@ -80,6 +95,7 @@ def _substitute_env_vars(value: Any) -> Any:
 
 @dataclass
 class ConnectorEntry:
+    name: str
     kind: str
     config: Dict[str, Any]
 
@@ -97,6 +113,7 @@ class ConnectorEntry:
 
 @dataclass
 class BugPilotConfig:
+    # Keyed by connector name (user-defined), not by kind.
     connectors: Dict[str, ConnectorEntry] = field(default_factory=dict)
     webhooks: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     global_settings: Dict[str, Any] = field(default_factory=dict)
@@ -115,8 +132,18 @@ class BugPilotConfig:
         raw = _substitute_env_vars(raw)
 
         connectors: Dict[str, ConnectorEntry] = {}
-        for kind, cfg in (raw.get("connectors") or {}).items():
-            connectors[kind] = ConnectorEntry(kind=kind, config=cfg or {})
+        for name, cfg in (raw.get("connectors") or {}).items():
+            cfg = cfg or {}
+            # Explicit "kind:" field takes precedence.
+            # Backward compat: if missing and the key matches a known type, use the key.
+            kind = cfg.pop("kind", None)
+            if kind is None:
+                if name in CONNECTOR_FIELDS:
+                    kind = name
+                else:
+                    # Unknown name with no kind field — skip with warning handled at validate()
+                    kind = name
+            connectors[name] = ConnectorEntry(name=name, kind=kind, config=cfg)
 
         return cls(
             connectors=connectors,
@@ -134,7 +161,11 @@ class BugPilotConfig:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         data: Dict[str, Any] = {}
         if self.connectors:
-            data["connectors"] = {k: v.config for k, v in self.connectors.items()}
+            out: Dict[str, Any] = {}
+            for name, entry in self.connectors.items():
+                # Always write kind: explicitly so the file is unambiguous.
+                out[name] = {"kind": entry.kind, **entry.config}
+            data["connectors"] = out
         if self.webhooks:
             data["webhooks"] = self.webhooks
         if self.global_settings:
@@ -148,13 +179,13 @@ class BugPilotConfig:
     def validate(self) -> List[str]:
         """Return a list of validation error messages (empty = valid)."""
         errors: List[str] = []
-        for kind, entry in self.connectors.items():
-            if kind not in CONNECTOR_FIELDS:
-                errors.append(f"{kind}: unknown connector type")
+        for name, entry in self.connectors.items():
+            if entry.kind not in CONNECTOR_FIELDS:
+                errors.append(f"{name}: unknown connector type '{entry.kind}'")
                 continue
-            for fdef in CONNECTOR_FIELDS[kind]:
+            for fdef in CONNECTOR_FIELDS[entry.kind]:
                 if fdef.get("optional"):
                     continue
                 if not entry.config.get(fdef["key"]):
-                    errors.append(f"{kind}.{fdef['key']}: required field is missing or empty")
+                    errors.append(f"{name}.{fdef['key']}: required field is missing or empty")
         return errors
