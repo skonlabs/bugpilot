@@ -40,7 +40,7 @@ function renderContent(content: string) {
             <tbody>
               {dataRows.map((row, ri) => (
                 <tr key={ri} className="border-b last:border-0">
-                  {row.map((cell, ci) => <td key={ci} className="px-4 py-2">{cell.trim()}</td>)}
+                  {row.map((cell, ci) => <td key={ci} className="px-4 py-2" dangerouslySetInnerHTML={{ __html: inlineFormat(cell.trim()) }} />)}
                 </tr>
               ))}
             </tbody>
