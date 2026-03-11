@@ -43,7 +43,7 @@ Your session has expired or credentials are invalid.
 
 Re-activate the CLI:
 ```bash
-bugpilot auth activate --key bp_YOUR_LICENSE_KEY --secret YOUR_API_SECRET
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY
 ```
 
 Or check who you're currently logged in as:
@@ -54,7 +54,7 @@ bugpilot auth whoami
 If credentials are corrupted, clear them and re-activate:
 ```bash
 rm ~/.config/bugpilot/credentials.json
-bugpilot auth activate --key bp_YOUR_LICENSE_KEY --secret YOUR_API_SECRET
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY
 ```
 
 ---
