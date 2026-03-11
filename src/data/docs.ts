@@ -2274,7 +2274,7 @@ bugpilot hypotheses list
   "api-reference": {
     slug: "api-reference",
     title: "API Reference",
-    category: "Reference",
+    category: "References",
     content: `# API Reference
 
 The BugPilot REST API follows standard HTTP conventions. All endpoints are versioned under \`/api/v1/\`. Request and response bodies use JSON (\`Content-Type: application/json\`).
