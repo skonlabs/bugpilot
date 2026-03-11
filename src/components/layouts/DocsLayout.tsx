@@ -79,7 +79,7 @@ export default function DocsLayout() {
 
       <div className="flex flex-1">
         {/* Desktop sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r lg:block">
+        <aside className="hidden w-64 shrink-0 border-r md:block">
           <div className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-auto">
             {sidebar}
           </div>
