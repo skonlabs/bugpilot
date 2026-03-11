@@ -722,7 +722,7 @@ Webhook endpoints are rate-limited to **100 requests per minute** per IP + org c
   connectors: {
     slug: "connectors",
     title: "Connector Setup",
-    category: "Investigating Incidents",
+    category: "Setup & Configure",
     content: `# Connector Setup Guide
 
 BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, code changes).
