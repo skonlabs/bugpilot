@@ -35,23 +35,25 @@ export default function DocsLayout() {
         {filteredCategories.map((cat) => (
           <div key={cat.label} className="mb-4">
             <div className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{cat.label}</div>
-            {cat.items.map((slug) => {
-              const page = docsPages[slug];
-              if (!page) return null;
-              return (
-                <Link
-                  key={slug}
-                  to={`/docs/${slug}`}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "block rounded-md px-3 py-1.5 text-sm transition-colors",
-                    currentSlug === slug ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                  )}
-                >
-                  {page.title}
-                </Link>
-              );
-            })}
+            <div className="ml-3 border-l border-border pl-1">
+              {cat.items.map((slug) => {
+                const page = docsPages[slug];
+                if (!page) return null;
+                return (
+                  <Link
+                    key={slug}
+                    to={`/docs/${slug}`}
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      "block rounded-md px-3 py-1.5 text-sm transition-colors",
+                      currentSlug === slug ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                    )}
+                  >
+                    {page.title}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         ))}
       </nav>
