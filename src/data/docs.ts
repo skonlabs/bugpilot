@@ -308,7 +308,7 @@ See [Automatic Mode — Webhooks](/docs/webhooks) to set this up.
   "how-to-investigate": {
     slug: "how-to-investigate",
     title: "Investigate an Incident",
-    category: "Investigating Incidents",
+    category: "Incident",
     content: `# How to Investigate an Incident with BugPilot
 
 This guide walks through a realistic incident from alert to resolution.
