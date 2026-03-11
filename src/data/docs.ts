@@ -3600,7 +3600,7 @@ bugpilot export markdown inv_7f3a2b
     slug: "database",
     title: "Database",
     category: "Setup & Configure",
-    content: \`# Database Setup
+    content: `# Database Setup
 
 BugPilot uses PostgreSQL 14+ as its primary data store. This guide covers database configuration for both managed and self-hosted deployments.
 
@@ -3608,17 +3608,17 @@ BugPilot uses PostgreSQL 14+ as its primary data store. This guide covers databa
 
 ## Connection String
 
-Set the \\\`DATABASE_URL\\\` environment variable with an asyncpg-compatible connection string:
+Set the \`DATABASE_URL\` environment variable with an asyncpg-compatible connection string:
 
-\\\`\\\`\\\`bash
+\`\`\`bash
 export DATABASE_URL="postgresql+asyncpg://bugpilot:yourpassword@localhost:5432/bugpilot"
-\\\`\\\`\\\`
+\`\`\`
 
 For managed databases (AWS RDS, GCP Cloud SQL, Azure), append SSL mode:
 
-\\\`\\\`\\\`
+\`\`\`
 postgresql+asyncpg://bugpilot:pass@your-rds-host:5432/bugpilot?ssl=require
-\\\`\\\`\\\`
+\`\`\`
 
 ---
 
@@ -3637,30 +3637,30 @@ postgresql+asyncpg://bugpilot:pass@your-rds-host:5432/bugpilot?ssl=require
 
 Apply database migrations after initial setup or upgrades:
 
-\\\`\\\`\\\`bash
+\`\`\`bash
 # Docker Compose
 docker compose exec backend alembic upgrade head
 
 # Kubernetes
 kubectl exec -n bugpilot deploy/bugpilot-backend -- alembic upgrade head
-\\\`\\\`\\\`
+\`\`\`
 
 ---
 
 ## Security Best Practices
 
-- Use a least-privilege database role: \\\`SELECT\\\`, \\\`INSERT\\\`, \\\`UPDATE\\\`, \\\`DELETE\\\` only — no DDL
+- Use a least-privilege database role: \`SELECT\`, \`INSERT\`, \`UPDATE\`, \`DELETE\` only — no DDL
 - Enable SSL/TLS for all database connections
 - Rotate database credentials regularly
 - Enable automated backups with point-in-time recovery
-- Ensure org isolation — no cross-tenant queries are possible through the API\`,
+- Ensure org isolation — no cross-tenant queries are possible through the API`,
   },
 
   hypothesis: {
     slug: "hypothesis",
     title: "Hypothesis",
     category: "Incident",
-    content: \`# Hypotheses
+    content: `# Hypotheses
 
 BugPilot generates hypotheses automatically as evidence is added to an investigation. The hypothesis engine runs a multi-pass pipeline to identify probable root causes.
 
@@ -3679,16 +3679,16 @@ The engine runs four passes in sequence:
 
 ## Listing Hypotheses
 
-\\\`\\\`\\\`bash
+\`\`\`bash
 bugpilot hypotheses list --investigation-id inv_7f3a2b
-\\\`\\\`\\\`
+\`\`\`
 
-\\\`\\\`\\\`
+\`\`\`
   RANK  HYPOTHESIS                              CONFIDENCE  STATUS   SOURCE
    1    Bad deployment introduced regression    72%         active   rule
    2    Memory exhaustion (OOMKill risk)        58%         active   rule
    3    Upstream dependency degradation         31%         active   graph
-\\\`\\\`\\\`
+\`\`\`
 
 ---
 
@@ -3696,15 +3696,15 @@ bugpilot hypotheses list --investigation-id inv_7f3a2b
 
 Add a theory from the team:
 
-\\\`\\\`\\\`bash
-bugpilot hypotheses create \\\\
-  --investigation-id inv_7f3a2b \\\\
-  "Stripe SDK v4 changed preferences API contract" \\\\
-  --confidence 0.65 \\\\
-  --reasoning "SDK upgrade changed how user.preferences is hydrated, causing NPE on first call" \\\\
-  --evidence ev_9c1d3e \\\\
+\`\`\`bash
+bugpilot hypotheses create \\
+  --investigation-id inv_7f3a2b \\
+  "Stripe SDK v4 changed preferences API contract" \\
+  --confidence 0.65 \\
+  --reasoning "SDK upgrade changed how user.preferences is hydrated, causing NPE on first call" \\
+  --evidence ev_9c1d3e \\
   --evidence ev_a2b4f1
-\\\`\\\`\\\`
+\`\`\`
 
 ---
 
@@ -3712,10 +3712,10 @@ bugpilot hypotheses create \\\\
 
 When you identify the root cause, confirm the correct hypothesis and reject the rest:
 
-\\\`\\\`\\\`bash
+\`\`\`bash
 bugpilot hypotheses confirm hyp_f3a1d2
 bugpilot hypotheses reject hyp_8b3c1a
-\\\`\\\`\\\`
+\`\`\`
 
 Confirming and rejecting hypotheses improves scoring accuracy for your org over time.
 
@@ -3731,22 +3731,22 @@ Add evidence from a second source to improve hypothesis quality.
 - Confidence is capped at **40%** with a single evidence source
 - A second source from a different platform significantly improves scores
 - Rejected hypotheses from past investigations reduce scores for similar patterns
-- Confirmed hypotheses boost scores for recurring patterns\`,
+- Confirmed hypotheses boost scores for recurring patterns`,
   },
 
   approval: {
     slug: "approval",
     title: "Approval",
     category: "Incident",
-    content: \`# Action Approval Workflow
+    content: `# Action Approval Workflow
 
-When a remediation action is created with risk level \\\`medium\\\`, \\\`high\\\`, or \\\`critical\\\`, it is placed in \\\`pending\\\` status and cannot be run until approved by a user with the \\\`approver\\\` or \\\`admin\\\` role.
+When a remediation action is created with risk level \`medium\`, \`high\`, or \`critical\`, it is placed in \`pending\` status and cannot be run until approved by a user with the \`approver\` or \`admin\` role.
 
 ---
 
 ## Approval Flow
 
-\\\`\\\`\\\`
+\`\`\`
 [investigator creates action]  →  Status: pending
          │
          ▼
@@ -3757,7 +3757,7 @@ When a remediation action is created with risk level \\\`medium\\\`, \\\`high\\\
     │
     ▼
 Status: approved  →  [investigator runs action]
-\\\`\\\`\\\`
+\`\`\`
 
 Safe and low-risk actions skip the approval step and can be run immediately by the creating user.
 
@@ -3767,65 +3767,65 @@ Safe and low-risk actions skip the approval step and can be run immediately by t
 
 | Risk | Approval Required |
 |------|------------------|
-| \\\`safe\\\` / \\\`low\\\` | No |
-| \\\`medium\\\` / \\\`high\\\` / \\\`critical\\\` | Yes — \\\`approver\\\` role required |
+| \`safe\` / \`low\` | No |
+| \`medium\` / \`high\` / \`critical\` | Yes — \`approver\` role required |
 
 ---
 
 ## Creating an Action
 
-\\\`\\\`\\\`bash
-bugpilot fix suggest \\\\
-  --investigation-id inv_7f3a2b \\\\
-  "Rollback deployment a3f8c2d" \\\\
-  --type rollback \\\\
-  --risk low \\\\
-  --description "Revert Stripe SDK v4 update" \\\\
-  --hypothesis-id hyp_f3a1d2 \\\\
+\`\`\`bash
+bugpilot fix suggest \\
+  --investigation-id inv_7f3a2b \\
+  "Rollback deployment a3f8c2d" \\
+  --type rollback \\
+  --risk low \\
+  --description "Revert Stripe SDK v4 update" \\
+  --hypothesis-id hyp_f3a1d2 \\
   --rollback-plan "git revert a3f8c2d && trigger CI redeploy pipeline"
-\\\`\\\`\\\`
+\`\`\`
 
 ---
 
 ## Approving an Action
 
-Users with the \\\`approver\\\` or \\\`admin\\\` role can approve pending actions:
+Users with the \`approver\` or \`admin\` role can approve pending actions:
 
-\\\`\\\`\\\`bash
+\`\`\`bash
 bugpilot fix approve act_d2f4e1
-\\\`\\\`\\\`
+\`\`\`
 
 ---
 
 ## Running an Approved Action
 
-\\\`\\\`\\\`bash
+\`\`\`bash
 bugpilot fix run act_d2f4e1
-\\\`\\\`\\\`
+\`\`\`
 
-\\\`\\\`\\\`
+\`\`\`
   Action:     Rollback deployment a3f8c2d
   Risk level: LOW
 Execute this action? [y/N]: y
 
 ✓ Action executed: act_d2f4e1
-\\\`\\\`\\\`
+\`\`\`
 
-Use \\\`--yes\\\` / \\\`-y\\\` to skip the confirmation prompt in scripts.
+Use \`--yes\` / \`-y\` to skip the confirmation prompt in scripts.
 
 ---
 
 ## Permissions
 
-Only users with the \\\`approver\\\` or \\\`admin\\\` role can approve actions. If you lack the required role:
+Only users with the \`approver\` or \`admin\` role can approve actions. If you lack the required role:
 
-\\\`\\\`\\\`
+\`\`\`
 ✗ Error: 403 Forbidden — insufficient role for this action
   Your role: investigator
   Required:  approver
-\\\`\\\`\\\`
+\`\`\`
 
-Ask your admin to assign you the required role. See [Users and Roles](/docs/rbac).\`,
+Ask your admin to assign you the required role. See [Users and Roles](/docs/rbac).`,
   },
 };
 
