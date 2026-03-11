@@ -2691,7 +2691,7 @@ All errors use standard HTTP status codes with a JSON body:
   architecture: {
     slug: "architecture",
     title: "Architecture",
-    category: "Reference",
+    category: "References",
     content: `# Architecture Overview
 
 BugPilot turns a vague symptom — "payment service is returning errors" — into ranked, evidence-backed root cause hypotheses with suggested safe actions. This document explains the system design and data flow.
