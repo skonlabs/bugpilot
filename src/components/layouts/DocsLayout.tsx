@@ -87,7 +87,7 @@ export default function DocsLayout() {
 
         {/* Mobile sidebar */}
         {sidebarOpen && (
-          <div className="fixed inset-0 top-14 z-40 bg-background lg:hidden">
+          <div className="fixed inset-0 top-14 z-40 bg-background md:hidden">
             {sidebar}
           </div>
         )}
