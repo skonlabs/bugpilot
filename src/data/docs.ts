@@ -1449,7 +1449,7 @@ curl "https://api.bugpilot.io/api/v1/admin/audit-logs?action=retention_purge" \\
   "cli-reference": {
     slug: "cli-reference",
     title: "CLI Reference",
-    category: "Reference",
+    category: "References",
     content: `# CLI Reference
 
 Complete reference for every \`bugpilot\` command. All commands support three output formats.
