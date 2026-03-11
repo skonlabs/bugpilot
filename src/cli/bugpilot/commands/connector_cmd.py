@@ -18,12 +18,11 @@ from bugpilot.config_loader import (
     ConnectorEntry,
 )
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_info, print_success, print_warning
+from bugpilot.output.human import console, print_error, print_info, print_success
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError
 
 app = typer.Typer(help="Manage data source connectors")
-
 
 def _get_ctx(typer_ctx: typer.Context) -> AppContext:
     return typer_ctx.obj
@@ -44,24 +43,27 @@ def cmd_list(ctx: typer.Context) -> None:
         return
 
     if app_ctx.output_format == "json":
-        print_json({k: v.masked() for k, v in cfg.connectors.items()})
+        print_json({
+            name: {"kind": entry.kind, **entry.masked()}
+            for name, entry in cfg.connectors.items()
+        })
         return
 
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold")
+    table.add_column("Name")
     table.add_column("Type")
     table.add_column("Key Fields")
 
-    for kind, entry in cfg.connectors.items():
+    for name, entry in cfg.connectors.items():
         masked = entry.masked()
-        # Show a few key fields (non-secret first)
         fields_preview = []
-        for fdef in CONNECTOR_FIELDS.get(kind, []):
+        for fdef in CONNECTOR_FIELDS.get(entry.kind, []):
             val = masked.get(fdef["key"])
             if val:
                 fields_preview.append(f"{fdef['key']}={val}")
             if len(fields_preview) >= 3:
                 break
-        table.add_row(kind, ", ".join(fields_preview) or "-")
+        table.add_row(name, entry.kind, ", ".join(fields_preview) or "-")
 
     console.print(table)
     console.print(f"[dim]{len(cfg.connectors)} connector(s) configured[/dim]")
@@ -78,24 +80,43 @@ def cmd_add(
         ...,
         help=f"Connector type: {', '.join(CONNECTOR_TYPES)}",
     ),
+    name: Optional[str] = typer.Option(
+        None,
+        "--name", "-n",
+        help="Unique name for this connector instance (default: same as type). "
+             "Use a custom name to configure multiple instances of the same type, "
+             "e.g. --name grafana-prod",
+    ),
     overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite if already configured"),
 ) -> None:
-    """Add or update a connector interactively."""
+    """Add or update a connector interactively.
+
+    To configure multiple instances of the same type use --name:
+
+      bugpilot connector add grafana --name grafana-prod
+      bugpilot connector add grafana --name grafana-staging
+    """
     connector_type = connector_type.lower()
     if connector_type not in CONNECTOR_FIELDS:
         print_error(f"Unknown connector type: {connector_type!r}")
         print_info(f"Supported types: {', '.join(CONNECTOR_TYPES)}")
         raise typer.Exit(1)
 
+    connector_name = (name or connector_type).strip()
+
     cfg = BugPilotConfig.load()
 
-    if connector_type in cfg.connectors and not overwrite:
+    if connector_name in cfg.connectors and not overwrite:
+        existing_kind = cfg.connectors[connector_name].kind
+        label = f"'{connector_name}' ({existing_kind})"
         if not Confirm.ask(
-            f"[yellow]Connector '{connector_type}' is already configured. Overwrite?[/yellow]"
+            f"[yellow]Connector {label} is already configured. Overwrite?[/yellow]"
         ):
             raise typer.Exit(0)
 
-    console.print(f"\n[bold]Configure {connector_type} connector[/bold]\n")
+    console.print(f"\n[bold]Configure {connector_type} connector[/bold]"
+                  + (f" [dim](name: {connector_name})[/dim]" if connector_name != connector_type else "")
+                  + "\n")
     config: dict = {}
 
     for fdef in CONNECTOR_FIELDS[connector_type]:
@@ -124,15 +145,14 @@ def cmd_add(
             continue
 
         if is_list:
-            # Convert comma-separated string to list
             items = [item.strip() for item in value.split(",") if item.strip()]
             config[key] = items
         else:
             config[key] = value
 
-    cfg.connectors[connector_type] = ConnectorEntry(kind=connector_type, config=config)
+    cfg.connectors[connector_name] = ConnectorEntry(name=connector_name, kind=connector_type, config=config)
     cfg.save()
-    print_success(f"Connector '{connector_type}' saved to ~/.config/bugpilot/config.yaml")
+    print_success(f"Connector '{connector_name}' saved to ~/.config/bugpilot/config.yaml")
     print_info("Run 'bugpilot connector test' to verify connectivity.")
 
 
@@ -143,24 +163,24 @@ def cmd_add(
 @app.command("remove")
 def cmd_remove(
     ctx: typer.Context,
-    connector_type: str = typer.Argument(..., help="Connector type to remove"),
+    connector_name: str = typer.Argument(..., help="Connector name to remove (from 'bugpilot connector list')"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
 ) -> None:
     """Remove a connector from config."""
-    connector_type = connector_type.lower()
     cfg = BugPilotConfig.load()
 
-    if connector_type not in cfg.connectors:
-        print_error(f"Connector '{connector_type}' is not configured.")
+    if connector_name not in cfg.connectors:
+        print_error(f"Connector '{connector_name}' is not configured.")
         raise typer.Exit(1)
 
+    kind = cfg.connectors[connector_name].kind
     if not yes:
-        if not Confirm.ask(f"Remove connector '[bold]{connector_type}[/bold]'?"):
+        if not Confirm.ask(f"Remove connector '[bold]{connector_name}[/bold]' ({kind})?"):
             raise typer.Exit(0)
 
-    del cfg.connectors[connector_type]
+    del cfg.connectors[connector_name]
     cfg.save()
-    print_success(f"Connector '{connector_type}' removed.")
+    print_success(f"Connector '{connector_name}' removed.")
 
 
 # ---------------------------------------------------------------------------
@@ -170,8 +190,8 @@ def cmd_remove(
 @app.command("test")
 def cmd_test(
     ctx: typer.Context,
-    connector_type: Optional[str] = typer.Argument(
-        None, help="Connector type to test (omit to test all)"
+    connector_name: Optional[str] = typer.Argument(
+        None, help="Connector name to test (omit to test all). Use 'bugpilot connector list' to see names."
     ),
 ) -> None:
     """Test connector connectivity via the BugPilot API."""
@@ -188,35 +208,37 @@ def cmd_test(
         return
 
     to_test: dict = {}
-    if connector_type:
-        connector_type = connector_type.lower()
-        if connector_type not in cfg.connectors:
-            print_error(f"Connector '{connector_type}' is not configured.")
+    if connector_name:
+        if connector_name not in cfg.connectors:
+            print_error(f"Connector '{connector_name}' is not configured.")
             raise typer.Exit(1)
-        to_test[connector_type] = cfg.connectors[connector_type]
+        to_test[connector_name] = cfg.connectors[connector_name]
     else:
         to_test = dict(cfg.connectors)
 
     async def _run():
         results = {}
-        async with app_ctx.make_client() as client:
-            for kind, entry in to_test.items():
-                console.print(f"  Testing [bold]{kind}[/bold]...", end=" ")
+        async with app_ctx.make_analysis_client() as client:
+            for name, entry in to_test.items():
+                label = name if name == entry.kind else f"{name} ({entry.kind})"
+                console.print(f"  Testing [bold]{label}[/bold]...", end=" ")
                 try:
                     r = await client.post(
                         "/api/v1/admin/connectors/test",
-                        json={"kind": kind, "config": entry.config},
+                        json={"kind": entry.kind, "config": entry.config},
                     )
                     if r.status_code == 200:
-                        console.print("[green]✓ OK[/green]")
-                        results[kind] = {"status": "ok"}
+                        latency = r.json().get("latency_ms")
+                        suffix = f" [dim]{latency:.0f}ms[/dim]" if latency else ""
+                        console.print(f"[green]✓ OK[/green]{suffix}")
+                        results[name] = {"status": "ok"}
                     else:
                         detail = r.json().get("detail", r.text)
                         console.print(f"[red]✗ FAILED[/red] — {detail}")
-                        results[kind] = {"status": "failed", "detail": detail}
+                        results[name] = {"status": "failed", "detail": detail}
                 except Exception as exc:
                     console.print(f"[red]✗ ERROR[/red] — {exc}")
-                    results[kind] = {"status": "error", "detail": str(exc)}
+                    results[name] = {"status": "error", "detail": str(exc)}
 
         if app_ctx.output_format == "json":
             print_json(results)

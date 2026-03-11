@@ -190,7 +190,7 @@ bugpilot evidence collect \
   --investigation-id inv_7f3a2b \
   --label "error logs" \
   --kind log_snapshot \
-  --source datadog \
+  --source "datadog://logs?service=payment-service&env=prod" \
   --summary "NullPointerException at UserService.java:142, started 14:31 UTC"
 
 # See what BugPilot thinks the root cause is

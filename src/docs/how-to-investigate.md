@@ -42,13 +42,15 @@ bugpilot incident triage "HTTP 5xx spike on payment-service" \
 
 Evidence items are normalized snapshots — log excerpts, metric summaries, config diffs, deployment events — that you attach to the investigation. The more evidence from different sources, the higher the confidence in hypotheses.
 
+The `--source` option takes a **URI** that identifies the origin of the evidence. The scheme names the system (e.g. `datadog://`, `github://`) and query parameters narrow the scope.
+
 ```bash
-# Log snapshot from your monitoring tool
+# Log snapshot from Datadog
 bugpilot evidence collect \
   --investigation-id inv_7f3a2b \
   --label "payment-service error logs" \
   --kind log_snapshot \
-  --source datadog \
+  --source "datadog://logs?service=payment-service&env=prod" \
   --summary "47 NullPointerException at UserService.java:142 starting 14:31 UTC. user.preferences was null."
 
 # Deployment event from GitHub
@@ -56,7 +58,7 @@ bugpilot evidence collect \
   --investigation-id inv_7f3a2b \
   --label "deployment at 14:23 UTC" \
   --kind config_diff \
-  --source github \
+  --source "github://deployments?repo=acme/payment-service&ref=a3f8c2d" \
   --summary "Commit a3f8c2d by alice: 'Update Stripe SDK v4'. Merged and deployed at 14:23 UTC — 8 minutes before errors began."
 
 # Memory metric snapshot
@@ -64,7 +66,7 @@ bugpilot evidence collect \
   --investigation-id inv_7f3a2b \
   --label "heap memory spike" \
   --kind metric_snapshot \
-  --source datadog \
+  --source "datadog://metrics?metric=system.mem.pct_usable&service=payment-service" \
   --summary "Heap memory rose from 60% to 92% on payment-service pod-3 between 14:23 and 14:31 UTC."
 ```
 
@@ -185,6 +187,8 @@ Close the investigation:
 
 ```bash
 bugpilot investigate close inv_7f3a2b
+# or the top-level alias:
+bugpilot resolve inv_7f3a2b
 ```
 
 ---

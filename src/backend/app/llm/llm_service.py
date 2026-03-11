@@ -4,7 +4,7 @@ LLM Service - orchestrates prompt building, caching, and LLM provider calls.
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING
 import structlog
 
 from app.llm.base import LLMProvider
@@ -21,7 +21,23 @@ PROMPT_VERSION = "1.0.0"
 
 
 class LLMService:
-    def __init__(self, provider: LLMProvider, db=None):
+    def __init__(
+        self,
+        provider: Optional[LLMProvider] = None,
+        db=None,
+        org_settings: Optional[dict] = None,
+    ):
+        """
+        Args:
+            provider: Explicit provider instance. If None, resolved via
+                      LLMProviderFactory using org_settings → env settings → default.
+            db: AsyncSession for usage logging.
+            org_settings: Organization.settings dict. When provided, per-org LLM
+                          config takes precedence over env settings.
+        """
+        if provider is None:
+            from app.llm.factory import LLMProviderFactory
+            provider = LLMProviderFactory.resolve(org_settings)
         self.provider = provider
         self.db = db
         self._cache: dict[str, LLMResponse] = {}  # in-memory cache for MVP

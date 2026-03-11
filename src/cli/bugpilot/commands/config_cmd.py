@@ -20,57 +20,87 @@ from bugpilot.output.json_out import print_json
 app = typer.Typer(help="Manage BugPilot configuration")
 
 _SAMPLE_CONFIG = """\
+# BugPilot Configuration
+#
+# Each connector entry has a unique NAME (the key) and a "kind" field that
+# sets the connector type. This lets you configure multiple instances of the
+# same type, e.g. two Grafana installations or two GitHub organisations.
+#
+# Example with two Grafana instances:
+#
+#   grafana-prod:
+#     kind: grafana
+#     url: https://grafana.prod.example.com
+#     api_token: ${GRAFANA_PROD_TOKEN}
+#   grafana-staging:
+#     kind: grafana
+#     url: https://grafana.staging.example.com
+#     api_token: ${GRAFANA_STAGING_TOKEN}
+#
+# Uncomment and fill in the connector(s) you need.
+
 connectors:
-  # Datadog - remove or comment out sections you don't use
-  datadog:
-    api_key: "${DD_API_KEY}"
-    app_key: "${DD_APP_KEY}"
-    site: "datadoghq.com"
 
-  # Grafana
+  # ── Datadog ──────────────────────────────────────────────────────────────
+  # datadog:
+  #   kind: datadog
+  #   api_key: ${DD_API_KEY}
+  #   app_key: ${DD_APP_KEY}
+  #   site: datadoghq.com       # e.g. datadoghq.eu, us3.datadoghq.com
+
+  # ── Grafana ──────────────────────────────────────────────────────────────
   # grafana:
-  #   url: "https://grafana.example.com"
-  #   api_token: "${GRAFANA_TOKEN}"
+  #   kind: grafana
+  #   url: https://grafana.example.com
+  #   api_token: ${GRAFANA_TOKEN}
   #   org_id: "1"
-  #   prometheus_datasource_uid: ""  # optional
+  #   prometheus_datasource_uid:  # optional
 
-  # AWS CloudWatch
+  # ── AWS CloudWatch ────────────────────────────────────────────────────────
   # cloudwatch:
-  #   aws_access_key_id: "${AWS_ACCESS_KEY_ID}"
-  #   aws_secret_access_key: "${AWS_SECRET_ACCESS_KEY}"
-  #   region: "us-east-1"
-  #   log_group_names: []  # optional
+  #   kind: cloudwatch
+  #   aws_access_key_id: ${AWS_ACCESS_KEY_ID}
+  #   aws_secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+  #   region: us-east-1
+  #   log_group_names:           # optional
+  #     - /aws/lambda/my-function
 
-  # GitHub
+  # ── GitHub ────────────────────────────────────────────────────────────────
   # github:
-  #   token: "${GITHUB_TOKEN}"
-  #   org: "mycompany"
-  #   repos: []  # optional
+  #   kind: github
+  #   token: ${GITHUB_TOKEN}
+  #   org: mycompany
+  #   repos:                     # optional – omit to include all
+  #     - my-repo
 
-  # Kubernetes
+  # ── Kubernetes ────────────────────────────────────────────────────────────
   # kubernetes:
-  #   api_server: "https://kubernetes.example.com:6443"
-  #   token: "${K8S_TOKEN}"
-  #   namespace: "production"
-  #   extra_namespaces: []  # optional
-  #   ca_cert_path: ""       # optional
+  #   kind: kubernetes
+  #   api_server: https://k8s.example.com:6443
+  #   token: ${K8S_TOKEN}
+  #   namespace: production
+  #   extra_namespaces:          # optional
+  #     - staging
+  #   ca_cert_path:              # optional
 
-  # PagerDuty
+  # ── PagerDuty ─────────────────────────────────────────────────────────────
   # pagerduty:
-  #   api_key: "${PD_API_KEY}"
-  #   from_email: "oncall@example.com"
-  #   service_ids: []  # optional
+  #   kind: pagerduty
+  #   api_key: ${PD_API_KEY}
+  #   from_email: oncall@example.com
+  #   service_ids:               # optional
+  #     - P1234567
 
 webhooks:
   # Set secrets that match what you configure in your monitoring platform
   # datadog:
-  #   secret: "${DD_WEBHOOK_SECRET}"
+  #   secret: ${DD_WEBHOOK_SECRET}
   # grafana:
-  #   secret: "${GRAFANA_WEBHOOK_SECRET}"
+  #   secret: ${GRAFANA_WEBHOOK_SECRET}
   # cloudwatch:
-  #   secret: "${CW_WEBHOOK_SECRET}"
+  #   secret: ${CW_WEBHOOK_SECRET}
   # pagerduty:
-  #   secret: "${PD_WEBHOOK_SECRET}"
+  #   secret: ${PD_WEBHOOK_SECRET}
 
 global:
   connector_timeout_seconds: 30

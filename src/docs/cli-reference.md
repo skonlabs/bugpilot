@@ -13,6 +13,8 @@ bugpilot [OPTIONS] COMMAND [ARGS]...
 | Option | Short | Env var | Default | Description |
 |--------|-------|---------|---------|-------------|
 | `--api-url TEXT` | — | `BUGPILOT_API_URL` | `https://api.bugpilot.io` | BugPilot service URL |
+| `--analysis-url TEXT` | — | `BUGPILOT_ANALYSIS_URL` | — | Analysis engine URL (for AI features) |
+| `--investigation TEXT` | — | `BUGPILOT_INVESTIGATION` | — | Default investigation ID for all commands |
 | `--output TEXT` | `-o` | `BUGPILOT_OUTPUT` | `human` | Output format: `human` \| `json` \| `verbose` |
 | `--no-color` | — | `NO_COLOR` | false | Disable colour |
 | `--version` | `-v` | — | — | Print version and exit |
@@ -22,6 +24,8 @@ bugpilot [OPTIONS] COMMAND [ARGS]...
 - **`human`** — colour-coded tables. Best for interactive use.
 - **`json`** — machine-readable JSON on stdout. Use in scripts and CI.
 - **`verbose`** — all fields with syntax highlighting. Use for debugging.
+
+Setting `BUGPILOT_INVESTIGATION` (or passing `--investigation`) lets you omit `-i`/`--investigation-id` from every subsequent command for the duration of a shell session.
 
 ---
 
@@ -80,6 +84,16 @@ Display name: Alice Smith
 Role:         investigator
 Org ID:       org_acme
 User ID:      usr_a3f8c2
+```
+
+---
+
+## `bugpilot license`
+
+Show license information and seat usage.
+
+```
+bugpilot license
 ```
 
 ---
@@ -265,6 +279,8 @@ Mark an investigation as closed.
 bugpilot investigate close INVESTIGATION_ID
 ```
 
+Also available as the top-level alias `bugpilot resolve`.
+
 ---
 
 ### `investigate delete`
@@ -280,6 +296,32 @@ bugpilot investigate delete INVESTIGATION_ID [--yes]
 ---
 
 ## `bugpilot incident`
+
+### `incident list`
+
+List recent incidents.
+
+```
+bugpilot incident list [--status STATUS] [--page N] [--page-size N]
+```
+
+---
+
+### `incident open`
+
+Set the active investigation context for the current shell session. Subsequent commands that accept `-i`/`--investigation-id` will use this investigation by default.
+
+```
+bugpilot incident open INVESTIGATION_ID
+```
+
+```
+$ bugpilot incident open inv_7f3a2b
+✓ Active investigation set to inv_7f3a2b
+  (stored in BUGPILOT_INVESTIGATION for this session)
+```
+
+---
 
 ### `incident triage`
 
@@ -308,6 +350,24 @@ bugpilot incident status INVESTIGATION_ID
 
 ---
 
+## `bugpilot investigation`
+
+### `investigation export`
+
+Export an investigation using the stored investigation context (set via `incident open` or `BUGPILOT_INVESTIGATION`).
+
+```
+bugpilot investigation export [-i INVESTIGATION_ID] [-f FORMAT] [-o FILE]
+```
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| `--investigation-id` | `-i` | `$BUGPILOT_INVESTIGATION` | Investigation ID |
+| `--format` | `-f` | `json` | `json` \| `markdown` |
+| `--output` | `-o` | stdout | Write to file instead of stdout |
+
+---
+
 ## `bugpilot evidence`
 
 Evidence is what BugPilot analyses. You add evidence items to an investigation — log excerpts, metric summaries, deployment events, config changes — and BugPilot uses them to generate hypotheses.
@@ -320,7 +380,7 @@ bugpilot evidence list --investigation-id ID [--kind KIND]
 
 | Option | Short | Required | Description |
 |--------|-------|----------|-------------|
-| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--investigation-id` | `-i` | Yes (or `BUGPILOT_INVESTIGATION`) | Investigation ID |
 | `--kind` | — | No | Filter by kind |
 
 **Evidence kinds:** `log_snapshot` · `metric_snapshot` · `trace` · `event` · `config_diff` · `topology` · `custom`
@@ -336,19 +396,39 @@ bugpilot evidence collect
   --investigation-id ID
   --label LABEL
   [--kind KIND]
-  [--source SOURCE]
+  [--source URI]
   [--summary TEXT]
   [--connector-id CONNECTOR_ID]
 ```
 
 | Option | Short | Required | Description |
 |--------|-------|----------|-------------|
-| `--investigation-id` | `-i` | Yes | Investigation to attach this evidence to |
+| `--investigation-id` | `-i` | Yes (or `BUGPILOT_INVESTIGATION`) | Investigation to attach this evidence to |
 | `--label` | `-l` | Yes | Short descriptive label |
 | `--kind` | `-k` | No | Evidence kind (default: `custom`) |
-| `--source` | — | No | Source system name, e.g. `datadog`, `github` |
+| `--source` | — | No | Source URI identifying where this evidence came from, e.g. `datadog://logs?service=checkout&env=prod` |
 | `--summary` | `-s` | No | Text summary of what this evidence shows |
 | `--connector-id` | — | No | ID of the connector that produced this |
+
+The `--source` option takes a **URI**, not a source system name. The URI scheme identifies the system (e.g. `datadog://`, `github://`, `cloudwatch://`) and query parameters narrow the scope.
+
+```bash
+# Log snapshot from Datadog
+bugpilot evidence collect \
+  -i inv_7f3a2b \
+  --label "payment-service error logs" \
+  --kind log_snapshot \
+  --source "datadog://logs?service=payment-service&env=prod" \
+  --summary "47 NullPointerException at UserService.java:142 starting 14:31 UTC"
+
+# Deployment event from GitHub
+bugpilot evidence collect \
+  -i inv_7f3a2b \
+  --label "deployment at 14:23 UTC" \
+  --kind config_diff \
+  --source "github://deployments?repo=acme/payment-service&ref=a3f8c2d" \
+  --summary "Commit a3f8c2d: Update Stripe SDK v4, deployed at 14:23 UTC"
+```
 
 ---
 
@@ -356,6 +436,28 @@ bugpilot evidence collect
 
 ```
 bugpilot evidence get EVIDENCE_ID
+```
+
+Also available as `evidence show EVIDENCE_ID`.
+
+---
+
+### `evidence show`
+
+Alias for `evidence get`.
+
+```
+bugpilot evidence show EVIDENCE_ID
+```
+
+---
+
+### `evidence refresh`
+
+Re-fetch an evidence item from its source connector.
+
+```
+bugpilot evidence refresh EVIDENCE_ID
 ```
 
 ---
@@ -375,13 +477,14 @@ bugpilot evidence delete EVIDENCE_ID [--yes]
 List hypotheses ranked by confidence.
 
 ```
-bugpilot hypotheses list --investigation-id ID [--status STATUS]
+bugpilot hypotheses list --investigation-id ID [--status STATUS] [--refresh]
 ```
 
 | Option | Short | Required | Description |
 |--------|-------|----------|-------------|
-| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--investigation-id` | `-i` | Yes (or `BUGPILOT_INVESTIGATION`) | Investigation ID |
 | `--status` | `-s` | No | `active` \| `confirmed` \| `rejected` |
+| `--refresh` | — | No | Trigger a new hypothesis generation pass before listing |
 
 ```
 $ bugpilot hypotheses list --investigation-id inv_7f3a2b
@@ -411,7 +514,7 @@ bugpilot hypotheses create
 | Argument/Option | Short | Required | Description |
 |-----------------|-------|----------|-------------|
 | `TITLE` | — | Yes | Hypothesis title (positional) |
-| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--investigation-id` | `-i` | Yes (or `BUGPILOT_INVESTIGATION`) | Investigation ID |
 | `--description` | `-d` | No | Detailed description |
 | `--confidence` | `-c` | No | Confidence score 0.0–1.0 |
 | `--reasoning` | — | No | Explanation of why this is a candidate |
@@ -462,7 +565,7 @@ bugpilot fix list --investigation-id ID [--status STATUS]
 
 | Option | Short | Required | Description |
 |--------|-------|----------|-------------|
-| `--investigation-id` | `-i` | Yes | Investigation ID |
+| `--investigation-id` | `-i` | Yes (or `BUGPILOT_INVESTIGATION`) | Investigation ID |
 | `--status` | — | No | `pending` \| `approved` \| `running` \| `completed` \| `cancelled` |
 
 ---
@@ -485,7 +588,7 @@ bugpilot fix suggest
 | Argument/Option | Short | Required | Default | Description |
 |-----------------|-------|----------|---------|-------------|
 | `TITLE` | — | Yes | — | Action title (positional) |
-| `--investigation-id` | `-i` | Yes | — | Investigation ID |
+| `--investigation-id` | `-i` | Yes (or `BUGPILOT_INVESTIGATION`) | — | Investigation ID |
 | `--type` | `-t` | Yes | — | Action type, e.g. `rollback`, `config_change`, `restart`, `scale` |
 | `--risk` | — | No | `medium` | `safe` \| `low` \| `medium` \| `high` \| `critical` |
 | `--description` | `-d` | No | — | What the action does |
@@ -569,11 +672,119 @@ bugpilot export markdown INVESTIGATION_ID [--output FILE]
 
 ---
 
+## `bugpilot summary`
+
+Generate an AI-powered summary of an investigation. Requires `BUGPILOT_ANALYSIS_URL` to be configured.
+
+```
+bugpilot summary [-i INVESTIGATION_ID]
+```
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--investigation-id` | `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+
+---
+
+## `bugpilot ask`
+
+Ask a free-form question about an investigation. The analysis engine answers using the investigation's evidence and hypotheses. Requires `BUGPILOT_ANALYSIS_URL`.
+
+```
+bugpilot ask QUESTION [-i INVESTIGATION_ID]
+```
+
+| Argument/Option | Description |
+|-----------------|-------------|
+| `QUESTION` | Your question (positional) |
+| `--investigation-id` / `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+
+```
+$ bugpilot ask "What changed in the 10 minutes before the errors started?" -i inv_7f3a2b
+
+  Based on the evidence collected:
+  - Deployment a3f8c2d (Stripe SDK v4) deployed at 14:23 UTC — 8 minutes before errors
+  - Heap memory began rising from 60% → 92% between 14:23 and 14:31 UTC
+```
+
+---
+
+## `bugpilot compare`
+
+Compare the current investigation state against a healthy baseline. Requires `BUGPILOT_ANALYSIS_URL`.
+
+```
+bugpilot compare [--last-healthy | --last-stable-post-deploy | --user-pinned] [-i INVESTIGATION_ID]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--last-healthy` | Compare against the last healthy state (default) |
+| `--last-stable-post-deploy` | Compare against the last stable state after a deploy |
+| `--user-pinned` | Compare against a user-pinned baseline |
+| `--investigation-id` / `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+
+---
+
+## `bugpilot timeline`
+
+Display the investigation timeline — all events ordered chronologically. Shows clock skew warnings when events from different sources have inconsistent timestamps.
+
+```
+bugpilot timeline [-i INVESTIGATION_ID]
+```
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--investigation-id` | `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+
+```
+$ bugpilot timeline -i inv_7f3a2b
+
+  TIME (UTC)  SOURCE    EVENT
+  14:23:04    github    Deployment a3f8c2d pushed to production
+  14:23:41    datadog   Heap memory began rising (60% → 92%)
+  14:31:07    datadog   HTTP 5xx rate crossed 5% threshold
+  14:31:09    pagerduty Alert fired: payment-service degraded
+
+  ⚠ Clock skew detected: pagerduty events are ~2s ahead of datadog
+```
+
+---
+
+## `bugpilot resolve`
+
+Top-level alias for `bugpilot investigate close`. Marks an investigation as resolved.
+
+```
+bugpilot resolve INVESTIGATION_ID
+```
+
+---
+
+## `bugpilot history`
+
+Show the history of investigations for the current org, including resolved and closed ones.
+
+```
+bugpilot history [-i INVESTIGATION_ID] [--page N] [--page-size N]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--investigation-id` / `-i` | Show history for a specific investigation |
+| `--page` | Page number (default: 1) |
+| `--page-size` | Results per page (default: 20) |
+
+---
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `BUGPILOT_API_URL` | Override the API endpoint (default: `https://api.bugpilot.io`) |
+| `BUGPILOT_ANALYSIS_URL` | Analysis engine URL (required for `summary`, `ask`, `compare`) |
+| `BUGPILOT_INVESTIGATION` | Default investigation ID — set via `incident open` or manually |
 | `BUGPILOT_LICENSE_KEY` | License key, read by `auth activate --key` |
 | `BUGPILOT_API_SECRET` | API secret, read by `auth activate --secret` |
 | `BUGPILOT_OUTPUT` | Default output format: `human` \| `json` \| `verbose` |
@@ -598,4 +809,11 @@ bugpilot investigate list --status open -o json \
 INV_ID=$(bugpilot incident triage "Deploy check failed" \
   --service payment-service --severity high -o json \
   | jq -r '.id')
+
+# Use stored context for subsequent commands
+export BUGPILOT_INVESTIGATION=$INV_ID
+bugpilot evidence collect --label "CI logs" --kind log_snapshot \
+  --source "github://actions?run_id=$GITHUB_RUN_ID" \
+  --summary "Build failed at step: unit-tests"
+bugpilot hypotheses list
 ```

@@ -3,7 +3,7 @@ Investigations API - core investigation CRUD and lifecycle management.
 """
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
 from app.core.rbac import Permission, Role, TokenPayload, require_permission, require_role
-from app.models.all_models import Investigation, InvestigationStatus, InvestigationMember, Severity
+from app.models.all_models import Investigation, InvestigationStatus, InvestigationMember, Outcome, Severity
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -39,6 +39,7 @@ class InvestigationUpdate(BaseModel):
     status: Optional[InvestigationStatus] = None
     tags: Optional[List[str]] = None
     context: Optional[dict] = None
+    outcome: Optional[str] = None  # Resolution outcome text; creates an Outcome record when provided
 
 
 class InvestigationOut(BaseModel):
@@ -77,8 +78,8 @@ def _serialize_investigation(inv: Investigation) -> InvestigationOut:
         title=inv.title,
         description=inv.description,
         symptom=inv.symptom,
-        severity=inv.severity.value,
-        status=inv.status.value,
+        severity=inv.severity,
+        status=inv.status,
         tags=inv.tags or [],
         context=inv.context or {},
         resolved_at=inv.resolved_at,
@@ -111,8 +112,9 @@ async def _get_investigation_or_404(
 async def list_investigations(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status_filter: Optional[InvestigationStatus] = Query(None, alias="status"),
+    status_filter: Optional[List[InvestigationStatus]] = Query(None, alias="status"),
     severity_filter: Optional[Severity] = Query(None, alias="severity"),
+    service: Optional[str] = Query(None, description="Filter by linked service name"),
     current_user: TokenPayload = Depends(require_permission(Permission.read_investigation)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -120,9 +122,11 @@ async def list_investigations(
     query = select(Investigation).where(Investigation.org_id == org_id)
 
     if status_filter:
-        query = query.where(Investigation.status == status_filter)
+        query = query.where(Investigation.status.in_(status_filter))
     if severity_filter:
         query = query.where(Investigation.severity == severity_filter)
+    if service:
+        query = query.where(Investigation.linked_services.contains([service]))
 
     # Count total
     from sqlalchemy import func as sqlfunc
@@ -194,12 +198,23 @@ async def update_investigation(
 ):
     inv = await _get_investigation_or_404(investigation_id, uuid.UUID(current_user.org_id), db)
 
-    update_data = body.model_dump(exclude_unset=True)
+    # Apply all standard fields (exclude 'outcome' — it goes to Outcome table, not Investigation)
+    update_data = body.model_dump(exclude_unset=True, exclude={"outcome"})
     for field, value in update_data.items():
         setattr(inv, field, value)
 
     if body.status == InvestigationStatus.resolved and not inv.resolved_at:
         inv.resolved_at = datetime.now(timezone.utc)
+
+    # Persist outcome as a separate Outcome record when provided
+    if body.outcome:
+        outcome_record = Outcome(
+            investigation_id=investigation_id,
+            description=body.outcome,
+            resolved_at=inv.resolved_at or datetime.now(timezone.utc),
+            confirmed_by_user_id=uuid.UUID(current_user.sub),
+        )
+        db.add(outcome_record)
 
     await db.commit()
     await db.refresh(inv)

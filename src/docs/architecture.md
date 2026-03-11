@@ -73,7 +73,7 @@ BugPilot builds a directed graph of causal relationships between evidence items.
 1. **Rule-based:** Matches evidence patterns against a library of known failure signatures (bad deployment, OOMKill, dependency degradation, config error, etc.)
 2. **Graph correlation:** Traverses the investigation graph to find causal chains
 3. **Historical reranking:** Compares current evidence patterns to resolved past investigations for the same org
-4. **LLM synthesis:** (Optional) Sends a redacted evidence summary to the configured LLM provider for open-ended hypothesis generation
+4. **LLM synthesis:** (Optional) Sends a redacted evidence summary to the configured LLM provider (`openai`, `anthropic`, `azure_openai`, `gemini`, `ollama`, or `openai_compatible`) for open-ended hypothesis generation
 5. **Deduplication:** Merges near-duplicate hypotheses using title similarity and evidence overlap
 6. **Final ranking:** Sorts by confidence score, assigns ranks
 

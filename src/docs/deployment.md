@@ -11,7 +11,7 @@ BugPilot's backend is a stateless FastAPI service backed by PostgreSQL, making i
 - PostgreSQL 14+
 - Docker and Docker Compose (for the quick start)
 - A Fernet key and JWT secret (generated below)
-- Optional: an LLM API key (OpenAI, Anthropic, or Azure OpenAI)
+- Optional: an LLM API key (OpenAI, Anthropic, Azure OpenAI, Gemini, Ollama, or OpenAI-compatible)
 
 ---
 
@@ -59,13 +59,12 @@ curl http://localhost:8000/health
 | `FERNET_KEY` | Yes | — | Fernet key for encrypting connector credentials |
 | `LOG_LEVEL` | No | `info` | `debug` / `info` / `warning` / `error` |
 | `EVIDENCE_TTL_MINUTES` | No | `10080` | Raw payload TTL (default: 7 days) |
-| `LLM_PROVIDER` | No | — | `openai` / `anthropic` / `azure_openai` / `ollama` |
-| `OPENAI_API_KEY` | If using OpenAI | — | OpenAI API key |
-| `ANTHROPIC_API_KEY` | If using Anthropic | — | Anthropic API key |
-| `AZURE_OPENAI_ENDPOINT` | If using Azure | — | Azure OpenAI resource endpoint |
-| `AZURE_OPENAI_API_KEY` | If using Azure | — | Azure OpenAI API key |
-| `AZURE_OPENAI_DEPLOYMENT` | If using Azure | — | Deployment name |
-| `OLLAMA_BASE_URL` | If using Ollama | `http://localhost:11434` | Ollama server URL |
+| `LLM_PROVIDER` | No | — | `openai` / `anthropic` / `azure_openai` / `gemini` / `ollama` / `openai_compatible` |
+| `LLM_API_KEY` | If using a cloud LLM | — | API key for the configured LLM provider |
+| `LLM_MODEL` | No | provider default | Model name override |
+| `LLM_BASE_URL` | If using Azure / Ollama / openai_compatible | — | Base URL for the LLM endpoint |
+| `LLM_AZURE_DEPLOYMENT` | If using Azure OpenAI | — | Azure deployment name |
+| `LLM_AZURE_API_VERSION` | If using Azure OpenAI | — | Azure API version |
 
 ---
 

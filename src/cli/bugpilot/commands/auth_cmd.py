@@ -104,9 +104,6 @@ def cmd_activate(
     license_key: Optional[str] = typer.Option(
         None, "--key", "-k", help="License key", envvar="BUGPILOT_LICENSE_KEY"
     ),
-    api_secret: Optional[str] = typer.Option(
-        None, "--secret", "-s", help="API secret", envvar="BUGPILOT_API_SECRET"
-    ),
     email: Optional[str] = typer.Option(None, "--email", "-e", help="Your email address"),
     display_name: Optional[str] = typer.Option(None, "--name", help="Your display name"),
 ) -> None:
@@ -118,8 +115,6 @@ def cmd_activate(
 
     if not license_key:
         license_key = Prompt.ask("[bold]Enter your license key[/bold]", password=True)
-    if not api_secret:
-        api_secret = Prompt.ask("[bold]Enter your API secret[/bold]", password=True)
     if not email:
         email = Prompt.ask("[bold]Enter your email address[/bold]")
 
@@ -128,7 +123,6 @@ def cmd_activate(
             resp = await activate(
                 app_ctx,
                 license_key=license_key,
-                api_secret=api_secret,
                 email=email,
                 display_name=display_name,
             )
@@ -186,6 +180,34 @@ def cmd_whoami(ctx: typer.Context) -> None:
                 console.print(f"[bold]User ID:[/bold] {data.get('user_id')}")
         except APIError as e:
             print_error(f"Failed to get user info: {e.detail}")
+            raise typer.Exit(1)
+
+    anyio.run(_run)
+
+
+@app.command("status")
+def cmd_status(ctx: typer.Context) -> None:
+    """Show current session status (validity, expiry, role)."""
+    app_ctx = _get_ctx(ctx)
+    if not app_ctx.load_credentials():
+        if app_ctx.output_format == "json":
+            print_json({"authenticated": False})
+        else:
+            print_info("Not authenticated. Run: bugpilot auth activate")
+        return
+
+    async def _run():
+        try:
+            data = await whoami(app_ctx)
+            if app_ctx.output_format == "json":
+                print_json({"authenticated": True, **data})
+            else:
+                console.print(f"[green]✓[/green] Authenticated")
+                console.print(f"[bold]User:[/bold] {data.get('email')}")
+                console.print(f"[bold]Role:[/bold] {data.get('role')}")
+                console.print(f"[bold]Org:[/bold] {data.get('org_id')}")
+        except APIError as e:
+            print_error(f"Session check failed: {e.detail}")
             raise typer.Exit(1)
 
     anyio.run(_run)

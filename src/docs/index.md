@@ -18,6 +18,7 @@ BugPilot is a developer CLI tool for debugging production incidents. Install it 
 |-------|-------------|
 | [Getting Started](./getting-started.md) | Install, activate, connect data sources, and run your first investigation |
 | [CLI Reference](./cli-reference.md) | Every command, flag, and output format |
+| [API Reference](./api-reference.md) | REST API endpoints, request/response shapes, authentication |
 
 ---
 
@@ -38,6 +39,8 @@ BugPilot is a developer CLI tool for debugging production incidents. Install it 
 | [Manage Users and Roles](./how-to-rbac.md) | Team access, roles, and approval workflow |
 | [Data Retention](./how-to-retention.md) | How long investigation data is stored |
 | [AI Analysis Settings](./how-to-configure-llm.md) | Configure the AI engine for deeper hypothesis generation |
+| [Deployment](./deployment.md) | Self-host BugPilot on Kubernetes, ECS, or Docker Compose |
+| [Architecture](./architecture.md) | System design, data model, and security overview |
 
 ---
 

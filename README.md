@@ -1,73 +1,85 @@
-# Welcome to your Lovable project
+# BugPilot
 
-## Project info
+BugPilot is a CLI-first developer tool for debugging and investigating production incidents. It connects to your observability stack, correlates signals across logs, metrics, and traces, and uses LLM-powered analysis to surface root-cause hypotheses and suggest remediation actions.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **Incident triage** — open and track production incidents from the command line
+- **Evidence collection** — pull logs, metrics, traces, and config diffs from connected sources
+- **Hypothesis generation** — 6-pass pipeline (rule-based → graph correlation → historical reranking → LLM synthesis → deduplication → final ranking)
+- **AI analysis** — ask questions, generate summaries, and compare against baselines
+- **Action playbooks** — suggest and run remediation actions with approval gates
+- **Export** — produce JSON or Markdown investigation reports
+- **Webhook ingest** — receive alerts from Datadog, Grafana, CloudWatch, and PagerDuty
 
-There are several ways of editing your application.
+## Architecture
 
-**Use Lovable**
+| Layer | Technology |
+|---|---|
+| CLI | Python / Typer |
+| API | FastAPI + PostgreSQL |
+| Analysis engine | Separate service (`BUGPILOT_ANALYSIS_URL`) |
+| LLM providers | OpenAI, Anthropic, Azure OpenAI, Gemini, Ollama, OpenAI-compatible |
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Quick Start
 
-Changes made via Lovable will be committed automatically to this repo.
+```bash
+pip install bugpilot
 
-**Use your preferred IDE**
+# Authenticate
+bugpilot auth login
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+# Open an incident
+bugpilot incident triage --title "High error rate on checkout service"
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+# Collect evidence
+bugpilot evidence collect --source "datadog://logs?service=checkout&env=prod" -i <investigation-id>
 
-Follow these steps:
+# Generate hypotheses
+bugpilot hypotheses list -i <investigation-id>
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Ask a question
+bugpilot ask "What changed in the last 30 minutes?" -i <investigation-id>
 ```
 
-**Edit a file directly in GitHub**
+## Documentation
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Full documentation is in [`src/docs/`](src/docs/):
 
-**Use GitHub Codespaces**
+- [Getting Started](src/docs/getting-started.md)
+- [CLI Reference](src/docs/cli-reference.md)
+- [API Reference](src/docs/api-reference.md)
+- [Architecture](src/docs/architecture.md)
+- [How to Investigate](src/docs/how-to-investigate.md)
+- [How to Configure LLM](src/docs/how-to-configure-llm.md)
+- [Deployment](src/docs/deployment.md)
+- [Data Retention](src/docs/how-to-retention.md)
+- [Webhooks](src/docs/how-to-webhooks.md)
+- [Connectors](src/docs/how-to-connectors.md)
+- [RBAC](src/docs/how-to-rbac.md)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Configuration
 
-## What technologies are used for this project?
+| Environment variable | Description |
+|---|---|
+| `BUGPILOT_API_URL` | BugPilot API base URL (default: `https://api.bugpilot.io`) |
+| `BUGPILOT_ANALYSIS_URL` | Analysis engine URL |
+| `BUGPILOT_TOKEN` | API authentication token |
+| `BUGPILOT_INVESTIGATION` | Default investigation ID for all commands |
+| `LLM_PROVIDER` | LLM provider (`openai`, `anthropic`, `azure_openai`, `gemini`, `ollama`, `openai_compatible`) |
+| `LLM_API_KEY` | API key for the configured LLM provider |
+| `LLM_MODEL` | Model name |
+| `LLM_BASE_URL` | Base URL (for Ollama or OpenAI-compatible providers) |
 
-This project is built with:
+## RBAC Roles
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+| Role | Permissions |
+|---|---|
+| `viewer` | Read-only access to investigations and evidence |
+| `investigator` | Create and update investigations, collect evidence |
+| `approver` | Approve and run medium/high-risk actions |
+| `admin` | Full access including critical actions and user management |
 
-## How can I deploy this project?
+## License
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+See [LICENSE](LICENSE).
