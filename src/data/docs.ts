@@ -22,663 +22,2948 @@ export const docsPages: Record<string, DocPage> = {
     category: "Getting Started",
     content: `# BugPilot Documentation
 
-BugPilot is a CLI-first debugging and investigation platform. It connects to your existing monitoring tools, collects evidence automatically, and uses a multi-pass engine (rule-based + graph correlation + AI synthesis) to generate ranked, actionable root cause hypotheses.
+BugPilot is a developer CLI tool for debugging production incidents. Install it on your machine, connect it to your existing observability tools, and use it to find the root cause of issues — on demand when something breaks, or automatically when monitoring alerts fire.
 
 ---
 
-## Getting Started
+## Two Modes
+
+**On-Demand** — You notice something wrong. You open a terminal, describe the symptom, and BugPilot queries your connected data sources to pull relevant evidence. It analyses what it finds and surfaces ranked hypotheses with suggested next steps.
+
+**Automatic** — Your monitoring tool fires an alert. BugPilot receives it via webhook, creates an investigation immediately, and starts collecting evidence. When you pick it up in the terminal, the evidence trail is already there.
+
+---
+
+## Get Started
 
 | Guide | Description |
 |-------|-------------|
-| [Getting Started](/docs/getting-started) | Install, configure, and run your first investigation in 5 minutes |
-| [Developer Setup](/docs/developer-setup) | Full local dev environment setup for contributors |
-| [Deployment](/docs/deployment) | Docker Compose, Kubernetes, and AWS ECS deployment |
+| [Getting Started](/docs/getting-started) | Install, activate, connect data sources, and run your first investigation |
+| [CLI Reference](/docs/cli-reference) | Every command, flag, and output format |
+| [API Reference](/docs/api-reference) | REST API endpoints, request/response shapes, authentication |
 
 ---
 
-## How-To Guides
+## Investigating Incidents
 
 | Guide | Description |
 |-------|-------------|
-| [Investigate an Incident](/docs/how-to-investigate) | End-to-end walkthrough: alert → evidence → hypotheses → fix → close |
-| [Configure Connectors](/docs/connectors) | Datadog, Grafana, CloudWatch, GitHub, Kubernetes, PagerDuty |
-| [Configure Webhooks](/docs/webhooks) | Auto-triage from Datadog, Grafana, CloudWatch, PagerDuty alerts |
-| [Configure LLM Providers](/docs/llm-providers) | OpenAI, Anthropic, Azure OpenAI, Ollama |
-| [Manage Users and Roles](/docs/rbac) | RBAC roles, approval workflow, audit log |
-| [Configure Data Retention](/docs/data-retention) | Retention phases, compliance configurations |
+| [On-Demand Investigation](/docs/how-to-investigate) | Investigate a live incident step by step |
+| [Automatic Mode — Webhooks](/docs/webhooks) | Auto-triage from Datadog, Grafana, CloudWatch, PagerDuty alerts |
+| [Connect Data Sources](/docs/connectors) | Datadog, Grafana, CloudWatch, GitHub, Kubernetes, PagerDuty |
 
 ---
 
-## Reference
+## Administration
 
-| Reference | Description |
-|-----------|-------------|
-| [CLI Reference](/docs/cli-reference) | Complete documentation for every CLI command |
-| [API Reference](/docs/api-reference) | REST API endpoints, request/response schemas |
-| [Architecture](/docs/architecture) | System design, data flow, and key decisions |
-
----
-
-## Support
-
-| Resource | Link |
-|----------|------|
-| Issues | https://github.com/skonlabs/bugpilot/issues |
-| API Docs (local) | http://localhost:8000/docs |
-| Troubleshooting | [Troubleshooting Guide](/docs/troubleshooting) |
+| Guide | Description |
+|-------|-------------|
+| [Manage Users and Roles](/docs/rbac) | Team access, roles, and approval workflow |
+| [Data Retention](/docs/data-retention) | How long investigation data is stored |
+| [AI Analysis Settings](/docs/llm-providers) | Configure the AI engine for deeper hypothesis generation |
+| [Deployment](/docs/deployment) | Self-host BugPilot on Kubernetes, ECS, or Docker Compose |
+| [Architecture](/docs/architecture) | System design, data model, and security overview |
 
 ---
 
-## Platform at a Glance
+## Help
 
-\`\`\`
-Symptom → [Evidence Collection] → [Investigation Graph] → [Hypothesis Engine] → [Safe Actions]
-               │                                                    │
-               ▼                                                    ▼
-    6 connectors, concurrent            Rule-based + Graph correlation + LLM synthesis
-    45s timeout, graceful degradation   Dedup, rank, single-lane detection
-\`\`\`
-
-**Tech stack:** Python 3.11, FastAPI, PostgreSQL 14, asyncpg, SQLAlchemy 2, Alembic, Pydantic v2, structlog, Prometheus, typer, Rich.`,
+| Resource | |
+|----------|--|
+| [Troubleshooting](/docs/troubleshooting) | Common problems and how to fix them |
+| GitHub Issues | https://github.com/skonlabs/bugpilot/issues |`,
   },
+
   "getting-started": {
     slug: "getting-started",
     title: "Getting Started",
     category: "Getting Started",
     content: `# Getting Started with BugPilot
 
-BugPilot is a CLI-first debugging and investigation platform. In under five minutes you can connect BugPilot to your observability stack, activate a license, and start an investigation that automatically gathers correlated evidence from every connected tool — turning a vague symptom into ranked, actionable hypotheses.
+BugPilot is a CLI tool that helps you debug production incidents. You install it on your machine, connect it to your observability tools, and use it to find root causes — either on demand when something breaks, or automatically when alerts fire.
 
 ---
 
-## Prerequisites
+## Step 1: Register
 
-| Requirement | Minimum version |
-|-------------|----------------|
-| Python      | 3.11 |
-| PostgreSQL  | 14 |
-| Docker + Compose | any recent |
-| pip         | 23+ |
-
-You will also need credentials for at least one connector (Datadog, Grafana, CloudWatch, GitHub, Kubernetes, or PagerDuty). BugPilot works with one connector, but produces the best hypotheses when evidence comes from multiple sources.
+Go to [bugpilot.io](https://bugpilot.io) and create an account. After registration, copy your **license key** and **API secret** from the credentials page.
 
 ---
 
-## Quick Start (Docker Compose)
+## Step 2: Install the CLI
 
-The fastest way to run BugPilot locally is with Docker Compose.
+Choose your operating system:
 
-\`\`\`bash
-# 1. Clone the repository
-git clone https://github.com/skonlabs/bugpilot.git
-cd bugpilot
+### macOS (Intel & Apple Silicon, macOS 12+)
 
-# 2. Copy and edit environment variables
-cp backend/.env.example backend/.env
-$EDITOR backend/.env          # set FERNET_KEY, JWT_SECRET at minimum
-
-# 3. Start PostgreSQL + API
-docker compose up -d
-
-# 4. Apply database migrations
-docker compose exec backend alembic upgrade head
-
-# 5. Install the CLI
-pip install -e ./cli
-
-# 6. Verify the API is healthy
-curl http://localhost:8000/health
-# {"status":"ok"}
-
-# 7. Activate your license
-bugpilot auth activate --license-key bp_YOUR_KEY_HERE
-\`\`\`
-
-After \`activate\` you will see:
-
-\`\`\`
-✓ License activated
-  Org:        acme-corp
-  Tier:       pro
-  Seats:      10 / 10 available
-  Expires:    2027-01-15
-  Device ID:  dev_a3f8c...
-\`\`\`
-
-You are now authenticated. The CLI stores credentials at \`~/.config/bugpilot/credentials.json\` (mode 600).
-
----
-
-## Manual Installation (without Docker)
-
-### 1. Database
+**Homebrew (recommended):**
 
 \`\`\`bash
-createdb bugpilot
+brew install bugpilot/tap/bugpilot
 \`\`\`
 
-### 2. Backend
+**Installer package:**
 
-\`\`\`bash
-cd backend
-pip install -e .
-pip install -e ".[dev]"   # include test dependencies
+Download the \`.pkg\` file from [bugpilot.io/download](https://bugpilot.io/download), open it, and follow the on-screen steps.
 
-# Set required environment variables
-export DATABASE_URL="postgresql+asyncpg://user:pass@localhost/bugpilot"
-export JWT_SECRET="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-export FERNET_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+### Windows (64-bit, Windows 10+)
 
-alembic upgrade head
-uvicorn app.main:app --reload --port 8000
+**Scoop:**
+
+\`\`\`powershell
+scoop install bugpilot
 \`\`\`
 
-### 3. CLI
+**Installer:**
+
+Download the \`.msi\` file from [bugpilot.io/download](https://bugpilot.io/download), run it, and follow the prompts.
+
+### Confirm the install
+
+Open a new terminal and run:
 
 \`\`\`bash
-cd cli
-pip install -e .
 bugpilot --version
 \`\`\`
 
 ---
 
-## Environment Variables Reference
+## Step 3: Activate
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| \`DATABASE_URL\` | Yes | — | PostgreSQL DSN (\`postgresql+asyncpg://...\`) |
-| \`JWT_SECRET\` | Yes | — | 32+ byte hex secret for JWT signing |
-| \`FERNET_KEY\` | Yes | — | Fernet key for encrypting connector credentials |
-| \`BUGPILOT_API_URL\` | CLI only | \`http://localhost:8000\` | Backend URL the CLI connects to |
-| \`LOG_LEVEL\` | No | \`info\` | \`debug\` / \`info\` / \`warning\` / \`error\` |
-| \`EVIDENCE_TTL_MINUTES\` | No | \`10080\` (7 days) | Default evidence raw-payload TTL |
-| \`LLM_PROVIDER\` | No | — | \`openai\` / \`anthropic\` / \`azure_openai\` / \`ollama\` |
-| \`OPENAI_API_KEY\` | If using OpenAI | — | OpenAI API key |
-| \`ANTHROPIC_API_KEY\` | If using Anthropic | — | Anthropic API key |
-| \`AZURE_OPENAI_ENDPOINT\` | If using Azure | — | Azure OpenAI resource endpoint |
-| \`AZURE_OPENAI_API_KEY\` | If using Azure | — | Azure OpenAI API key |
-| \`AZURE_OPENAI_DEPLOYMENT\` | If using Azure | — | Deployment name |
-| \`OLLAMA_BASE_URL\` | If using Ollama | \`http://localhost:11434\` | Ollama server URL |
+Activation links the CLI to your account. The first time you run this command, BugPilot displays its Terms of Service — you must accept them to proceed.
+
+\`\`\`bash
+bugpilot auth activate --key YOUR_LICENSE_KEY --secret YOUR_API_SECRET
+\`\`\`
+
+You will be prompted to accept the Terms of Service and enter your email:
+
+\`\`\`
+┌─ Terms of Service ───────────────────────────────────────────┐
+│ BugPilot Terms of Service                                     │
+│                                                               │
+│ By activating BugPilot you agree to the following:           │
+│   1. BugPilot accesses your monitoring data only with the    │
+│      credentials you explicitly provide.                      │
+│   ...                                                         │
+│                                                               │
+│ Full Terms: https://bugpilot.io/terms                        │
+└───────────────────────────────────────────────────────────────┘
+
+Do you accept the Terms of Service? [y/N]: y
+
+✓ Terms of Service accepted.
+
+Enter your email address: alice@acme.com
+
+✓ BugPilot activated!
+
+Next steps:
+  1. Set up a connector   bugpilot connector add datadog
+  2. Test connectivity    bugpilot connector test
+  3. Start investigating  bugpilot incident triage "..."
+\`\`\`
+
+BugPilot stores your session at \`~/.config/bugpilot/credentials.json\` (\`600\` permissions). You only need to activate once per machine.
+
+Check who you're logged in as at any time:
+
+\`\`\`bash
+bugpilot auth whoami
+\`\`\`
 
 ---
 
-## Your First Investigation
+## Step 4: Connect Your Data Sources
+
+BugPilot reads connector credentials from \`~/.config/bugpilot/config.yaml\`. There are two ways to configure it:
+
+### Option A: Interactive wizard (recommended)
+
+The \`connector add\` command walks you through each required field for the connector type you choose:
 
 \`\`\`bash
-# Start a new investigation
-bugpilot investigate create \\
-  --title "High error rate on payment-service" \\
+bugpilot connector add datadog
+bugpilot connector add grafana
+bugpilot connector add cloudwatch
+bugpilot connector add github
+bugpilot connector add kubernetes
+bugpilot connector add pagerduty
+\`\`\`
+
+Example:
+
+\`\`\`
+Configure datadog connector
+
+  API Key: ••••••••••••••••••••
+  Application Key: ••••••••••••••••••••
+  Site (e.g. datadoghq.com) [datadoghq.com]:
+
+✓ Connector 'datadog' saved to ~/.config/bugpilot/config.yaml
+i Run 'bugpilot connector test' to verify connectivity.
+\`\`\`
+
+### Option B: Edit the config file directly
+
+Create a starter config with all connector templates:
+
+\`\`\`bash
+bugpilot config init
+\`\`\`
+
+Then open \`~/.config/bugpilot/config.yaml\` in your editor and fill in your credentials. You can use \`\${VAR_NAME}\` syntax to read values from environment variables:
+
+\`\`\`yaml
+connectors:
+  datadog:
+    api_key: "\${DD_API_KEY}"
+    app_key: "\${DD_APP_KEY}"
+    site: "datadoghq.com"
+  grafana:
+    url: "https://grafana.example.com"
+    api_token: "\${GRAFANA_TOKEN}"
+    org_id: "1"
+\`\`\`
+
+### Verify connectivity
+
+\`\`\`bash
+bugpilot connector test
+\`\`\`
+
+\`\`\`
+  Testing datadog...  ✓ OK
+  Testing grafana...  ✓ OK
+\`\`\`
+
+| Connector | Data BugPilot can access |
+|-----------|--------------------------|
+| **Datadog** | Logs, metrics, traces, monitor alerts |
+| **Grafana** | Metrics, alert notifications |
+| **AWS CloudWatch** | Logs, metrics, alarms |
+| **GitHub** | Commits, deployments, pull requests |
+| **Kubernetes** | Pod status, events, logs |
+| **PagerDuty** | Incident and alert history |
+
+See [Connect Data Sources](/docs/connectors) for required permissions and field details for each platform.
+
+---
+
+## Step 5: Investigate
+
+BugPilot has two usage modes:
+
+### On-Demand
+
+When you notice an issue, open a terminal and describe what you're seeing. BugPilot queries your connected sources, builds a picture of what happened, and tells you what it thinks the root cause is.
+
+\`\`\`bash
+# Start an investigation
+bugpilot incident triage "Payment service errors spiking" \\
+  --symptom "HTTP 5xx rate above 5% since 14:31 UTC" \\
+  --severity critical \\
   --service payment-service
 
-# BugPilot prints:
-# ✓ Investigation created: inv_7f3a2b...
-#   Title:    High error rate on payment-service
-#   Service:  payment-service
-#   Status:   open
-#   Branch:   main
+# Attach evidence you've collected
+bugpilot evidence collect \\
+  --investigation-id inv_7f3a2b \\
+  --label "error logs" \\
+  --kind log_snapshot \\
+  --source "datadog://logs?service=payment-service&env=prod" \\
+  --summary "NullPointerException at UserService.java:142, started 14:31 UTC"
 
-# Collect evidence from all configured connectors
-bugpilot evidence collect inv_7f3a2b --since 2h
+# See what BugPilot thinks the root cause is
+bugpilot hypotheses list --investigation-id inv_7f3a2b
 
-# View generated hypotheses
-bugpilot hypotheses list inv_7f3a2b
-
-# Get the top hypothesis and suggested fixes
-bugpilot fix suggest inv_7f3a2b hyp_c9e1...
-
-# Run a safe dry-run of the recommended action
-bugpilot fix run act_d2f4... --dry-run
+# When resolved, close the investigation
+bugpilot investigate close inv_7f3a2b
 \`\`\`
+
+See [On-Demand Investigation](/docs/how-to-investigate) for the full workflow.
+
+### Automatic
+
+Set up webhooks so that when your monitoring tool fires an alert, BugPilot automatically creates an investigation. You open the terminal to find it already has evidence collected.
+
+\`\`\`bash
+# Check what's waiting for you
+bugpilot investigate list --status open
+
+# Pick up an auto-created investigation
+bugpilot incident status inv_7f3a2b
+\`\`\`
+
+See [Automatic Mode — Webhooks](/docs/webhooks) to set this up.
 
 ---
 
 ## Next Steps
 
-- [CLI Reference](/docs/cli-reference) — complete command documentation
-- [Connector Setup](/docs/connectors) — configure Datadog, Grafana, CloudWatch, etc.
-- [Architecture Overview](/docs/architecture) — how evidence, graphs, and hypotheses work
-- [API Reference](/docs/api-reference) — REST API for programmatic use
-- [Deployment Guide](/docs/deployment) — production deployment on Kubernetes / ECS`,
+- [On-Demand Investigation](/docs/how-to-investigate) — full incident walkthrough
+- [Automatic Mode — Webhooks](/docs/webhooks) — auto-create investigations from alerts
+- [Connect Data Sources](/docs/connectors) — connector setup for each platform
+- [CLI Reference](/docs/cli-reference) — every command and flag`,
   },
-  "developer-setup": {
-    slug: "developer-setup",
-    title: "Developer Setup",
-    category: "Self-Hosting",
-    content: `# Developer Setup Guide
 
-This guide covers setting up a full local development environment for contributing to BugPilot.
+  "how-to-investigate": {
+    slug: "how-to-investigate",
+    title: "Investigate an Incident",
+    category: "Investigating Incidents",
+    content: `# How to Investigate an Incident with BugPilot
 
----
-
-## Repository Structure
-
-\`\`\`
-bugpilot/
-├── backend/                    # FastAPI backend
-│   ├── app/
-│   │   ├── api/v1/             # Route handlers
-│   │   ├── connectors/         # Evidence source integrations
-│   │   │   ├── datadog/
-│   │   │   ├── grafana/
-│   │   │   ├── cloudwatch/
-│   │   │   ├── github/
-│   │   │   ├── kubernetes/
-│   │   │   └── pagerduty/
-│   │   ├── core/               # Config, DB, security, RBAC, logging
-│   │   ├── graph/              # Investigation graph engine
-│   │   ├── hypothesis/         # 6-pass hypothesis pipeline
-│   │   ├── llm/                # LLM providers and service layer
-│   │   │   └── providers/      # OpenAI, Anthropic, Azure, Ollama
-│   │   ├── models/             # SQLAlchemy ORM models
-│   │   ├── privacy/            # PII redaction pipeline
-│   │   ├── schemas/            # Pydantic request/response schemas
-│   │   ├── services/           # Domain services (dedup, retention, export…)
-│   │   ├── webhooks/           # Webhook handlers and router
-│   │   └── workers/            # Evidence collector
-│   ├── migrations/             # Alembic migration files
-│   │   └── versions/
-│   ├── tests/                  # Test suite (pytest + pytest-asyncio)
-│   └── pyproject.toml
-├── cli/                        # typer CLI
-│   ├── bugpilot/
-│   │   ├── auth/               # License activation
-│   │   ├── commands/           # All CLI command groups
-│   │   └── output/             # human / json / verbose formatters
-│   ├── tests/
-│   └── pyproject.toml
-├── docs/                       # This documentation
-├── fixtures/                   # Sample configs and payloads
-│   └── sample_configs/
-└── docker-compose.yml
-\`\`\`
+This guide walks through a realistic incident from alert to resolution.
 
 ---
 
-## Prerequisites
+## Scenario
 
-- Python 3.11+
-- PostgreSQL 14+ (or Docker)
-- Git
+At 14:31 UTC your monitoring fires: **payment-service HTTP 5xx rate > 5%**. You open a terminal.
 
 ---
 
-## Setup
+## Step 1: Open an Investigation
 
-### 1. Clone the repository
+Create an investigation to anchor all evidence and hypotheses to this incident.
 
 \`\`\`bash
-git clone https://github.com/skonlabs/bugpilot.git
-cd bugpilot
+bugpilot investigate create "HTTP 5xx spike on payment-service" \\
+  --symptom "5xx rate above 5% since 14:31 UTC, ~847 affected requests" \\
+  --severity critical
 \`\`\`
 
-### 2. Backend
+\`\`\`
+✓ Created  inv_7f3a2b
+  Title:    HTTP 5xx spike on payment-service
+  Severity: critical
+  Status:   open
+\`\`\`
+
+**Shortcut:** Use \`bugpilot incident triage\` when you want to create the investigation and immediately record the initial alert in one step:
 
 \`\`\`bash
-cd backend
-
-# Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
-
-# Install with dev dependencies
-pip install -e ".[dev]"
-
-# Create a .env file
-cat > .env << 'EOF'
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost/bugpilot_dev
-JWT_SECRET=dev-only-secret-do-not-use-in-production-1234567890abcdef
-FERNET_KEY=$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
-LOG_LEVEL=debug
-EOF
-
-# Apply it
-export $(cat .env | xargs)
-
-# Create the database
-createdb bugpilot_dev
-
-# Run migrations
-alembic upgrade head
-
-# Start the API with live reload
-uvicorn app.main:app --reload --port 8000
+bugpilot incident triage "HTTP 5xx spike on payment-service" \\
+  --symptom "5xx rate above 5% since 14:31 UTC" \\
+  --severity critical \\
+  --service payment-service
 \`\`\`
 
-### 3. CLI
+---
+
+## Step 2: Add Evidence
+
+Evidence items are normalized snapshots — log excerpts, metric summaries, config diffs, deployment events — that you attach to the investigation. The more evidence from different sources, the higher the confidence in hypotheses.
+
+The \`--source\` option takes a **URI** that identifies the origin of the evidence. The scheme names the system (e.g. \`datadog://\`, \`github://\`) and query parameters narrow the scope.
 
 \`\`\`bash
-cd cli
-pip install -e .
+# Log snapshot from Datadog
+bugpilot evidence collect \\
+  --investigation-id inv_7f3a2b \\
+  --label "payment-service error logs" \\
+  --kind log_snapshot \\
+  --source "datadog://logs?service=payment-service&env=prod" \\
+  --summary "47 NullPointerException at UserService.java:142 starting 14:31 UTC. user.preferences was null."
 
-# Point at local backend
-export BUGPILOT_API_URL=http://localhost:8000
+# Deployment event from GitHub
+bugpilot evidence collect \\
+  --investigation-id inv_7f3a2b \\
+  --label "deployment at 14:23 UTC" \\
+  --kind config_diff \\
+  --source "github://deployments?repo=acme/payment-service&ref=a3f8c2d" \\
+  --summary "Commit a3f8c2d by alice: 'Update Stripe SDK v4'. Merged and deployed at 14:23 UTC — 8 minutes before errors began."
+
+# Memory metric snapshot
+bugpilot evidence collect \\
+  --investigation-id inv_7f3a2b \\
+  --label "heap memory spike" \\
+  --kind metric_snapshot \\
+  --source "datadog://metrics?metric=system.mem.pct_usable&service=payment-service" \\
+  --summary "Heap memory rose from 60% to 92% on payment-service pod-3 between 14:23 and 14:31 UTC."
 \`\`\`
 
----
-
-## Running Tests
-
-Tests use an in-memory SQLite database — no running PostgreSQL needed.
+List what you've added:
 
 \`\`\`bash
-cd backend
-
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_hypothesis.py -v
-
-# Run with coverage report
-pytest --cov=app --cov-report=term-missing
-
-# Run only tests matching a keyword
-pytest -k "test_dedup" -v
-
-# Run with verbose output and no capture (useful for debugging)
-pytest tests/test_retention.py -v -s
+bugpilot evidence list --investigation-id inv_7f3a2b
 \`\`\`
 
-### Test database
-
-The test suite uses \`sqlite+aiosqlite:///:memory:\` configured in \`tests/conftest.py\`. A cross-dialect \`JSONB\` TypeDecorator in \`app/models/all_models.py\` ensures models work with both PostgreSQL (production) and SQLite (tests).
-
-### Writing tests
-
-Follow the patterns in \`tests/test_hypothesis.py\` and \`tests/test_dedup.py\`:
-
-\`\`\`python
-import pytest
-from app.hypothesis.engine import HypothesisEngine
-
-@pytest.mark.asyncio
-async def test_my_feature():
-    engine = HypothesisEngine(use_llm=False)
-    result = await engine.generate(
-        evidence=[{"id": "ev1", "kind": "log_snapshot", ...}],
-        context={"service": "my-service"},
-    )
-    assert len(result) >= 1
-    assert result[0].confidence_score > 0
+\`\`\`
+  ID          LABEL                         KIND             SOURCE    ADDED
+  ev_9c1d3e   payment-service error logs    log_snapshot     datadog   1m ago
+  ev_a2b4f1   deployment at 14:23 UTC       config_diff      github    45s ago
+  ev_f7d2c3   heap memory spike             metric_snapshot  datadog   20s ago
 \`\`\`
 
-For tests that need the database, use the \`db_session\` fixture from \`conftest.py\`:
-
-\`\`\`python
-@pytest.mark.asyncio
-async def test_db_feature(db_session):
-    from app.models.all_models import Investigation, InvestigationStatus
-    inv = Investigation(title="test", status=InvestigationStatus.open, ...)
-    db_session.add(inv)
-    await db_session.flush()
-    assert inv.id is not None
-\`\`\`
+**Evidence kinds:** \`log_snapshot\` · \`metric_snapshot\` · \`trace\` · \`event\` · \`config_diff\` · \`topology\` · \`custom\`
 
 ---
 
-## Code Style
+## Step 3: Review Hypotheses
 
-BugPilot uses standard Python conventions:
-
-- **Type hints** on all function signatures
-- **Async/await** throughout (no sync blocking calls in API handlers or connectors)
-- **structlog** for all logging (never \`print()\`)
-- **Pydantic v2** with \`ConfigDict\` (not class-based \`Config\`)
-- **SQLAlchemy 2.0** declarative style with \`Mapped\` / \`mapped_column\`
-
----
-
-## Adding a New API Endpoint
-
-1. Add a route handler to the appropriate file in \`app/api/v1/\`
-2. Add request/response Pydantic schemas to \`app/schemas/base.py\`
-3. Mount the router in \`app/main.py\` if it's a new file
-4. Write tests in \`backend/tests/\`
-
-\`\`\`python
-# app/api/v1/my_feature.py
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.db import get_db
-from app.core.rbac import TokenPayload, require_role, Role
-
-router = APIRouter(prefix="/my-feature", tags=["my-feature"])
-
-class MyFeatureResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    name: str
-
-@router.get("/{item_id}", response_model=MyFeatureResponse)
-async def get_item(
-    item_id: str,
-    current_user: TokenPayload = Depends(require_role(Role.viewer)),
-    db: AsyncSession = Depends(get_db),
-):
-    ...
-\`\`\`
-
----
-
-## Adding a New Connector
-
-1. Create a directory: \`app/connectors/myplatform/\`
-2. Create \`__init__.py\` and \`connector.py\`
-3. Subclass \`BaseConnector\` from \`app.connectors.base\`
-4. Add a value to the \`ConnectorType\` enum in \`app/models/all_models.py\`
-5. Register the connector in the admin connector factory
-6. Add sample credentials to \`fixtures/sample_configs/sample_connector_config.yaml\`
-7. Write tests in \`backend/tests/test_connectors.py\`
-
----
-
-## Database Migrations
-
-When you modify \`app/models/all_models.py\`, generate a new Alembic migration:
+BugPilot generates hypotheses automatically as evidence is added. The hypothesis engine runs a multi-pass pipeline: rule-based pattern matching → graph correlation → historical reranking → LLM synthesis (when an LLM provider is configured).
 
 \`\`\`bash
-cd backend
-
-# Auto-generate based on model diff
-alembic revision --autogenerate -m "add_my_new_column"
-
-# Review the generated file in migrations/versions/
-# Always check autogenerated migrations before applying
-
-# Apply
-alembic upgrade head
-
-# Rollback one step
-alembic downgrade -1
+bugpilot hypotheses list --investigation-id inv_7f3a2b
 \`\`\`
 
----
+\`\`\`
+  RANK  HYPOTHESIS                              CONFIDENCE  STATUS   SOURCE
+   1    Bad deployment introduced regression    72%         active   rule
+   2    Memory exhaustion (OOMKill risk)        58%         active   rule
+   3    Upstream dependency degradation         31%         active   graph
+\`\`\`
 
-## Debugging Tips
-
-### View SQL queries
+To add a hypothesis manually — for a theory from the team:
 
 \`\`\`bash
-# In .env
-LOG_LEVEL=debug
-
-# Or set SQLAlchemy echo
-# In app/core/db.py, change:
-engine = create_async_engine(settings.database_url, echo=True)
-\`\`\`
-
-### Test a specific connector locally
-
-\`\`\`python
-# In a Python REPL or script
-import asyncio
-from app.connectors.datadog.connector import DatadogConnector
-from datetime import datetime, timezone, timedelta
-from app.connectors.base import ConnectorCapability
-
-async def test():
-    connector = DatadogConnector({
-        "api_key": "YOUR_API_KEY",
-        "app_key": "YOUR_APP_KEY",
-        "base_url": "https://api.datadoghq.com",
-    })
-    result = await connector.validate()
-    print(result)
-
-    since = datetime.now(timezone.utc) - timedelta(hours=1)
-    until = datetime.now(timezone.utc)
-    items = await connector.fetch_evidence(
-        ConnectorCapability.LOGS, "payment-service", since, until
-    )
-    print(f"Got {len(items)} items")
-
-asyncio.run(test())
-\`\`\`
-
-### Inspect the hypothesis engine
-
-\`\`\`python
-import asyncio
-from app.hypothesis.engine import HypothesisEngine
-
-async def test():
-    engine = HypothesisEngine(use_llm=False)
-    hypotheses = await engine.generate(
-        evidence=[
-            {"id": "ev1", "kind": "log_snapshot", "summary": "OOMKilled"},
-            {"id": "ev2", "kind": "metric_snapshot", "summary": "memory spike"},
-        ],
-        context={"service": "payment-service"},
-    )
-    for h in hypotheses:
-        print(f"{h.rank}. [{h.confidence_score:.0%}] {h.title}")
-
-asyncio.run(test())
+bugpilot hypotheses create \\
+  --investigation-id inv_7f3a2b \\
+  "Stripe SDK v4 changed preferences API contract" \\
+  --confidence 0.65 \\
+  --reasoning "SDK upgrade changed how user.preferences is hydrated, causing NPE on first call" \\
+  --evidence ev_9c1d3e \\
+  --evidence ev_a2b4f1
 \`\`\`
 
 ---
 
-## Common Issues
+## Step 4: Propose a Fix
 
-### \`FERNET_KEY\` is not valid
-
-Generate a proper key:
-
-\`\`\`python
-from cryptography.fernet import Fernet
-print(Fernet.generate_key().decode())
-\`\`\`
-
-### \`asyncpg\` SSL error
-
-Add \`?ssl=disable\` for local development:
-
-\`\`\`
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost/bugpilot_dev?ssl=disable
-\`\`\`
-
-### SQLite JSONB error in tests
-
-Ensure the \`JSONB\` TypeDecorator is imported from \`app.models.all_models\`, not from \`sqlalchemy.dialects.postgresql\` directly. The TypeDecorator routes to \`JSON\` on SQLite automatically.
-
-### \`aiosqlite\` not found
+Create a remediation action. Risk level determines whether approval is required before the action can be run.
 
 \`\`\`bash
-pip install aiosqlite
+bugpilot fix suggest \\
+  --investigation-id inv_7f3a2b \\
+  "Rollback deployment a3f8c2d" \\
+  --type rollback \\
+  --risk low \\
+  --description "Revert Stripe SDK v4 update — correlates with onset of 5xx errors" \\
+  --hypothesis-id hyp_f3a1d2 \\
+  --rollback-plan "git revert a3f8c2d && trigger CI redeploy pipeline"
+\`\`\`
+
+\`\`\`
+✓ Action created: act_d2f4e1
+  Title:  Rollback deployment a3f8c2d
+  Risk:   low
+  Status: pending  (no approval required for low-risk actions)
+\`\`\`
+
+**Risk levels and approval:**
+
+| Risk | Approval required |
+|------|------------------|
+| \`safe\` / \`low\` | No |
+| \`medium\` / \`high\` / \`critical\` | Yes — \`approver\` role required |
+
+---
+
+## Step 5: Execute the Fix
+
+Run the action. BugPilot will show the action details and ask for confirmation before executing:
+
+\`\`\`bash
+bugpilot fix run act_d2f4e1
+\`\`\`
+
+\`\`\`
+  Action:     Rollback deployment a3f8c2d
+  Risk level: LOW
+Execute this action? [y/N]: y
+
+✓ Action executed: act_d2f4e1
+\`\`\`
+
+Use \`--yes\` / \`-y\` to skip the confirmation prompt in scripts.
+
+Watch your monitoring. If the 5xx rate drops, the fix worked.
+
+---
+
+## Step 6: Confirm Root Cause and Close
+
+Confirm the hypothesis that turned out to be correct:
+
+\`\`\`bash
+bugpilot hypotheses confirm hyp_f3a1d2
+\`\`\`
+
+Reject the ones that didn't apply:
+
+\`\`\`bash
+bugpilot hypotheses reject hyp_8b3c1a
+\`\`\`
+
+Close the investigation:
+
+\`\`\`bash
+bugpilot investigate close inv_7f3a2b
+# or the top-level alias:
+bugpilot resolve inv_7f3a2b
 \`\`\`
 
 ---
 
-## Pull Request Guidelines
+## Step 7: Export a Post-Mortem
 
-1. Run the full test suite before submitting: \`pytest\`
-2. Add tests for any new feature or bug fix
-3. Keep changes focused — one feature or fix per PR
-4. Update the relevant doc file if your change affects user-facing behaviour
-5. Ensure no Pydantic deprecation warnings (\`class Config\` → \`model_config = ConfigDict(...)\`)`,
+\`\`\`bash
+# Markdown report for Confluence / Notion / GitHub wiki
+bugpilot export markdown inv_7f3a2b --output postmortem-2026-03-10.md
+
+# Full JSON bundle for archiving or integrations
+bugpilot export json inv_7f3a2b --output inv_7f3a2b.json
+\`\`\`
+
+---
+
+## Tips
+
+**Add evidence from multiple sources.** Confidence is capped at 40% with a single source. A second source from a different platform significantly improves hypothesis quality.
+
+**Use \`--output json\` in scripts.** Every command supports \`-o json\` for pipeline-friendly output:
+
+\`\`\`bash
+bugpilot hypotheses list --investigation-id inv_7f3a2b -o json \\
+  | jq '.[] | select(.confidence_score > 0.6)'
+\`\`\`
+
+**Reject bad hypotheses early.** This helps BugPilot improve scoring accuracy for your org over time.`,
   },
-  deployment: {
-    slug: "deployment",
-    title: "Deployment",
-    category: "Self-Hosting",
-    content: `# Deployment Guide
 
-This guide covers production deployment of BugPilot. The architecture is stateless (API) + stateful (PostgreSQL), making it straightforward to run on any container platform.
+  webhooks: {
+    slug: "webhooks",
+    title: "Configure Webhooks",
+    category: "Investigating Incidents",
+    content: `# How to Configure Webhooks (Automatic Mode)
+
+BugPilot can receive webhooks from your monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
 
 ---
 
-## Docker Compose (Single-host / Staging)
+## How It Works
 
-The included \`docker-compose.yml\` is suitable for a single-host staging deployment.
-
-\`\`\`bash
-# 1. Clone and configure
-git clone https://github.com/skonlabs/bugpilot.git
-cd bugpilot
-cp backend/.env.example backend/.env
-
-# 2. Edit required secrets
-$EDITOR backend/.env
-
-# 3. Start services
-docker compose up -d
-
-# 4. Apply migrations
-docker compose exec backend alembic upgrade head
-
-# 5. Tail logs
-docker compose logs -f backend
 \`\`\`
-
-### Generating required secrets
-
-\`\`\`bash
-# JWT_SECRET (32+ byte hex)
-python3 -c 'import secrets; print(secrets.token_hex(32))'
-
-# FERNET_KEY
-python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+Monitoring platform fires alert
+          │
+          ▼
+BugPilot receives webhook POST
+          │
+          ▼
+Signature verified (HMAC-SHA256)
+          │
+          ▼
+Dedup check — does a similar open investigation already exist?
+          │
+    ┌─────┴──────┐
+  New alert    Duplicate
+    │              │
+    ▼              ▼
+Create new     Update existing
+investigation  investigation
+          │
+          ▼
+Evidence collection begins
+          │
+          ▼
+Open terminal → bugpilot investigate list --status open
 \`\`\`
 
 ---
 
-## Environment Variables
+## Supported Sources
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| \`DATABASE_URL\` | Yes | \`postgresql+asyncpg://user:pass@host/db\` |
-| \`JWT_SECRET\` | Yes | 64-char hex string for JWT signing |
-| \`FERNET_KEY\` | Yes | Fernet key for credential encryption |
-| \`LOG_LEVEL\` | No | \`debug\` / \`info\` / \`warning\` / \`error\` |
-| \`EVIDENCE_TTL_MINUTES\` | No | Raw payload TTL (default: 10080 = 7 days) |
-| \`LLM_PROVIDER\` | No | \`openai\` / \`anthropic\` / \`azure_openai\` / \`ollama\` |
-| \`OPENAI_API_KEY\` | If using OpenAI | OpenAI API key |
-| \`ANTHROPIC_API_KEY\` | If using Anthropic | Anthropic API key |
-| \`AZURE_OPENAI_ENDPOINT\` | If using Azure | Azure resource endpoint |
-| \`AZURE_OPENAI_API_KEY\` | If using Azure | Azure API key |
-| \`AZURE_OPENAI_DEPLOYMENT\` | If using Azure | Deployment name |
-| \`OLLAMA_BASE_URL\` | If using Ollama | Default: \`http://localhost:11434\` |
+| Source | Webhook path | Signature header |
+|--------|-------------|-----------------|
+| Datadog | \`/api/v1/webhooks/datadog\` | \`X-Hub-Signature\` (hex HMAC) |
+| Grafana | \`/api/v1/webhooks/grafana\` | \`X-Grafana-Signature\` (\`sha256=\` prefix) |
+| AWS CloudWatch (SNS) | \`/api/v1/webhooks/cloudwatch\` | SNS certificate verification |
+| PagerDuty | \`/api/v1/webhooks/pagerduty\` | \`X-PagerDuty-Signature\` (\`v1=\` prefix) |
+
+---
+
+## Step 1: Add a Webhook Secret to Your Config
+
+Each webhook source requires a secret (minimum 32 characters) used to verify incoming request signatures. Add the secret to the \`webhooks\` section of \`~/.config/bugpilot/config.yaml\`:
+
+\`\`\`bash
+# Generate a starter config if you haven't already
+bugpilot config init
+\`\`\`
+
+Then edit \`~/.config/bugpilot/config.yaml\` and fill in the \`webhooks\` section:
+
+\`\`\`yaml
+webhooks:
+  datadog:
+    secret: "\${DD_WEBHOOK_SECRET}"
+  grafana:
+    secret: "\${GRAFANA_WEBHOOK_SECRET}"
+  cloudwatch:
+    secret: "\${CW_WEBHOOK_SECRET}"
+  pagerduty:
+    secret: "\${PD_WEBHOOK_SECRET}"
+\`\`\`
+
+Use a different secret for each source. Secrets must be at least 32 characters.
+
+---
+
+## Step 2: Configure Your Monitoring Platform
+
+Point your monitoring platform's webhook/notification settings at the BugPilot endpoint and set the shared secret.
+
+### Datadog
+
+1. Go to **Integrations → Webhooks**
+2. Add a new webhook:
+   - **URL:** \`https://api.bugpilot.io/api/v1/webhooks/datadog\`
+   - **Payload:** Leave as default (standard Datadog format)
+   - **Secret:** The value you set for \`webhooks.datadog.secret\` in config.yaml
+3. Add the webhook to any monitor under **Notify your team**
+
+### Grafana
+
+1. Go to **Alerting → Contact points → New contact point**
+2. Select type **Webhook**
+3. Set URL to \`https://api.bugpilot.io/api/v1/webhooks/grafana\`
+4. Under **Optional Webhook settings**, set the Authorization header using your secret
+5. Save and assign to an alert rule via a notification policy
+
+### AWS CloudWatch (via SNS)
+
+1. Create an SNS topic
+2. Add an HTTPS subscription pointing to \`https://api.bugpilot.io/api/v1/webhooks/cloudwatch\`
+3. BugPilot will automatically confirm the subscription on first delivery
+4. Configure your CloudWatch alarms to send to the SNS topic
+
+### PagerDuty
+
+1. Go to **Integrations → Generic Webhooks (v3)**
+2. Add endpoint: \`https://api.bugpilot.io/api/v1/webhooks/pagerduty\`
+3. Select events: **incident.triggered**, **incident.acknowledged**, **incident.resolved**
+4. Set the webhook secret to match what you set in config.yaml
+
+---
+
+## Step 3: Verify the Config
+
+\`\`\`bash
+bugpilot config validate
+\`\`\`
+
+\`\`\`
+✓ Config is valid.
+  2 connector(s) configured
+\`\`\`
+
+---
+
+## Using Automatic Mode
+
+After webhooks are configured, alerts create investigations automatically. In the terminal:
+
+\`\`\`bash
+# See what investigations have been auto-created
+bugpilot investigate list --status open
+
+# Check the status of an auto-created investigation
+bugpilot incident status inv_7f3a2b
+
+# Continue from where BugPilot left off — add more evidence, review hypotheses
+bugpilot evidence collect --investigation-id inv_7f3a2b ...
+bugpilot hypotheses list --investigation-id inv_7f3a2b
+\`\`\`
+
+---
+
+## Deduplication
+
+When a webhook arrives, BugPilot checks for existing open investigations using a weighted similarity score:
+
+| Signal | Weight |
+|--------|--------|
+| Service name match | 40% |
+| Time proximity (within 30 min) | 30% |
+| Alert signature match | 20% |
+| Symptom text similarity | 10% |
+
+If similarity exceeds the threshold, the webhook updates the existing investigation rather than creating a new one.
+
+---
+
+## Secret Rotation
+
+To rotate a webhook secret without downtime:
+
+1. Update the secret in \`~/.config/bugpilot/config.yaml\`
+2. Update the secret in your monitoring platform
+3. BugPilot supports a 1-hour grace window where both the old and new secret are accepted
+
+---
+
+## Rate Limiting
+
+Webhook endpoints are rate-limited to **100 requests per minute** per IP + org combination. Requests exceeding this return \`429 Too Many Requests\`.
+
+---
+
+## Troubleshooting
+
+**401 Unauthorized on delivery**
+- The signature header is missing or the secret doesn't match
+- Verify the secret in your monitoring platform matches \`webhooks.<source>.secret\` in config.yaml exactly (no extra spaces or encoding differences)
+- Check for encoding differences (URL-encoding, extra whitespace)
+
+**Webhook received but no investigation created**
+- Verify the webhook payload format matches the expected schema for your source
+- If a dedup check matched an existing open investigation, the webhook updated it — check \`bugpilot investigate list --status open\``,
+  },
+
+  connectors: {
+    slug: "connectors",
+    title: "Connector Setup",
+    category: "Investigating Incidents",
+    content: `# Connector Setup Guide
+
+BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, code changes).
+
+The more connectors you configure, the better BugPilot's hypotheses will be. Single-source investigations are marked as **single-lane** and confidence scores are capped at 40% until additional sources are added.
+
+---
+
+## Supported Connectors
+
+| Connector | Capabilities | Auth method |
+|-----------|-------------|-------------|
+| Datadog | Logs, Metrics, Traces, Alerts | API key + App key |
+| Grafana | Metrics, Alerts | Service account token |
+| AWS CloudWatch | Logs, Metrics, Alarms | IAM access key + secret |
+| GitHub | Code changes, Deployments | Personal access token or GitHub App |
+| Kubernetes | Pod state, Events, Logs | Service account bearer token |
+| PagerDuty | Incidents, Alerts | REST API key |
+
+---
+
+## Configuring Connectors
+
+All connector credentials are stored in \`~/.config/bugpilot/config.yaml\` (permissions \`600\`). Credentials are never sent anywhere except the BugPilot service for evidence collection.
+
+### Option A: Interactive wizard (recommended)
+
+\`\`\`bash
+bugpilot connector add datadog
+bugpilot connector add grafana
+bugpilot connector add cloudwatch
+bugpilot connector add github
+bugpilot connector add kubernetes
+bugpilot connector add pagerduty
+\`\`\`
+
+Each command prompts for the required fields. Secret values are masked during input.
+
+### Option B: Edit config.yaml directly
+
+Generate a starter file:
+
+\`\`\`bash
+bugpilot config init
+\`\`\`
+
+Then edit \`~/.config/bugpilot/config.yaml\`. Use \`\${VAR_NAME}\` to pull values from environment variables.
+
+### Listing and removing connectors
+
+\`\`\`bash
+bugpilot connector list          # show all configured connectors (secrets masked)
+bugpilot connector remove datadog  # remove a connector
+bugpilot connector test          # test all connectors
+bugpilot connector test grafana  # test a specific connector
+\`\`\`
+
+### Checking your config for errors
+
+\`\`\`bash
+bugpilot config validate
+bugpilot config show
+\`\`\`
+
+---
+
+## Datadog
+
+**Capabilities:** Logs, Metrics, Traces, Alerts
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`api_key\` | Yes | Datadog API key |
+| \`app_key\` | Yes | Datadog Application key |
+| \`site\` | No | Your Datadog site — default: \`datadoghq.com\` |
+
+### Required permissions
+
+Your API key must have:
+- \`logs_read_data\`
+- \`metrics_read\`
+- \`apm_read\`
+- \`monitors_read\`
+
+### Config file example
+
+\`\`\`yaml
+connectors:
+  datadog:
+    api_key: "\${DD_API_KEY}"
+    app_key: "\${DD_APP_KEY}"
+    site: "datadoghq.com"
+\`\`\`
+
+---
+
+## Grafana
+
+**Capabilities:** Metrics, Alerts
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`url\` | Yes | Your Grafana instance URL (e.g. \`https://grafana.example.com\`) |
+| \`api_token\` | Yes | Service account token (Viewer role minimum) |
+| \`org_id\` | No | Grafana org ID — default: \`1\` |
+| \`prometheus_datasource_uid\` | No | UID of your Prometheus datasource (auto-discovered if omitted) |
+
+### Creating a service account token
+
+1. Go to **Administration → Service Accounts → Add service account**
+2. Set role to **Viewer**
+3. Click **Add token** — copy the token immediately
+
+### Config file example
+
+\`\`\`yaml
+connectors:
+  grafana:
+    url: "https://grafana.example.com"
+    api_token: "\${GRAFANA_TOKEN}"
+    org_id: "1"
+\`\`\`
+
+---
+
+## AWS CloudWatch
+
+**Capabilities:** Logs, Metrics, Alarms
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`aws_access_key_id\` | Yes | IAM access key ID |
+| \`aws_secret_access_key\` | Yes | IAM secret access key |
+| \`region\` | Yes | AWS region (e.g. \`us-east-1\`) |
+| \`log_group_names\` | No | List of CloudWatch log group names to query |
+
+### Required IAM permissions
+
+\`\`\`json
+{
+  "Effect": "Allow",
+  "Action": [
+    "logs:StartQuery",
+    "logs:GetQueryResults",
+    "logs:DescribeLogGroups",
+    "cloudwatch:GetMetricData",
+    "cloudwatch:DescribeAlarms"
+  ],
+  "Resource": "*"
+}
+\`\`\`
+
+### Config file example
+
+\`\`\`yaml
+connectors:
+  cloudwatch:
+    aws_access_key_id: "\${AWS_ACCESS_KEY_ID}"
+    aws_secret_access_key: "\${AWS_SECRET_ACCESS_KEY}"
+    region: "us-east-1"
+    log_group_names:
+      - "/aws/lambda/payment-service"
+      - "/ecs/checkout-service"
+\`\`\`
+
+---
+
+## GitHub
+
+**Capabilities:** Code changes, Deployments
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`token\` | Yes | Personal access token or GitHub App installation token |
+| \`org\` | Yes | GitHub organization name |
+| \`repos\` | No | List of repository names to watch |
+
+### Token scopes required
+
+- \`repo:status\`
+- \`read:repo_hook\`
+
+### Creating a personal access token
+
+1. Go to **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)**
+2. Generate new token with \`repo:status\` and \`read:repo_hook\` scopes
+
+### Config file example
+
+\`\`\`yaml
+connectors:
+  github:
+    token: "\${GITHUB_TOKEN}"
+    org: "mycompany"
+    repos:
+      - "payment-service"
+      - "checkout-service"
+\`\`\`
 
 ---
 
 ## Kubernetes
 
-### Namespace and secrets
+**Capabilities:** Pod state, Events, Logs
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`api_server\` | Yes | Kubernetes API server URL |
+| \`token\` | Yes | Service account bearer token |
+| \`namespace\` | No | Primary namespace — default: \`production\` |
+| \`extra_namespaces\` | No | Additional namespaces to watch |
+| \`ca_cert_path\` | No | Path to CA certificate for TLS verification |
+
+### Creating a service account
+
+\`\`\`yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bugpilot
+  namespace: production
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: bugpilot-reader
+rules:
+- apiGroups: ["", "apps"]
+  resources: ["pods", "nodes", "events", "deployments"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: bugpilot-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: bugpilot-reader
+subjects:
+- kind: ServiceAccount
+  name: bugpilot
+  namespace: production
+\`\`\`
+
+Get the token:
+
+\`\`\`bash
+kubectl create token bugpilot -n production
+\`\`\`
+
+### Config file example
+
+\`\`\`yaml
+connectors:
+  kubernetes:
+    api_server: "https://kubernetes.example.com:6443"
+    token: "\${K8S_TOKEN}"
+    namespace: "production"
+    extra_namespaces:
+      - "staging"
+\`\`\`
+
+---
+
+## PagerDuty
+
+**Capabilities:** Incidents, Alerts
+
+### Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| \`api_key\` | Yes | PagerDuty REST API key (read-only) |
+| \`from_email\` | Yes | Email address for API requests |
+| \`service_ids\` | No | Limit to specific PagerDuty service IDs |
+
+### Creating a read-only API key
+
+1. Go to **PagerDuty → Integrations → API Access Keys**
+2. Create a key with **Read-only** access
+
+### Config file example
+
+\`\`\`yaml
+connectors:
+  pagerduty:
+    api_key: "\${PD_API_KEY}"
+    from_email: "oncall@example.com"
+    service_ids:
+      - "PXXXXXX"
+\`\`\`
+
+---
+
+## Connection Behaviour
+
+| Setting | Value |
+|---------|-------|
+| Request timeout per connector | 30 seconds |
+| Max collection time per connector | 45 seconds |
+| Retry on HTTP status | 429, 500, 502, 503, 504 |
+| Max retry attempts | 3 |
+| Retry backoff | Exponential with jitter |
+
+If a connector times out or errors, BugPilot marks it **degraded** for that run and continues with the remaining connectors. Results are partial rather than blocked.`,
+  },
+
+  "llm-providers": {
+    slug: "llm-providers",
+    title: "LLM Providers",
+    category: "Configuration",
+    content: `# How to Configure LLM Providers
+
+BugPilot uses LLMs to synthesize additional hypotheses when evidence is complex or when rule-based patterns don't fully explain an incident. LLM usage is **optional** — BugPilot works without one using its rule-based and graph correlation engines.
+
+---
+
+## Overview
+
+When an LLM is configured, it runs as the 4th pass of the hypothesis pipeline:
+
+\`\`\`
+Pass 1: Rule-based pattern matching     (always runs)
+Pass 2: Graph correlation               (always runs)
+Pass 3: Historical reranking            (always runs)
+Pass 4: LLM synthesis                  (runs only when LLM_PROVIDER is set)
+Pass 5: Deduplication
+Pass 6: Final ranking
+\`\`\`
+
+The LLM receives a **redacted** evidence summary — all PII, credentials, tokens, and keys are stripped before anything is sent. This is enforced in code; a safety check raises an error if non-redacted data reaches the LLM boundary.
+
+---
+
+## Supported Providers
+
+| Provider key | Models | Notes |
+|---|---|---|
+| \`openai\` | \`gpt-4o\` (default) | Requires \`LLM_API_KEY\` |
+| \`anthropic\` | \`claude-sonnet-4-6\` (default) | Requires \`LLM_API_KEY\`. Supports prompt caching. |
+| \`azure_openai\` | Any deployed model | Requires \`LLM_BASE_URL\`, \`LLM_API_KEY\`, and \`LLM_AZURE_DEPLOYMENT\` |
+| \`gemini\` | \`gemini-1.5-pro\` (default) | Requires \`LLM_API_KEY\` |
+| \`ollama\` | Any locally hosted model | Requires \`LLM_BASE_URL\`. No external API calls — fully on-premise. |
+| \`openai_compatible\` | Any model | For OpenAI-compatible APIs (e.g. vLLM, LM Studio). Requires \`LLM_BASE_URL\` and \`LLM_API_KEY\`. |
+
+---
+
+## Configuration
+
+LLM providers are configured via environment variables on the BugPilot analysis engine server. All providers share the same variable names — only the values differ.
+
+### Common Variables
+
+| Variable | Description |
+|---|---|
+| \`LLM_PROVIDER\` | Provider key (see table above) |
+| \`LLM_API_KEY\` | API key for the selected provider |
+| \`LLM_MODEL\` | Model name override (uses provider default if unset) |
+| \`LLM_BASE_URL\` | Base URL for Azure OpenAI, Ollama, or OpenAI-compatible providers |
+| \`LLM_AZURE_DEPLOYMENT\` | Azure OpenAI deployment name (Azure only) |
+| \`LLM_AZURE_API_VERSION\` | Azure OpenAI API version (Azure only) |
+
+### OpenAI
+
+\`\`\`bash
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...
+# Optional: override the default model
+LLM_MODEL=gpt-4o
+\`\`\`
+
+### Anthropic
+
+\`\`\`bash
+LLM_PROVIDER=anthropic
+LLM_API_KEY=sk-ant-...
+# Optional: override the default model
+LLM_MODEL=claude-sonnet-4-6
+\`\`\`
+
+### Azure OpenAI
+
+\`\`\`bash
+LLM_PROVIDER=azure_openai
+LLM_BASE_URL=https://your-resource.openai.azure.com
+LLM_API_KEY=your-azure-key
+LLM_AZURE_DEPLOYMENT=your-deployment-name
+LLM_AZURE_API_VERSION=2024-02-01
+\`\`\`
+
+### Google Gemini
+
+\`\`\`bash
+LLM_PROVIDER=gemini
+LLM_API_KEY=AIzaSy...
+# Optional: override the default model
+LLM_MODEL=gemini-1.5-pro
+\`\`\`
+
+### Ollama (on-premise, no external calls)
+
+\`\`\`bash
+LLM_PROVIDER=ollama
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3                        # or any model you have pulled
+\`\`\`
+
+### OpenAI-Compatible (vLLM, LM Studio, etc.)
+
+\`\`\`bash
+LLM_PROVIDER=openai_compatible
+LLM_BASE_URL=http://localhost:8080/v1
+LLM_API_KEY=your-api-key               # use "none" if auth is not required
+LLM_MODEL=your-model-name
+\`\`\`
+
+### No LLM (rule-based only)
+
+Simply leave \`LLM_PROVIDER\` unset. BugPilot will use rule-based and graph correlation only. This is the default.
+
+---
+
+## Privacy Guarantee
+
+Before any evidence is sent to an LLM, BugPilot's privacy redactor strips:
+
+- Email addresses
+- Phone numbers
+- JWT and Bearer tokens
+- Payment card numbers
+- AWS access keys and secrets
+- PEM private keys
+- IP addresses (configurable)
+- Custom regex patterns (configurable per org)
+
+This redaction happens in code before the LLM boundary. A safety check in the hypothesis engine raises a \`ValueError\` if it detects non-redacted content about to be sent — this is a hard stop, not a warning.
+
+---
+
+## Token Budget
+
+| Limit | Value |
+|-------|-------|
+| Max prompt tokens | 8,000 |
+| Max completion tokens | 2,000 |
+| Max tokens per investigation | 40,000 |
+
+When the investigation token budget is exhausted, LLM synthesis is skipped for subsequent hypothesis passes. Rule-based and graph results are still produced.
+
+---
+
+## Caching
+
+LLM responses are cached in-memory keyed by SHA-256 hash of the graph content. The cache is invalidated when new evidence is added to the investigation.
+
+---
+
+## Usage Tracking
+
+LLM usage is logged and exposed via Prometheus metrics:
+
+| Metric | Description |
+|--------|-------------|
+| \`bugpilot_llm_requests_total\` | Total LLM requests, labelled by provider |
+| \`bugpilot_llm_tokens_total\` | Prompt and completion token counts |`,
+  },
+
+  rbac: {
+    slug: "rbac",
+    title: "Users & Roles",
+    category: "Administration",
+    content: `# How to Manage Users and Roles
+
+BugPilot uses role-based access control (RBAC) with four roles. This guide covers role assignments, permissions, and administration tasks.
+
+---
+
+## Roles
+
+| Role | Description |
+|------|-------------|
+| \`viewer\` | Read-only access — can view investigations, evidence, hypotheses, and actions |
+| \`investigator\` | Standard user — can create investigations, add evidence, create hypotheses and actions |
+| \`approver\` | All investigator permissions plus the ability to approve medium/high/critical-risk actions |
+| \`admin\` | Full access — manages users, connectors, webhooks, org settings, and all data |
+
+---
+
+## Permission Matrix
+
+| Permission | viewer | investigator | approver | admin |
+|------------|--------|-------------|----------|-------|
+| View investigations | ✓ | ✓ | ✓ | ✓ |
+| Create/update investigations | | ✓ | ✓ | ✓ |
+| View evidence | ✓ | ✓ | ✓ | ✓ |
+| Add/delete evidence | | ✓ | ✓ | ✓ |
+| View hypotheses | ✓ | ✓ | ✓ | ✓ |
+| Create/update hypotheses | | ✓ | ✓ | ✓ |
+| View actions | ✓ | ✓ | ✓ | ✓ |
+| Create actions | | ✓ | ✓ | ✓ |
+| **Approve medium/high/critical actions** | | | **✓** | **✓** |
+| Manage users and roles | | | | ✓ |
+| Manage connectors and webhooks | | | | ✓ |
+| View audit log | | | | ✓ |
+| Configure org settings | | | | ✓ |
+
+---
+
+## Action Approval Workflow
+
+When an action is created with risk level \`medium\`, \`high\`, or \`critical\`, it is placed in \`pending\` status and cannot be run until approved by a user with the \`approver\` or \`admin\` role.
+
+\`\`\`
+[investigator creates action]  →  Status: pending
+         │
+         ▼
+[approver reviews]
+         │
+    ┌────┴────┐
+  Approve    Reject
+    │
+    ▼
+Status: approved  →  [investigator runs action]
+\`\`\`
+
+Safe and low-risk actions skip the approval step and can be run immediately by the creating user.
+
+---
+
+## Managing Users
+
+### Viewing Users
+
+\`\`\`bash
+curl https://api.bugpilot.io/api/v1/admin/users \\
+  -H "Authorization: Bearer \$ADMIN_TOKEN"
+\`\`\`
+
+### Changing a User's Role
+
+\`\`\`bash
+curl -X PATCH https://api.bugpilot.io/api/v1/admin/users/{user_id} \\
+  -H "Authorization: Bearer \$ADMIN_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"role": "approver"}'
+\`\`\`
+
+Valid roles: \`viewer\`, \`investigator\`, \`approver\`, \`admin\`
+
+### Deactivating a User
+
+\`\`\`bash
+curl -X DELETE https://api.bugpilot.io/api/v1/admin/users/{user_id} \\
+  -H "Authorization: Bearer \$ADMIN_TOKEN"
+\`\`\`
+
+Deactivated users lose access immediately. Their historical data (investigations, evidence, actions) is preserved.
+
+---
+
+## Audit Log
+
+Every write operation is recorded in the audit log with:
+
+- \`user_id\` — who performed the action
+- \`action\` — what was done
+- \`ip_address\` — where the request came from
+- \`occurred_at\` — timestamp
+- \`metadata\` — relevant IDs and field changes
+
+\`\`\`bash
+curl "https://api.bugpilot.io/api/v1/admin/audit-logs?limit=50" \\
+  -H "Authorization: Bearer \$ADMIN_TOKEN"
+\`\`\`
+
+The audit log is append-only and cannot be modified or deleted.
+
+---
+
+## CLI Token Roles
+
+When a user activates the CLI with \`bugpilot auth activate --key bp_...\`, their token inherits the role assigned to them by the admin. The role is visible in \`bugpilot auth whoami\`.
+
+If a command is rejected due to insufficient permissions, the CLI returns:
+
+\`\`\`
+✗ Error: 403 Forbidden — insufficient role for this action
+  Your role: investigator
+  Required:  approver
+\`\`\``,
+  },
+
+  "data-retention": {
+    slug: "data-retention",
+    title: "Data Retention",
+    category: "Administration",
+    content: `# How to Configure Data Retention
+
+BugPilot implements a three-phase data retention policy, configurable per organisation. A daily purge job runs automatically at 02:00 UTC.
+
+---
+
+## Retention Phases
+
+Data moves through three progressively smaller retention windows:
+
+\`\`\`
+Investigation created
+        │
+        ▼
+Phase 1: Investigation archive
+  Resolved/closed investigations retained for N days
+  Default: 90 days
+        │
+        ▼
+Phase 2: Evidence metadata
+  Evidence rows (metadata only) retained for N days
+  Default: 30 days
+        │
+        ▼
+Phase 3: Raw payload
+  Raw evidence payloads purged after N days
+  Default: 7 days
+  (evidence row remains, payload_ref set to null)
+\`\`\`
+
+---
+
+## Defaults
+
+| Phase | Default retention |
+|-------|-----------------|
+| Investigation archive | 90 days |
+| Evidence metadata | 30 days |
+| Raw payload | 7 days |
+
+---
+
+## Preset Configurations
+
+### Compliance (longer retention)
+
+\`\`\`json
+{
+  "investigation_archive_days": 365,
+  "evidence_metadata_days": 365,
+  "raw_payload_days": 7
+}
+\`\`\`
+
+### Cost-optimised
+
+\`\`\`json
+{
+  "investigation_archive_days": 90,
+  "evidence_metadata_days": 30,
+  "raw_payload_days": 7
+}
+\`\`\`
+
+### Development / low-cost
+
+\`\`\`json
+{
+  "investigation_archive_days": 30,
+  "evidence_metadata_days": 7,
+  "raw_payload_days": 1
+}
+\`\`\`
+
+---
+
+## Updating Retention Settings
+
+Admins can update the retention policy via the API:
+
+\`\`\`bash
+curl -X PATCH https://api.bugpilot.io/api/v1/admin/org/settings \\
+  -H "Authorization: Bearer \$ADMIN_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "retention": {
+      "investigation_archive_days": 180,
+      "evidence_metadata_days": 60,
+      "raw_payload_days": 14
+    }
+  }'
+\`\`\`
+
+---
+
+## How the Purge Works
+
+Each purge phase is fully idempotent — safe to run multiple times. Every deletion writes an entry to the audit log before data is removed, so you have a record of what was purged and when.
+
+The purge runs automatically on a daily schedule. You can view recent purge activity in the audit log:
+
+\`\`\`bash
+curl "https://api.bugpilot.io/api/v1/admin/audit-logs?action=retention_purge" \\
+  -H "Authorization: Bearer \$ADMIN_TOKEN"
+\`\`\`
+
+---
+
+## Notes
+
+- Retention settings apply org-wide; per-investigation overrides are not currently supported
+- Reducing retention takes effect on the next daily purge run
+- Increasing retention is effective immediately (existing data is not retroactively deleted)
+- The audit log itself is not subject to retention purges — it is permanent`,
+  },
+
+  "cli-reference": {
+    slug: "cli-reference",
+    title: "CLI Reference",
+    category: "Reference",
+    content: `# CLI Reference
+
+Complete reference for every \`bugpilot\` command. All commands support three output formats.
+
+---
+
+## Global Options
+
+\`\`\`
+bugpilot [OPTIONS] COMMAND [ARGS]...
+\`\`\`
+
+| Option | Short | Env var | Default | Description |
+|--------|-------|---------|---------|-------------|
+| \`--api-url TEXT\` | — | \`BUGPILOT_API_URL\` | \`https://api.bugpilot.io\` | BugPilot service URL |
+| \`--analysis-url TEXT\` | — | \`BUGPILOT_ANALYSIS_URL\` | — | Analysis engine URL (for AI features) |
+| \`--investigation TEXT\` | — | \`BUGPILOT_INVESTIGATION\` | — | Default investigation ID for all commands |
+| \`--output TEXT\` | \`-o\` | \`BUGPILOT_OUTPUT\` | \`human\` | Output format: \`human\` \\| \`json\` \\| \`verbose\` |
+| \`--no-color\` | — | \`NO_COLOR\` | false | Disable colour |
+| \`--version\` | \`-v\` | — | — | Print version and exit |
+
+**Output formats:**
+
+- **\`human\`** — colour-coded tables. Best for interactive use.
+- **\`json\`** — machine-readable JSON on stdout. Use in scripts and CI.
+- **\`verbose\`** — all fields with syntax highlighting. Use for debugging.
+
+Setting \`BUGPILOT_INVESTIGATION\` (or passing \`--investigation\`) lets you omit \`-i\`/\`--investigation-id\` from every subsequent command for the duration of a shell session.
+
+---
+
+## \`bugpilot auth\`
+
+### \`auth activate\`
+
+Link the CLI to your BugPilot account. Displays Terms of Service on first run. Run once per machine.
+
+\`\`\`
+bugpilot auth activate [--key KEY] [--secret SECRET] [--email EMAIL] [--name NAME]
+\`\`\`
+
+| Option | Short | Env var | Description |
+|--------|-------|---------|-------------|
+| \`--key\` | \`-k\` | \`BUGPILOT_LICENSE_KEY\` | License key. Prompted if omitted. |
+| \`--secret\` | \`-s\` | \`BUGPILOT_API_SECRET\` | API secret. Prompted if omitted. |
+| \`--email\` | \`-e\` | — | Your email address. Prompted if omitted. |
+| \`--name\` | — | — | Optional display name. |
+
+\`\`\`
+$ bugpilot auth activate --key YOUR_LICENSE_KEY --secret YOUR_API_SECRET
+
+[Terms of Service displayed — accept/decline]
+
+Enter your email address: alice@acme.com
+
+✓ BugPilot activated!
+\`\`\`
+
+Session is stored at \`~/.config/bugpilot/credentials.json\` (permissions \`600\`).
+
+---
+
+### \`auth logout\`
+
+End the session and clear stored credentials.
+
+\`\`\`
+bugpilot auth logout
+\`\`\`
+
+---
+
+### \`auth whoami\`
+
+Show the currently authenticated user.
+
+\`\`\`
+bugpilot auth whoami
+\`\`\`
+
+\`\`\`
+User:         alice@acme.com
+Display name: Alice Smith
+Role:         investigator
+Org ID:       org_acme
+User ID:      usr_a3f8c2
+\`\`\`
+
+---
+
+## \`bugpilot license\`
+
+Show license information and seat usage.
+
+\`\`\`
+bugpilot license
+\`\`\`
+
+---
+
+## \`bugpilot connector\`
+
+Manage data source connectors. Credentials are stored in \`~/.config/bugpilot/config.yaml\`.
+
+### \`connector list\`
+
+Show all configured connectors (secrets masked).
+
+\`\`\`
+bugpilot connector list
+\`\`\`
+
+---
+
+### \`connector add\`
+
+Add or update a connector interactively.
+
+\`\`\`
+bugpilot connector add TYPE [--overwrite]
+\`\`\`
+
+| Argument/Option | Description |
+|-----------------|-------------|
+| \`TYPE\` | Connector type: \`datadog\` \\| \`grafana\` \\| \`cloudwatch\` \\| \`github\` \\| \`kubernetes\` \\| \`pagerduty\` |
+| \`--overwrite\` | Overwrite existing connector without prompting |
+
+\`\`\`
+$ bugpilot connector add datadog
+
+Configure datadog connector
+
+  API Key: ••••••••••••••••••••
+  Application Key: ••••••••••••••••••••
+  Site (e.g. datadoghq.com) [datadoghq.com]:
+
+✓ Connector 'datadog' saved to ~/.config/bugpilot/config.yaml
+\`\`\`
+
+---
+
+### \`connector remove\`
+
+Remove a connector from config.
+
+\`\`\`
+bugpilot connector remove TYPE [--yes]
+\`\`\`
+
+\`--yes\` / \`-y\` — skip confirmation.
+
+---
+
+### \`connector test\`
+
+Test connector connectivity. Omit \`TYPE\` to test all.
+
+\`\`\`
+bugpilot connector test [TYPE]
+\`\`\`
+
+\`\`\`
+$ bugpilot connector test
+
+  Testing datadog...  ✓ OK
+  Testing grafana...  ✓ OK
+\`\`\`
+
+---
+
+## \`bugpilot config\`
+
+Manage \`~/.config/bugpilot/config.yaml\`.
+
+### \`config init\`
+
+Create a starter config file with all connector and webhook templates.
+
+\`\`\`
+bugpilot config init [--overwrite]
+\`\`\`
+
+\`--overwrite\` — replace an existing config file.
+
+---
+
+### \`config show\`
+
+Display the current config (secrets masked).
+
+\`\`\`
+bugpilot config show
+\`\`\`
+
+---
+
+### \`config validate\`
+
+Check the config for missing required fields.
+
+\`\`\`
+bugpilot config validate
+\`\`\`
+
+Exits with code \`1\` if there are validation errors.
+
+---
+
+## \`bugpilot investigate\`
+
+### \`investigate list\`
+
+List investigations for your organisation.
+
+\`\`\`
+bugpilot investigate list [--status STATUS] [--severity SEVERITY] [--page N] [--page-size N]
+\`\`\`
+
+| Option | Description |
+|--------|-------------|
+| \`--status, -s\` | Filter: \`open\` \\| \`in_progress\` \\| \`resolved\` \\| \`closed\` |
+| \`--severity\` | Filter: \`critical\` \\| \`high\` \\| \`medium\` \\| \`low\` |
+| \`--page, -p\` | Page number (default: 1) |
+| \`--page-size\` | Results per page (default: 20) |
+
+\`\`\`
+$ bugpilot investigate list --status open
+
+  ID          TITLE                                SEVERITY  STATUS   CREATED
+  inv_7f3a2b  High error rate on payment-service   high      open     2h ago
+  inv_c1d9e0  Database connection pool exhausted   critical  open     45m ago
+\`\`\`
+
+---
+
+### \`investigate create\`
+
+Open a new investigation.
+
+\`\`\`
+bugpilot investigate create TITLE [--symptom TEXT] [--severity LEVEL] [--description TEXT]
+\`\`\`
+
+| Argument/Option | Required | Default | Description |
+|-----------------|----------|---------|-------------|
+| \`TITLE\` | Yes | — | Short description (positional argument) |
+| \`--symptom\` | No | — | Observable symptom text |
+| \`--severity\` | No | \`medium\` | \`critical\` \\| \`high\` \\| \`medium\` \\| \`low\` |
+| \`--description, -d\` | No | — | Additional context or notes |
+
+---
+
+### \`investigate get\`
+
+Fetch full details of one investigation.
+
+\`\`\`
+bugpilot investigate get INVESTIGATION_ID
+\`\`\`
+
+---
+
+### \`investigate update\`
+
+Update investigation fields.
+
+\`\`\`
+bugpilot investigate update INVESTIGATION_ID
+  [--title TEXT] [--status STATUS] [--severity LEVEL] [--description TEXT]
+\`\`\`
+
+---
+
+### \`investigate close\`
+
+Mark an investigation as closed.
+
+\`\`\`
+bugpilot investigate close INVESTIGATION_ID
+\`\`\`
+
+Also available as the top-level alias \`bugpilot resolve\`.
+
+---
+
+### \`investigate delete\`
+
+Permanently delete an investigation and all its evidence. Requires confirmation.
+
+\`\`\`
+bugpilot investigate delete INVESTIGATION_ID [--yes]
+\`\`\`
+
+\`--yes\` / \`-y\` — skip the confirmation prompt.
+
+---
+
+## \`bugpilot incident\`
+
+### \`incident list\`
+
+List recent incidents.
+
+\`\`\`
+bugpilot incident list [--status STATUS] [--page N] [--page-size N]
+\`\`\`
+
+---
+
+### \`incident open\`
+
+Set the active investigation context for the current shell session. Subsequent commands that accept \`-i\`/\`--investigation-id\` will use this investigation by default.
+
+\`\`\`
+bugpilot incident open INVESTIGATION_ID
+\`\`\`
+
+\`\`\`
+$ bugpilot incident open inv_7f3a2b
+✓ Active investigation set to inv_7f3a2b
+  (stored in BUGPILOT_INVESTIGATION for this session)
+\`\`\`
+
+---
+
+### \`incident triage\`
+
+Quickly create an investigation from an active alert. Creates the investigation and records a timeline event in one step.
+
+\`\`\`
+bugpilot incident triage TITLE [--symptom TEXT] [--severity LEVEL] [--service TEXT]
+\`\`\`
+
+| Argument/Option | Required | Default | Description |
+|-----------------|----------|---------|-------------|
+| \`TITLE\` | Yes | — | Incident title or alert name (positional) |
+| \`--symptom, -s\` | No | — | Observed symptom or alert description |
+| \`--severity\` | No | \`high\` | \`critical\` \\| \`high\` \\| \`medium\` \\| \`low\` |
+| \`--service\` | No | — | Affected service name |
+
+---
+
+### \`incident status\`
+
+Show a full summary of an active investigation — evidence count, hypotheses, and actions.
+
+\`\`\`
+bugpilot incident status INVESTIGATION_ID
+\`\`\`
+
+---
+
+## \`bugpilot investigation\`
+
+### \`investigation export\`
+
+Export an investigation using the stored investigation context (set via \`incident open\` or \`BUGPILOT_INVESTIGATION\`).
+
+\`\`\`
+bugpilot investigation export [-i INVESTIGATION_ID] [-f FORMAT] [-o FILE]
+\`\`\`
+
+| Option | Short | Default | Description |
+|--------|-------|---------|-------------|
+| \`--investigation-id\` | \`-i\` | \`\$BUGPILOT_INVESTIGATION\` | Investigation ID |
+| \`--format\` | \`-f\` | \`json\` | \`json\` \\| \`markdown\` |
+| \`--output\` | \`-o\` | stdout | Write to file instead of stdout |
+
+---
+
+## \`bugpilot evidence\`
+
+Evidence is what BugPilot analyses. You add evidence items to an investigation — log excerpts, metric summaries, deployment events, config changes — and BugPilot uses them to generate hypotheses.
+
+### \`evidence list\`
+
+\`\`\`
+bugpilot evidence list --investigation-id ID [--kind KIND]
+\`\`\`
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| \`--investigation-id\` | \`-i\` | Yes (or \`BUGPILOT_INVESTIGATION\`) | Investigation ID |
+| \`--kind\` | — | No | Filter by kind |
+
+**Evidence kinds:** \`log_snapshot\` · \`metric_snapshot\` · \`trace\` · \`event\` · \`config_diff\` · \`topology\` · \`custom\`
+
+---
+
+### \`evidence collect\`
+
+Add a piece of evidence to an investigation.
+
+\`\`\`
+bugpilot evidence collect
+  --investigation-id ID
+  --label LABEL
+  [--kind KIND]
+  [--source URI]
+  [--summary TEXT]
+  [--connector-id CONNECTOR_ID]
+\`\`\`
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| \`--investigation-id\` | \`-i\` | Yes (or \`BUGPILOT_INVESTIGATION\`) | Investigation to attach this evidence to |
+| \`--label\` | \`-l\` | Yes | Short descriptive label |
+| \`--kind\` | \`-k\` | No | Evidence kind (default: \`custom\`) |
+| \`--source\` | — | No | Source URI identifying where this evidence came from, e.g. \`datadog://logs?service=checkout&env=prod\` |
+| \`--summary\` | \`-s\` | No | Text summary of what this evidence shows |
+| \`--connector-id\` | — | No | ID of the connector that produced this |
+
+The \`--source\` option takes a **URI**, not a source system name. The URI scheme identifies the system (e.g. \`datadog://\`, \`github://\`, \`cloudwatch://\`) and query parameters narrow the scope.
+
+\`\`\`bash
+# Log snapshot from Datadog
+bugpilot evidence collect \\
+  -i inv_7f3a2b \\
+  --label "payment-service error logs" \\
+  --kind log_snapshot \\
+  --source "datadog://logs?service=payment-service&env=prod" \\
+  --summary "47 NullPointerException at UserService.java:142 starting 14:31 UTC"
+
+# Deployment event from GitHub
+bugpilot evidence collect \\
+  -i inv_7f3a2b \\
+  --label "deployment at 14:23 UTC" \\
+  --kind config_diff \\
+  --source "github://deployments?repo=acme/payment-service&ref=a3f8c2d" \\
+  --summary "Commit a3f8c2d: Update Stripe SDK v4, deployed at 14:23 UTC"
+\`\`\`
+
+---
+
+### \`evidence get\`
+
+\`\`\`
+bugpilot evidence get EVIDENCE_ID
+\`\`\`
+
+Also available as \`evidence show EVIDENCE_ID\`.
+
+---
+
+### \`evidence show\`
+
+Alias for \`evidence get\`.
+
+\`\`\`
+bugpilot evidence show EVIDENCE_ID
+\`\`\`
+
+---
+
+### \`evidence refresh\`
+
+Re-fetch an evidence item from its source connector.
+
+\`\`\`
+bugpilot evidence refresh EVIDENCE_ID
+\`\`\`
+
+---
+
+### \`evidence delete\`
+
+\`\`\`
+bugpilot evidence delete EVIDENCE_ID [--yes]
+\`\`\`
+
+---
+
+## \`bugpilot hypotheses\`
+
+### \`hypotheses list\`
+
+List hypotheses ranked by confidence.
+
+\`\`\`
+bugpilot hypotheses list --investigation-id ID [--status STATUS] [--refresh]
+\`\`\`
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| \`--investigation-id\` | \`-i\` | Yes (or \`BUGPILOT_INVESTIGATION\`) | Investigation ID |
+| \`--status\` | \`-s\` | No | \`active\` \\| \`confirmed\` \\| \`rejected\` |
+| \`--refresh\` | — | No | Trigger a new hypothesis generation pass before listing |
+
+\`\`\`
+$ bugpilot hypotheses list --investigation-id inv_7f3a2b
+
+  RANK  HYPOTHESIS                             CONFIDENCE  STATUS
+   1    Bad deployment introduced regression   72%         active
+   2    Memory exhaustion                      41%         active
+   3    Upstream dependency degradation        28%         active
+\`\`\`
+
+---
+
+### \`hypotheses create\`
+
+Add a hypothesis manually.
+
+\`\`\`
+bugpilot hypotheses create
+  --investigation-id ID
+  TITLE
+  [--description TEXT]
+  [--confidence FLOAT]
+  [--reasoning TEXT]
+  [--evidence EVIDENCE_ID]...
+\`\`\`
+
+| Argument/Option | Short | Required | Description |
+|-----------------|-------|----------|-------------|
+| \`TITLE\` | — | Yes | Hypothesis title (positional) |
+| \`--investigation-id\` | \`-i\` | Yes (or \`BUGPILOT_INVESTIGATION\`) | Investigation ID |
+| \`--description\` | \`-d\` | No | Detailed description |
+| \`--confidence\` | \`-c\` | No | Confidence score 0.0–1.0 |
+| \`--reasoning\` | — | No | Explanation of why this is a candidate |
+| \`--evidence\` | — | No | Supporting evidence ID (repeatable) |
+
+---
+
+### \`hypotheses confirm\`
+
+Mark a hypothesis as the confirmed root cause.
+
+\`\`\`
+bugpilot hypotheses confirm HYPOTHESIS_ID
+\`\`\`
+
+---
+
+### \`hypotheses reject\`
+
+Mark a hypothesis as ruled out.
+
+\`\`\`
+bugpilot hypotheses reject HYPOTHESIS_ID
+\`\`\`
+
+---
+
+### \`hypotheses update\`
+
+Update a hypothesis.
+
+\`\`\`
+bugpilot hypotheses update HYPOTHESIS_ID
+  [--title TEXT] [--confidence FLOAT] [--reasoning TEXT]
+\`\`\`
+
+---
+
+## \`bugpilot fix\`
+
+### \`fix list\`
+
+List actions for an investigation.
+
+\`\`\`
+bugpilot fix list --investigation-id ID [--status STATUS]
+\`\`\`
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| \`--investigation-id\` | \`-i\` | Yes (or \`BUGPILOT_INVESTIGATION\`) | Investigation ID |
+| \`--status\` | — | No | \`pending\` \\| \`approved\` \\| \`running\` \\| \`completed\` \\| \`cancelled\` |
+
+---
+
+### \`fix suggest\`
+
+Propose a remediation action.
+
+\`\`\`
+bugpilot fix suggest
+  --investigation-id ID
+  TITLE
+  --type TYPE
+  [--risk LEVEL]
+  [--description TEXT]
+  [--hypothesis-id ID]
+  [--rollback-plan TEXT]
+\`\`\`
+
+| Argument/Option | Short | Required | Default | Description |
+|-----------------|-------|----------|---------|-------------|
+| \`TITLE\` | — | Yes | — | Action title (positional) |
+| \`--investigation-id\` | \`-i\` | Yes (or \`BUGPILOT_INVESTIGATION\`) | — | Investigation ID |
+| \`--type\` | \`-t\` | Yes | — | Action type, e.g. \`rollback\`, \`config_change\`, \`restart\`, \`scale\` |
+| \`--risk\` | — | No | \`medium\` | \`safe\` \\| \`low\` \\| \`medium\` \\| \`high\` \\| \`critical\` |
+| \`--description\` | \`-d\` | No | — | What the action does |
+| \`--hypothesis-id\` | — | No | — | Hypothesis this action targets |
+| \`--rollback-plan\` | — | No | — | How to undo this action |
+
+**Approval rules:**
+
+| Risk level | Approval required before running? |
+|------------|----------------------------------|
+| \`safe\` or \`low\` | No |
+| \`medium\`, \`high\`, or \`critical\` | Yes — \`approver\` role required |
+
+---
+
+### \`fix approve\`
+
+Approve a medium/high/critical-risk action. Requires \`approver\` or \`admin\` role.
+
+\`\`\`
+bugpilot fix approve ACTION_ID
+\`\`\`
+
+---
+
+### \`fix run\`
+
+Execute an action. Displays the action title and risk level, then prompts for confirmation before proceeding.
+
+\`\`\`
+bugpilot fix run ACTION_ID [--yes]
+\`\`\`
+
+\`--yes\` / \`-y\` — skip the confirmation prompt.
+
+\`\`\`
+$ bugpilot fix run act_d2f4e1
+
+  Action:     Rollback deployment a3f8c2d
+  Risk level: LOW
+Execute this action? [y/N]: y
+
+✓ Action executed: act_d2f4e1
+\`\`\`
+
+---
+
+### \`fix cancel\`
+
+Cancel a pending or approved action.
+
+\`\`\`
+bugpilot fix cancel ACTION_ID
+\`\`\`
+
+---
+
+## \`bugpilot export\`
+
+### \`export json\`
+
+Export the full investigation bundle as JSON (investigation, evidence, hypotheses, actions, timeline).
+
+\`\`\`
+bugpilot export json INVESTIGATION_ID [--output FILE]
+\`\`\`
+
+\`--output\` / \`-o\` — write to a file instead of stdout.
+
+---
+
+### \`export markdown\`
+
+Export a Markdown incident report suitable for Confluence, Notion, or GitHub wikis.
+
+\`\`\`
+bugpilot export markdown INVESTIGATION_ID [--output FILE]
+\`\`\`
+
+\`--output\` / \`-o\` — write to a file instead of stdout.
+
+---
+
+## \`bugpilot summary\`
+
+Generate an AI-powered summary of an investigation. Requires \`BUGPILOT_ANALYSIS_URL\` to be configured.
+
+\`\`\`
+bugpilot summary [-i INVESTIGATION_ID]
+\`\`\`
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| \`--investigation-id\` | \`-i\` | Investigation ID (or \`BUGPILOT_INVESTIGATION\`) |
+
+---
+
+## \`bugpilot ask\`
+
+Ask a free-form question about an investigation. The analysis engine answers using the investigation's evidence and hypotheses. Requires \`BUGPILOT_ANALYSIS_URL\`.
+
+\`\`\`
+bugpilot ask QUESTION [-i INVESTIGATION_ID]
+\`\`\`
+
+| Argument/Option | Description |
+|-----------------|-------------|
+| \`QUESTION\` | Your question (positional) |
+| \`--investigation-id\` / \`-i\` | Investigation ID (or \`BUGPILOT_INVESTIGATION\`) |
+
+\`\`\`
+$ bugpilot ask "What changed in the 10 minutes before the errors started?" -i inv_7f3a2b
+
+  Based on the evidence collected:
+  - Deployment a3f8c2d (Stripe SDK v4) deployed at 14:23 UTC — 8 minutes before errors
+  - Heap memory began rising from 60% → 92% between 14:23 and 14:31 UTC
+\`\`\`
+
+---
+
+## \`bugpilot compare\`
+
+Compare the current investigation state against a healthy baseline. Requires \`BUGPILOT_ANALYSIS_URL\`.
+
+\`\`\`
+bugpilot compare [--last-healthy | --last-stable-post-deploy | --user-pinned] [-i INVESTIGATION_ID]
+\`\`\`
+
+| Option | Description |
+|--------|-------------|
+| \`--last-healthy\` | Compare against the last healthy state (default) |
+| \`--last-stable-post-deploy\` | Compare against the last stable state after a deploy |
+| \`--user-pinned\` | Compare against a user-pinned baseline |
+| \`--investigation-id\` / \`-i\` | Investigation ID (or \`BUGPILOT_INVESTIGATION\`) |
+
+---
+
+## \`bugpilot timeline\`
+
+Display the investigation timeline — all events ordered chronologically. Shows clock skew warnings when events from different sources have inconsistent timestamps.
+
+\`\`\`
+bugpilot timeline [-i INVESTIGATION_ID]
+\`\`\`
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| \`--investigation-id\` | \`-i\` | Investigation ID (or \`BUGPILOT_INVESTIGATION\`) |
+
+\`\`\`
+$ bugpilot timeline -i inv_7f3a2b
+
+  TIME (UTC)  SOURCE    EVENT
+  14:23:04    github    Deployment a3f8c2d pushed to production
+  14:23:41    datadog   Heap memory began rising (60% → 92%)
+  14:31:07    datadog   HTTP 5xx rate crossed 5% threshold
+  14:31:09    pagerduty Alert fired: payment-service degraded
+
+  ⚠ Clock skew detected: pagerduty events are ~2s ahead of datadog
+\`\`\`
+
+---
+
+## \`bugpilot resolve\`
+
+Top-level alias for \`bugpilot investigate close\`. Marks an investigation as resolved.
+
+\`\`\`
+bugpilot resolve INVESTIGATION_ID
+\`\`\`
+
+---
+
+## \`bugpilot history\`
+
+Show the history of investigations for the current org, including resolved and closed ones.
+
+\`\`\`
+bugpilot history [-i INVESTIGATION_ID] [--page N] [--page-size N]
+\`\`\`
+
+| Option | Description |
+|--------|-------------|
+| \`--investigation-id\` / \`-i\` | Show history for a specific investigation |
+| \`--page\` | Page number (default: 1) |
+| \`--page-size\` | Results per page (default: 20) |
+
+---
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| \`BUGPILOT_API_URL\` | Override the API endpoint (default: \`https://api.bugpilot.io\`) |
+| \`BUGPILOT_ANALYSIS_URL\` | Analysis engine URL (required for \`summary\`, \`ask\`, \`compare\`) |
+| \`BUGPILOT_INVESTIGATION\` | Default investigation ID — set via \`incident open\` or manually |
+| \`BUGPILOT_LICENSE_KEY\` | License key, read by \`auth activate --key\` |
+| \`BUGPILOT_API_SECRET\` | API secret, read by \`auth activate --secret\` |
+| \`BUGPILOT_OUTPUT\` | Default output format: \`human\` \\| \`json\` \\| \`verbose\` |
+| \`NO_COLOR\` | Set to any non-empty value to disable colour |
+
+---
+
+## Using in CI / Scripts
+
+\`\`\`bash
+# Activate non-interactively
+bugpilot auth activate \\
+  --key "\$BUGPILOT_LICENSE_KEY" \\
+  --secret "\$BUGPILOT_API_SECRET" \\
+  --email "\$BUGPILOT_EMAIL"
+
+# Machine-readable output
+bugpilot investigate list --status open -o json \\
+  | jq '.items[] | {id, title, severity}'
+
+# Create and capture investigation ID
+INV_ID=\$(bugpilot incident triage "Deploy check failed" \\
+  --service payment-service --severity high -o json \\
+  | jq -r '.id')
+
+# Use stored context for subsequent commands
+export BUGPILOT_INVESTIGATION=\$INV_ID
+bugpilot evidence collect --label "CI logs" --kind log_snapshot \\
+  --source "github://actions?run_id=\$GITHUB_RUN_ID" \\
+  --summary "Build failed at step: unit-tests"
+bugpilot hypotheses list
+\`\`\``,
+  },
+
+  "api-reference": {
+    slug: "api-reference",
+    title: "API Reference",
+    category: "Reference",
+    content: `# API Reference
+
+The BugPilot REST API follows standard HTTP conventions. All endpoints are versioned under \`/api/v1/\`. Request and response bodies use JSON (\`Content-Type: application/json\`).
+
+---
+
+## Authentication
+
+All endpoints except \`/auth/activate\` require a valid JWT in the Authorization header:
+
+\`\`\`
+Authorization: Bearer <access_token>
+\`\`\`
+
+Tokens expire after **1 hour**. Use the refresh endpoint to get a new token without re-activating.
+
+---
+
+## Auth Endpoints
+
+### \`POST /api/v1/auth/activate\`
+
+Exchange a license key for access and refresh tokens.
+
+**Request:**
+\`\`\`json
+{
+  "license_key": "bp_T7zK9mNvXq...",
+  "email": "alice@acme.com",
+  "display_name": "Alice Smith",
+  "device_fingerprint": "sha256_of_hardware_uuid_and_system"
+}
+\`\`\`
+
+**Response \`200\`:**
+\`\`\`json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer",
+  "org_id": "org_acme",
+  "user_id": "usr_a3f8c2"
+}
+\`\`\`
+
+---
+
+### \`POST /api/v1/auth/refresh\`
+
+Exchange a refresh token for a new access token.
+
+**Request:**
+\`\`\`json
+{
+  "refresh_token": "eyJ..."
+}
+\`\`\`
+
+**Response \`200\`:** Same structure as \`/auth/activate\`.
+
+---
+
+### \`POST /api/v1/auth/logout\`
+
+Revoke the current session. Returns \`204 No Content\`.
+
+---
+
+### \`GET /api/v1/auth/whoami\`
+
+Return the current user's identity.
+
+**Response \`200\`:**
+\`\`\`json
+{
+  "user_id": "usr_a3f8c2",
+  "email": "alice@acme.com",
+  "display_name": "Alice Smith",
+  "role": "investigator",
+  "org_id": "org_acme",
+  "org_slug": "acme-corp"
+}
+\`\`\`
+
+---
+
+## Investigation Endpoints
+
+### \`GET /api/v1/investigations\`
+
+List investigations.
+
+**Query params:** \`status\`, \`severity\`, \`page\` (default: 1), \`page_size\` (default: 20)
+
+**Response \`200\`:** Array of investigation objects.
+
+---
+
+### \`POST /api/v1/investigations\`
+
+Create a new investigation.
+
+**Request:**
+\`\`\`json
+{
+  "title": "High error rate on payment-service",
+  "symptom": "HTTP 5xx rate above 5%",
+  "severity": "critical",
+  "linked_services": ["payment-service"],
+  "description": "Optional longer context"
+}
+\`\`\`
+
+**Response \`201\`:** Investigation object with \`id\`.
+
+---
+
+### \`GET /api/v1/investigations/{investigation_id}\`
+
+Fetch a single investigation with full details.
+
+---
+
+### \`PATCH /api/v1/investigations/{investigation_id}\`
+
+Update investigation fields.
+
+**Request (all fields optional):**
+\`\`\`json
+{
+  "title": "Updated title",
+  "status": "in_progress",
+  "severity": "high",
+  "description": "Updated notes"
+}
+\`\`\`
+
+---
+
+### \`DELETE /api/v1/investigations/{investigation_id}\`
+
+Permanently delete an investigation and all its evidence. Returns \`204\`.
+
+---
+
+## Evidence Endpoints
+
+### \`GET /api/v1/evidence\`
+
+List evidence items for an investigation.
+
+**Query params:** \`investigation_id\` (required), \`kind\`, \`limit\`, \`offset\`
+
+---
+
+### \`POST /api/v1/evidence\`
+
+Add an evidence item.
+
+**Request:**
+\`\`\`json
+{
+  "investigation_id": "inv_7f3a2b",
+  "label": "payment-service error logs",
+  "kind": "log_snapshot",
+  "source": "datadog",
+  "summary": "47 NullPointerException at UserService.java:142",
+  "connector_id": "conn_dd_prod"
+}
+\`\`\`
+
+**Response \`201\`:** Evidence object with \`id\`.
+
+---
+
+### \`GET /api/v1/evidence/{evidence_id}\`
+
+Fetch a single evidence item.
+
+---
+
+### \`DELETE /api/v1/evidence/{evidence_id}\`
+
+Delete an evidence item. Returns \`204\`.
+
+---
+
+## Hypothesis Endpoints
+
+### \`GET /api/v1/hypotheses\`
+
+List hypotheses for an investigation.
+
+**Query params:** \`investigation_id\` (required), \`status\` (\`active\` / \`confirmed\` / \`rejected\`)
+
+**Response \`200\`:** Array of hypothesis objects, sorted by \`rank\`.
+
+---
+
+### \`POST /api/v1/hypotheses\`
+
+Create a hypothesis manually.
+
+**Request:**
+\`\`\`json
+{
+  "investigation_id": "inv_7f3a2b",
+  "title": "Bad deployment introduced regression",
+  "description": "Stripe SDK v4 changed preferences API contract",
+  "confidence_score": 0.72,
+  "reasoning": "Deployment at 14:23 correlates with error onset at 14:31",
+  "evidence_ids": ["ev_9c1d3e", "ev_a2b4f1"]
+}
+\`\`\`
+
+---
+
+### \`POST /api/v1/hypotheses/{hypothesis_id}/confirm\`
+
+Mark a hypothesis as the confirmed root cause. Returns \`200\`.
+
+---
+
+### \`POST /api/v1/hypotheses/{hypothesis_id}/reject\`
+
+Mark a hypothesis as rejected.
+
+**Request (optional):**
+\`\`\`json
+{ "reason": "Ruled out — memory was stable during the incident" }
+\`\`\`
+
+---
+
+### \`PATCH /api/v1/hypotheses/{hypothesis_id}\`
+
+Update hypothesis fields.
+
+---
+
+## Action Endpoints
+
+### \`GET /api/v1/actions\`
+
+List actions for an investigation.
+
+**Query params:** \`investigation_id\` (required), \`status\`
+
+---
+
+### \`POST /api/v1/actions\`
+
+Create an action.
+
+**Request:**
+\`\`\`json
+{
+  "investigation_id": "inv_7f3a2b",
+  "title": "Rollback deployment a3f8c2d",
+  "action_type": "rollback",
+  "risk_level": "low",
+  "description": "Revert Stripe SDK v4 update",
+  "hypothesis_id": "hyp_f3a1d2",
+  "rollback_plan": "git revert a3f8c2d && redeploy"
+}
+\`\`\`
+
+**Response \`201\`:** Action object with \`id\` and \`status: pending\`.
+
+---
+
+### \`POST /api/v1/actions/{action_id}/approve\`
+
+Approve an action (requires \`approver\` or \`admin\` role). Returns \`200\`.
+
+---
+
+### \`POST /api/v1/actions/{action_id}/run\`
+
+Execute an action. Returns \`200\` with the updated action object.
+
+---
+
+### \`POST /api/v1/actions/{action_id}/dry-run\`
+
+Simulate an action without making any changes. Returns the same response shape as \`/run\` but no side effects are applied.
+
+---
+
+### \`POST /api/v1/actions/{action_id}/cancel\`
+
+Cancel a pending or approved action. Returns \`200\`.
+
+---
+
+## Graph Endpoints
+
+### \`GET /api/v1/graph/timeline\`
+
+Return the investigation timeline as an ordered list of events.
+
+**Query params:** \`investigation_id\` (required)
+
+### \`GET /api/v1/graph/causal/{investigation_id}\`
+
+Return the causal graph as nodes and weighted edges.
+
+---
+
+## Export Endpoints
+
+### \`GET /api/v1/export/json/{investigation_id}\`
+
+Export the full investigation bundle as JSON.
+
+### \`GET /api/v1/export/markdown/{investigation_id}\`
+
+Export a Markdown incident report.
+
+---
+
+## Webhook Endpoints
+
+These endpoints receive alerts from monitoring platforms. Requests must include a valid HMAC signature.
+
+| Method | Path | Source |
+|--------|------|--------|
+| POST | \`/api/v1/webhooks/datadog\` | Datadog |
+| POST | \`/api/v1/webhooks/grafana\` | Grafana |
+| POST | \`/api/v1/webhooks/cloudwatch\` | AWS CloudWatch (SNS) |
+| POST | \`/api/v1/webhooks/pagerduty\` | PagerDuty |
+
+All webhook endpoints return \`200\` on success or \`401\` on signature failure. Rate limit: 100 requests/min per IP + org.
+
+---
+
+## Admin Endpoints
+
+All admin endpoints require the \`admin\` role.
+
+### Connectors
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | \`/api/v1/admin/connectors\` | List configured connectors |
+| POST | \`/api/v1/admin/connectors\` | Add a connector |
+| DELETE | \`/api/v1/admin/connectors/{id}\` | Remove a connector |
+| GET | \`/api/v1/admin/connectors/validate\` | Validate all connectors |
+
+### Users
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | \`/api/v1/admin/users\` | List users |
+| PATCH | \`/api/v1/admin/users/{id}\` | Update role |
+| DELETE | \`/api/v1/admin/users/{id}\` | Deactivate user |
+
+### Webhooks
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | \`/api/v1/admin/webhooks\` | List webhook configs |
+| POST | \`/api/v1/admin/webhooks\` | Register webhook |
+| DELETE | \`/api/v1/admin/webhooks/{id}\` | Remove webhook |
+
+### Org Settings
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | \`/api/v1/admin/org/settings\` | Get org settings |
+| PATCH | \`/api/v1/admin/org/settings\` | Update settings (retention, etc.) |
+
+### Audit Log
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | \`/api/v1/admin/audit-logs\` | Query audit log |
+
+---
+
+## Health Endpoints
+
+| Path | Description |
+|------|-------------|
+| \`GET /health\` | Liveness — returns \`{"status": "ok"}\` |
+| \`GET /health/ready\` | Readiness — checks database connectivity |
+| \`GET /metrics\` | Prometheus metrics |
+| \`GET /openapi.json\` | OpenAPI specification |
+| \`GET /docs\` | Swagger UI |
+
+---
+
+## Error Responses
+
+All errors use standard HTTP status codes with a JSON body:
+
+\`\`\`json
+{
+  "detail": "Human-readable error message"
+}
+\`\`\`
+
+| Status | Meaning |
+|--------|---------|
+| \`400\` | Bad request — invalid input |
+| \`401\` | Unauthorized — missing or invalid token |
+| \`403\` | Forbidden — insufficient role |
+| \`404\` | Not found |
+| \`422\` | Validation error — request body failed schema validation |
+| \`429\` | Rate limit exceeded |
+| \`500\` | Internal server error |`,
+  },
+
+  architecture: {
+    slug: "architecture",
+    title: "Architecture",
+    category: "Reference",
+    content: `# Architecture Overview
+
+BugPilot turns a vague symptom — "payment service is returning errors" — into ranked, evidence-backed root cause hypotheses with suggested safe actions. This document explains the system design and data flow.
+
+---
+
+## System Diagram
+
+\`\`\`
+┌──────────────────────────────────────────────────────────────────┐
+│  User's Machine                                                  │
+│                                                                  │
+│   bugpilot CLI (macOS / Windows binary)                          │
+│       │                                                          │
+└───────┼──────────────────────────────────────────────────────────┘
+        │  HTTPS  (api.bugpilot.io)
+        ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  BugPilot Cloud Service                                          │
+│                                                                  │
+│   FastAPI REST API  (/api/v1/...)                                 │
+│       │                    │                                     │
+│       ▼                    ▼                                     │
+│   PostgreSQL DB        Evidence Collectors                       │
+│                             │                                    │
+│                    ┌────────┼────────┐                           │
+│                    ▼        ▼        ▼                           │
+│               Datadog   Grafana   CloudWatch                     │
+│               GitHub    K8s       PagerDuty                      │
+│                                                                  │
+│   Hypothesis Engine                                              │
+│       ├── Pass 1: Rule-based patterns                            │
+│       ├── Pass 2: Graph correlation                              │
+│       ├── Pass 3: Historical reranking                           │
+│       ├── Pass 4: LLM synthesis (optional)                       │
+│       ├── Pass 5: Deduplication                                  │
+│       └── Pass 6: Final ranking                                  │
+└──────────────────────────────────────────────────────────────────┘
+\`\`\`
+
+---
+
+## Core Concepts
+
+### Investigation
+
+The central unit of work. An investigation holds a title, symptom, severity, linked services, timeline of events, and references to all evidence, hypotheses, and actions.
+
+Status lifecycle: \`open\` → \`in_progress\` → \`resolved\` → \`closed\`
+
+### Evidence
+
+A normalized snapshot of a data point from a monitoring source. Evidence is typed by kind:
+
+| Kind | Description |
+|------|-------------|
+| \`log_snapshot\` | Log lines or error summaries |
+| \`metric_snapshot\` | Metric values at a point in time |
+| \`trace\` | Distributed trace data |
+| \`event\` | Deployment, config change, or system event |
+| \`config_diff\` | Before/after config comparison |
+| \`topology\` | Service dependency or infrastructure topology |
+| \`custom\` | Free-form evidence from any source |
+
+Each evidence item has a \`reliability_score\` (0–1), an \`is_redacted\` flag, and an optional \`connector_id\` attributing it to a configured source.
+
+### Investigation Graph
+
+BugPilot builds a directed graph of causal relationships between evidence items. Graph edges are weighted by temporal proximity, service overlap, and signal type correlation. The graph drives the second pass of hypothesis generation.
+
+### Hypothesis Engine — 6-Pass Pipeline
+
+1. **Rule-based:** Matches evidence patterns against a library of known failure signatures (bad deployment, OOMKill, dependency degradation, config error, etc.)
+2. **Graph correlation:** Traverses the investigation graph to find causal chains
+3. **Historical reranking:** Compares current evidence patterns to resolved past investigations for the same org
+4. **LLM synthesis:** (Optional) Sends a redacted evidence summary to the configured LLM provider (\`openai\`, \`anthropic\`, \`azure_openai\`, \`gemini\`, \`ollama\`, or \`openai_compatible\`) for open-ended hypothesis generation
+5. **Deduplication:** Merges near-duplicate hypotheses using title similarity and evidence overlap
+6. **Final ranking:** Sorts by confidence score, assigns ranks
+
+### Actions
+
+Proposed remediation steps. Each action has:
+- A **risk level** (\`safe\` / \`low\` / \`medium\` / \`high\` / \`critical\`)
+- An **approval gate** — medium and above require an \`approver\` or \`admin\` before execution
+- A **rollback plan** — documented steps to undo the action
+- A **dry-run mode** — simulates the action without making changes
+
+---
+
+## Privacy and Security
+
+### PII Redaction
+
+Before evidence summaries are sent to an LLM, BugPilot's privacy redactor strips:
+
+- Email addresses
+- Phone numbers
+- JWT and Bearer tokens
+- Payment card numbers (PAN)
+- AWS access keys and secrets
+- PEM private keys
+- IP addresses (configurable)
+- Custom regex patterns (per org)
+
+A hard safety check in the hypothesis engine raises an error if non-redacted content is detected at the LLM boundary — this is enforced in code, not policy.
+
+### Authentication
+
+- License keys activate a device and exchange for a short-lived JWT (1-hour expiry) plus a refresh token
+- Device fingerprint (SHA-256 of hardware UUID + system info) is recorded at activation
+- Tokens are stored at \`~/.config/bugpilot/credentials.json\` with \`600\` permissions
+- All API requests use \`Authorization: Bearer <token>\`
+
+### Org Isolation
+
+Every database query is scoped to \`org_id\`. Cross-tenant queries are architecturally impossible — the \`org_id\` is derived from the verified JWT, not from a user-supplied parameter.
+
+### Credential Encryption
+
+Connector credentials are encrypted with Fernet (symmetric AES-128-CBC + HMAC-SHA256) before storage. The Fernet key is a required environment variable and must be managed in a secrets manager in production.
+
+---
+
+## Connectors
+
+Evidence collection is concurrent across all configured connectors. Each connector runs with:
+- Request timeout: 30 seconds
+- Collection timeout: 45 seconds (connector is marked degraded if exceeded)
+- Retry policy: exponential backoff with jitter, max 3 attempts, on 429 / 5xx
+
+Connector failures are graceful — other connectors continue unaffected.
+
+---
+
+## Data Model
+
+Key tables (21 total):
+
+| Table | Description |
+|-------|-------------|
+| \`organisations\` | Tenant root, holds settings and retention config |
+| \`users\` | User accounts with role and org membership |
+| \`license_activations\` | Device activations and token refresh history |
+| \`investigations\` | Investigation workspace |
+| \`investigation_timeline\` | Timestamped events within an investigation |
+| \`evidence_items\` | Normalized evidence with metadata and payload reference |
+| \`hypotheses\` | Generated hypotheses with confidence scores and evidence citations |
+| \`actions\` | Proposed remediation actions with risk and approval state |
+| \`connectors\` | Configured monitoring integrations (credentials encrypted) |
+| \`webhooks\` | Registered webhook sources and secrets |
+| \`audit_logs\` | Append-only record of all write operations |
+| \`llm_usage_logs\` | LLM token usage per investigation |
+
+---
+
+## Observability
+
+### Metrics (Prometheus)
+
+Available at \`/metrics\` on the backend:
+
+| Metric | Description |
+|--------|-------------|
+| \`bugpilot_activations_total\` | CLI activations |
+| \`bugpilot_active_investigations\` | Current open investigations |
+| \`bugpilot_investigation_duration_seconds\` | Time from open to resolved |
+| \`bugpilot_time_to_first_hypothesis_seconds\` | Hypothesis generation latency |
+| \`bugpilot_connector_errors_total\` | Connector fetch errors by connector |
+| \`bugpilot_connector_rate_limits_total\` | Rate limit hits by connector |
+| \`bugpilot_webhook_verification_failures_total\` | Failed webhook signature verifications |
+| \`bugpilot_llm_requests_total\` | LLM requests by provider |
+| \`bugpilot_llm_tokens_total\` | LLM token usage (prompt + completion) |
+| \`bugpilot_http_requests_total\` | API request counts |
+| \`bugpilot_http_request_duration_seconds\` | API response latency |
+
+### Structured Logging
+
+All log output is structured JSON via structlog. Log entries include: \`timestamp\`, \`level\`, \`event\`, \`investigation_id\`, \`org_id\`, \`connector\`, \`duration_ms\`, and other context fields as applicable.`,
+  },
+
+  deployment: {
+    slug: "deployment",
+    title: "Deployment",
+    category: "Self-Hosting",
+    content: `# Self-Hosting BugPilot
+
+:::info
+This guide is for teams that want to run BugPilot on their own infrastructure. If you are using the hosted service at bugpilot.io, you do not need this guide — just [download the CLI](/docs/getting-started) and activate it.
+:::
+
+BugPilot's backend is a stateless FastAPI service backed by PostgreSQL, making it straightforward to deploy on any container platform.
+
+---
+
+## Prerequisites
+
+- PostgreSQL 14+
+- Docker and Docker Compose (for the quick start)
+- A Fernet key and JWT secret (generated below)
+- Optional: an LLM API key (OpenAI, Anthropic, Azure OpenAI, Gemini, Ollama, or OpenAI-compatible)
+
+---
+
+## Generating Required Secrets
+
+Before deploying, generate the two required secrets:
+
+\`\`\`bash
+# JWT_SECRET — 64-character hex string
+python3 -c 'import secrets; print(secrets.token_hex(32))'
+
+# FERNET_KEY — symmetric encryption key for connector credentials
+python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+\`\`\`
+
+Store these in a secrets manager (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault, etc.). Do not commit them to source control.
+
+---
+
+## Docker Compose (Single Host / Staging)
+
+\`\`\`bash
+# 1. Set environment variables
+export DATABASE_URL="postgresql+asyncpg://bugpilot:yourpassword@postgres:5432/bugpilot"
+export JWT_SECRET="your-64-char-hex-string"
+export FERNET_KEY="your-fernet-key"
+
+# 2. Start the services
+docker compose up -d
+
+# 3. Apply database migrations
+docker compose exec backend alembic upgrade head
+
+# 4. Verify the service is healthy
+curl http://localhost:8000/health
+# {"status": "ok"}
+\`\`\`
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| \`DATABASE_URL\` | Yes | — | \`postgresql+asyncpg://user:pass@host/db\` |
+| \`JWT_SECRET\` | Yes | — | 64-char hex string for JWT signing |
+| \`FERNET_KEY\` | Yes | — | Fernet key for encrypting connector credentials |
+| \`LOG_LEVEL\` | No | \`info\` | \`debug\` / \`info\` / \`warning\` / \`error\` |
+| \`EVIDENCE_TTL_MINUTES\` | No | \`10080\` | Raw payload TTL (default: 7 days) |
+| \`LLM_PROVIDER\` | No | — | \`openai\` / \`anthropic\` / \`azure_openai\` / \`gemini\` / \`ollama\` / \`openai_compatible\` |
+| \`LLM_API_KEY\` | If using a cloud LLM | — | API key for the configured LLM provider |
+| \`LLM_MODEL\` | No | provider default | Model name override |
+| \`LLM_BASE_URL\` | If using Azure / Ollama / openai_compatible | — | Base URL for the LLM endpoint |
+| \`LLM_AZURE_DEPLOYMENT\` | If using Azure OpenAI | — | Azure deployment name |
+| \`LLM_AZURE_API_VERSION\` | If using Azure OpenAI | — | Azure API version |
+
+---
+
+## Kubernetes
+
+### Namespace and Secrets
 
 \`\`\`bash
 kubectl create namespace bugpilot
 
 kubectl create secret generic bugpilot-secrets \\
   --namespace bugpilot \\
-  --from-literal=DATABASE_URL="postgresql+asyncpg://bugpilot:$DB_PASS@postgres:5432/bugpilot" \\
-  --from-literal=JWT_SECRET="$JWT_SECRET" \\
-  --from-literal=FERNET_KEY="$FERNET_KEY" \\
-  --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY"
+  --from-literal=DATABASE_URL="postgresql+asyncpg://bugpilot:\$DB_PASS@postgres:5432/bugpilot" \\
+  --from-literal=JWT_SECRET="\$JWT_SECRET" \\
+  --from-literal=FERNET_KEY="\$FERNET_KEY"
 \`\`\`
 
-### Deployment manifest
+### API Deployment
 
 \`\`\`yaml
 apiVersion: apps/v1
@@ -737,7 +3022,7 @@ spec:
     targetPort: 8000
 \`\`\`
 
-### Running migrations as a Job
+### Migration Job
 
 \`\`\`yaml
 apiVersion: batch/v1
@@ -758,99 +3043,16 @@ spec:
             name: bugpilot-secrets
 \`\`\`
 
----
+### Daily Retention Purge CronJob
 
-## AWS ECS (Fargate)
-
-### Task definition highlights
-
-\`\`\`json
-{
-  "family": "bugpilot-api",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
-  "containerDefinitions": [
-    {
-      "name": "api",
-      "image": "your-registry/bugpilot-backend:latest",
-      "portMappings": [{"containerPort": 8000}],
-      "secrets": [
-        {"name": "DATABASE_URL",  "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT:parameter/bugpilot/DATABASE_URL"},
-        {"name": "JWT_SECRET",    "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT:parameter/bugpilot/JWT_SECRET"},
-        {"name": "FERNET_KEY",    "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT:parameter/bugpilot/FERNET_KEY"}
-      ],
-      "healthCheck": {
-        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"],
-        "interval": 30,
-        "timeout": 5,
-        "retries": 3,
-        "startPeriod": 30
-      },
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/bugpilot",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "api"
-        }
-      }
-    }
-  ]
-}
-\`\`\`
-
----
-
-## Database: PostgreSQL
-
-### Recommended settings
-
-\`\`\`sql
--- Increase max connections for asyncpg pool
-ALTER SYSTEM SET max_connections = 200;
-
--- Enable pg_stat_statements for query monitoring
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
-
--- Recommended indexes (all created by migration 0001)
--- investigations(org_id, status)
--- evidence_items(investigation_id)
--- evidence_items(fetched_at)  -- for retention purge
--- audit_logs(org_id, occurred_at)
-\`\`\`
-
-### Managed database options
-
-| Platform | Service |
-|----------|---------|
-| AWS | RDS PostgreSQL 14+ or Aurora PostgreSQL |
-| GCP | Cloud SQL for PostgreSQL |
-| Azure | Azure Database for PostgreSQL |
-| Self-hosted | PostgreSQL 14+ with asyncpg-compatible SSL |
-
-Ensure \`asyncpg\` SSL mode is set correctly:
-
-\`\`\`
-postgresql+asyncpg://user:pass@host/db?ssl=require
-\`\`\`
-
----
-
-## Retention Purge Job
-
-BugPilot's retention service must be called on a schedule. Add a cron job or scheduled task:
-
-\`\`\`bash
-# Kubernetes CronJob
+\`\`\`yaml
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: bugpilot-retention
   namespace: bugpilot
 spec:
-  schedule: "0 2 * * *"   # 02:00 UTC daily
+  schedule: "0 2 * * *"
   jobTemplate:
     spec:
       template:
@@ -867,9 +3069,68 @@ spec:
 
 ---
 
-## Prometheus Scraping
+## AWS ECS (Fargate)
 
-Add BugPilot to your \`prometheus.yml\`:
+\`\`\`json
+{
+  "family": "bugpilot-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "your-registry/bugpilot-backend:latest",
+      "portMappings": [{"containerPort": 8000}],
+      "secrets": [
+        {"name": "DATABASE_URL", "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT:parameter/bugpilot/DATABASE_URL"},
+        {"name": "JWT_SECRET",   "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT:parameter/bugpilot/JWT_SECRET"},
+        {"name": "FERNET_KEY",   "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT:parameter/bugpilot/FERNET_KEY"}
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3
+      }
+    }
+  ]
+}
+\`\`\`
+
+---
+
+## PostgreSQL
+
+### Recommended Settings
+
+\`\`\`sql
+-- Increase max connections for asyncpg connection pool
+ALTER SYSTEM SET max_connections = 200;
+
+-- Enable query monitoring
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+\`\`\`
+
+### Managed Database Options
+
+| Platform | Recommended service |
+|----------|-------------------|
+| AWS | RDS PostgreSQL 14+ or Aurora PostgreSQL |
+| GCP | Cloud SQL for PostgreSQL |
+| Azure | Azure Database for PostgreSQL |
+| Self-hosted | PostgreSQL 14+ |
+
+Ensure the connection string uses asyncpg SSL mode for managed databases:
+
+\`\`\`
+postgresql+asyncpg://user:pass@host/db?ssl=require
+\`\`\`
+
+---
+
+## Prometheus Scraping
 
 \`\`\`yaml
 scrape_configs:
@@ -880,31 +3141,21 @@ scrape_configs:
     scrape_interval: 15s
 \`\`\`
 
-### Recommended alerts
+---
 
-\`\`\`yaml
-groups:
-- name: bugpilot
-  rules:
-  - alert: BugPilotAPIDown
-    expr: up{job="bugpilot"} == 0
-    for: 2m
-    labels:
-      severity: critical
+## Pointing the CLI at Your Self-Hosted Instance
 
-  - alert: BugPilotWebhookVerificationFailures
-    expr: increase(bugpilot_webhook_verification_failures_total[5m]) > 10
-    labels:
-      severity: warning
-    annotations:
-      summary: "High webhook verification failure rate — possible replay attack"
+When using a self-hosted backend, set the API URL before activating:
 
-  - alert: BugPilotConnectorErrors
-    expr: increase(bugpilot_connector_errors_total[10m]) > 20
-    labels:
-      severity: warning
-    annotations:
-      summary: "Connector {{ $labels.connector }} has elevated error rate"
+\`\`\`bash
+export BUGPILOT_API_URL=https://your-bugpilot-instance.example.com
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY
+\`\`\`
+
+Or pass it per-command:
+
+\`\`\`bash
+bugpilot --api-url https://your-bugpilot-instance.example.com auth whoami
 \`\`\`
 
 ---
@@ -914,2724 +3165,267 @@ groups:
 Before going to production:
 
 - \`JWT_SECRET\` is at least 32 bytes and stored in a secrets manager (not in \`.env\` files)
-- \`FERNET_KEY\` is rotated regularly and stored in a secrets manager
-- PostgreSQL is not publicly accessible — use a private subnet
-- TLS is terminated at the load balancer (SSL certificate on ALB/nginx/ingress)
-- Webhook secrets are rotated using the dual-secret grace window feature
-- Log output (\`/metrics\`, \`/health\`) is not exposed publicly
-- Database credentials use a least-privilege role (SELECT, INSERT, UPDATE, DELETE — no DDL)
+- \`FERNET_KEY\` is stored in a secrets manager and rotated on a schedule
+- PostgreSQL is not publicly accessible — use a private subnet or VPC
+- TLS is terminated at the load balancer (ALB / nginx / ingress controller)
+- Webhook secrets are rotated periodically using the dual-secret grace window
+- \`/metrics\` and \`/health\` endpoints are not publicly accessible
+- Database credentials use a least-privilege role (SELECT, INSERT, UPDATE, DELETE only — no DDL)
 - \`LOG_LEVEL=info\` in production (not \`debug\`, which may log request bodies)
-- Org isolation tested — no cross-tenant queries possible through the API`,
+- Org isolation verified — no cross-tenant queries are possible through the API`,
   },
-  "how-to-investigate": {
-    slug: "how-to-investigate",
-    title: "Investigate an Incident",
-    category: "Investigating Incidents",
-    content: `# How to Investigate an Incident with BugPilot
 
-This guide walks through a realistic incident scenario from alert to resolution using BugPilot.
-
----
-
-## Scenario
-
-At 14:31 UTC your monitoring fires: **payment-service HTTP 5xx rate > 5%**. The on-call engineer opens a terminal.
-
----
-
-## Step 1 — Authenticate
-
-If this is your first time on this machine:
-
-\`\`\`bash
-bugpilot auth activate --license-key bp_YOUR_LICENSE_KEY
-\`\`\`
-
-Check who you're logged in as:
-
-\`\`\`bash
-bugpilot auth whoami
-\`\`\`
-
-\`\`\`
-  User:  alice@acme.com
-  Role:  investigator
-  Org:   acme-corp
-\`\`\`
-
----
-
-## Step 2 — Triage (recommended: let BugPilot handle it)
-
-The \`incident triage\` command does the most in one step: deduplication check, investigation creation, evidence collection, and initial hypothesis generation.
-
-\`\`\`bash
-bugpilot incident triage \\
-  --service payment-service \\
-  --alert-name "HTTP 5xx rate > 5%" \\
-  --severity critical \\
-  --since 2h
-\`\`\`
-
-\`\`\`
-  ⚡ Dedup check: No similar open investigations found
-  ✓ Investigation created: inv_7f3a2b
-  ↓ Collecting evidence (5 connectors)...
-    ✓ datadog/logs         47 items   0.34s
-    ✓ datadog/metrics      12 items   0.41s
-    ✓ datadog/alerts        3 items   0.28s
-    ✗ grafana/metrics       —         degraded: timeout after 45s
-    ✓ github/deployments    2 items   0.19s
-  ✓ Hypotheses generated (3)
-
-  TOP HYPOTHESIS
-  ──────────────────────────────────────────────────────────────
-  Rank 1  │  Bad Deployment Introduced Regression          ▓▓▓▓▓▓▓▒ 72%
-          │  Deployment a3f8c2d at 14:23 UTC correlates with the
-          │  onset of 5xx errors. Commit message: "Update Stripe
-          │  SDK to v4". Affected evidence: 12 items.
-  ──────────────────────────────────────────────────────────────
-
-  Investigation ID: inv_7f3a2b
-  Run: bugpilot hypotheses list inv_7f3a2b   for all hypotheses
-  Run: bugpilot fix suggest inv_7f3a2b       for remediation options
-\`\`\`
+  "developer-setup": {
+    slug: "developer-setup",
+    title: "Developer Setup",
+    category: "Self-Hosting",
+    content: `# Developer Setup Guide
 
 :::info
-BugPilot detected that Grafana timed out but continued with the other 4 connectors. It notes the degraded source and still produced useful hypotheses from logs + metrics + deployment data.
+This guide is for contributors building BugPilot from source. If you are a BugPilot user, [download the CLI binary](/docs/getting-started) — you do not need this guide.
 :::
 
 ---
 
-## Step 3 — Review All Hypotheses
+## Prerequisites
 
-\`\`\`bash
-bugpilot hypotheses list inv_7f3a2b
-\`\`\`
-
-\`\`\`
-  RANK  HYPOTHESIS                              CONFIDENCE  STATUS  SOURCE
-  ────  ──────────────────────────────────────  ──────────  ──────  ──────
-  1     Bad Deployment Introduced Regression    72%         active  rule
-  2     Memory Exhaustion                       58%         active  rule
-  3     Upstream Dependency Degradation         41%         active  graph
-
-  3 hypotheses  │  Evidence from 3 capabilities (LOGS, METRICS, DEPLOYMENTS)
-\`\`\`
-
-Each hypothesis shows:
-- **Confidence score** — derived from evidence strength and correlation
-- **Source** — \`rule\` (pattern matching), \`graph\` (graph analysis), or \`llm\` (AI synthesis)
+- Python 3.11+
+- PostgreSQL 14+ (or Docker)
+- Node.js 20+ (for the frontend website)
+- Git
 
 ---
 
-## Step 4 — Investigate a Hypothesis
-
-Check the evidence linked to the top hypothesis:
-
-\`\`\`bash
-bugpilot evidence list inv_7f3a2b --capability deployments
-\`\`\`
+## Repository Structure
 
 \`\`\`
-  ID           SOURCE         CAPABILITY    SUMMARY                          RELIABILITY
-  ev_d1e2f3   github         DEPLOYMENTS   Merge commit a3f8c2d: "Update     0.98
-                                           Stripe SDK to v4" by alice, 14:23
-  ev_a4b5c6   datadog        DEPLOYMENTS   Deployment: payment-service →      0.95
-                                           v2.14.0, duration: 3m12s, 14:23
-\`\`\`
-
-Timeline view to see the sequence of events:
-
-\`\`\`bash
-bugpilot investigate get inv_7f3a2b
-\`\`\`
-
-\`\`\`
-  TIMELINE
-  ─────────────────────────────────────────────────────────────
-  14:23:00  DEPLOYMENT    Deploy a3f8c2d — payment-service v2.14.0
-  14:31:12  SYMPTOM       HTTP 5xx rate spike — 7.2% error rate
-  14:31:45  ALERT         PagerDuty: P1 incident created
-  14:33:00  SYMPTOM       Latency p99 increased to 8.2s
-  ─────────────────────────────────────────────────────────────
-\`\`\`
-
-The 8-minute gap between deployment and error onset strongly suggests the deployment is the cause.
-
----
-
-## Step 5 — Reject Unlikely Hypotheses
-
-After reviewing the evidence, hypothesis #2 (Memory Exhaustion) looks unlikely — memory metrics are stable.
-
-\`\`\`bash
-bugpilot hypotheses reject hyp_mem456 \\
-  --reason "Memory metrics stable at 62% usage throughout the incident window"
+bugpilot/
+├── src/
+│   ├── backend/                  # FastAPI backend
+│   │   ├── app/
+│   │   │   ├── api/v1/           # Route handlers
+│   │   │   ├── connectors/       # Evidence source integrations
+│   │   │   │   ├── datadog/
+│   │   │   │   ├── grafana/
+│   │   │   │   ├── cloudwatch/
+│   │   │   │   ├── github/
+│   │   │   │   ├── kubernetes/
+│   │   │   │   └── pagerduty/
+│   │   │   ├── core/             # Config, DB, security, RBAC, logging
+│   │   │   ├── graph/            # Investigation graph engine
+│   │   │   ├── hypothesis/       # 6-pass hypothesis pipeline
+│   │   │   ├── llm/              # LLM providers and service layer
+│   │   │   ├── models/           # SQLAlchemy ORM models
+│   │   │   ├── privacy/          # PII redaction pipeline
+│   │   │   ├── schemas/          # Pydantic request/response schemas
+│   │   │   ├── services/         # Domain services
+│   │   │   ├── webhooks/         # Webhook handlers
+│   │   │   └── workers/          # Evidence collector
+│   │   ├── migrations/           # Alembic migrations
+│   │   ├── tests/                # pytest test suite
+│   │   └── pyproject.toml
+│   ├── cli/                      # typer CLI (source for the binary)
+│   │   ├── bugpilot/
+│   │   │   ├── auth/             # License activation
+│   │   │   ├── commands/         # CLI command groups
+│   │   │   └── output/           # human / json / verbose formatters
+│   │   ├── tests/
+│   │   └── pyproject.toml
+│   └── docs/                     # Documentation
+├── fixtures/                     # Sample configs and webhook payloads
+└── docker-compose.yml
 \`\`\`
 
 ---
 
-## Step 6 — Get Remediation Options
+## Backend Setup
 
 \`\`\`bash
-bugpilot fix suggest inv_7f3a2b
+cd src/backend
+
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\\Scripts\\activate
+
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Set required environment variables
+export DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost/bugpilot_dev?ssl=disable"
+export JWT_SECRET="dev-only-secret-do-not-use-in-production-1234567890abcdef"
+export FERNET_KEY="\$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+export LOG_LEVEL="debug"
+
+# Create the database
+createdb bugpilot_dev
+
+# Run migrations
+alembic upgrade head
+
+# Start the API with live reload
+uvicorn app.main:app --reload --port 8000
 \`\`\`
 
-\`\`\`
-  SUGGESTED ACTIONS
-
-  #1  Rollback deployment a3f8c2d                                  RISK: low
-      Rationale:   Deployment correlates with 5xx onset at 14:31
-      Effect:      Restore payment-service to v2.13.0 (stable 3 days)
-      Rollback:    git revert a3f8c2d && trigger CI/CD pipeline
-      Approval:    Not required
-
-  #2  Disable Stripe SDK v4 feature flag                          RISK: low
-      Rationale:   New SDK may have breaking API changes
-      Effect:      Bypass v4 code path without a full rollback
-      Rollback:    Re-enable feature flag
-      Approval:    Not required
-
-  #3  Increase memory limit to 1Gi                                RISK: medium
-      Rationale:   Memory headroom of 38% — guard against spikes
-      Effect:      Prevent potential OOMKill under load
-      Rollback:    Revert resource quota change
-      Approval:    Required (approver role)
-\`\`\`
+The API is now running at \`http://localhost:8000\`. Swagger UI is at \`http://localhost:8000/docs\`.
 
 ---
 
-## Step 7 — Dry Run a Safe Action
-
-Always dry-run before executing:
+## CLI Setup (for development)
 
 \`\`\`bash
-bugpilot fix run act_rollback123 --dry-run
-\`\`\`
+cd src/cli
 
-\`\`\`
-  DRY RUN: Rollback deployment a3f8c2d
-  ─────────────────────────────────────────────────────────────
-  Would execute:
-    1. Trigger rollback pipeline for payment-service
-    2. Set image: payment-service → v2.13.0
-    3. Wait for rollout (estimated: 2-3 minutes)
+# Install in editable mode
+pip install -e .
 
-  Estimated downtime:    0s  (rolling update strategy)
-  Previous version age:  3 days (stable, no incidents)
-  Risk assessment:       LOW
+# Point at your local backend
+export BUGPILOT_API_URL=http://localhost:8000
 
-  To execute: bugpilot fix run act_rollback123
-\`\`\`
-
----
-
-## Step 8 — Execute the Action
-
-\`\`\`bash
-bugpilot fix run act_rollback123
-\`\`\`
-
-\`\`\`
-  ✓ Action executed: Rollback deployment a3f8c2d
-    Status:   completed
-    Output:   Rolling update complete. 3/3 pods ready.
-    Duration: 2m41s
-\`\`\`
-
----
-
-## Step 9 — Confirm the Root Cause and Close
-
-Once the 5xx rate drops back to baseline, confirm the hypothesis and close the investigation.
-
-\`\`\`bash
-# Confirm the root cause
-bugpilot hypotheses confirm hyp_deploy789
-
-# Close the investigation with root cause summary
-bugpilot investigate close inv_7f3a2b \\
-  --root-cause "Stripe SDK v4 introduced a breaking change in the charge() API. Rolled back to v2.13.0. SDK upgrade to be re-attempted with proper integration tests."
-\`\`\`
-
-\`\`\`
-  ✓ Investigation closed
-    Duration:     47 minutes
-    Root cause:   Stripe SDK v4 introduced a breaking change...
-    Actions:      1 executed (rollback a3f8c2d)
-    Evidence:     65 items from 4 sources
-\`\`\`
-
----
-
-## Step 10 — Export the Incident Report
-
-\`\`\`bash
-bugpilot export markdown inv_7f3a2b --output-file incident-report.md
-\`\`\`
-
-The generated Markdown report includes: timeline, root cause, evidence summary, actions taken (with approvals), and outcome. Ready to paste into Confluence, Notion, or a GitHub issue.
-
----
-
-## Tips and Patterns
-
-### Parallel hypothesis testing
-
-Use branches to test multiple hypotheses in parallel without polluting the main investigation:
-
-\`\`\`bash
-# Create a branch to test the memory hypothesis separately
-bugpilot investigate update inv_7f3a2b --create-branch memory-investigation
-\`\`\`
-
-### Multi-service incidents
-
-When multiple services are affected, add them to the investigation:
-
-\`\`\`bash
-bugpilot investigate update inv_7f3a2b \\
-  --service checkout-service \\
-  --service stripe-gateway
-\`\`\`
-
-BugPilot will collect evidence for all linked services and look for cross-service causal chains.
-
-### Automating triage from CI/CD
-
-\`\`\`bash
-# Trigger triage automatically after a failed deployment
-if [ "$DEPLOY_STATUS" = "failed" ]; then
-  bugpilot incident triage \\
-    --service "$SERVICE_NAME" \\
-    --alert-name "Deployment smoke test failed: $BUILD_ID" \\
-    --severity high \\
-    --since 15m \\
-    --output json > /tmp/triage.json
-
-  # Print top hypothesis to CI logs
-  cat /tmp/triage.json | python3 -c "
-  import json,sys
-  r = json.load(sys.stdin)
-  h = r.get('top_hypothesis')
-  if h:
-      print(f'Top hypothesis: {h[\"title\"]} ({h[\"confidence_score\"]*100:.0f}% confidence)')
-  "
-fi
-\`\`\`
-
-### When evidence is thin (single-lane warning)
-
-If you see \`⚠ Evidence from single source only\` — this means only one connector provided data. Confidence scores are capped at 40%.
-
-To improve hypothesis quality:
-1. Check that other connectors are properly configured: \`bugpilot auth whoami\`
-2. Validate connector health: \`curl /api/v1/admin/connectors/validate\`
-3. Re-collect with explicit capabilities: \`bugpilot evidence collect inv_7f3a2b --since 2h\``,
-  },
-  connectors: {
-    slug: "connectors",
-    title: "Connector Setup",
-    category: "Investigating Incidents",
-    content: `# Connector Setup Guide
-
-BugPilot collects evidence from your existing observability tools through **connectors**. Each connector maps to a real-world monitoring platform and exposes one or more **capabilities** (logs, metrics, traces, alerts, incidents, deployments, infrastructure state, or code changes).
-
-The more connectors you configure, the better BugPilot's hypotheses will be. A single-source investigation is marked as a **single-lane investigation** and confidence scores are automatically capped at 40% — prompting you to add more evidence sources.
-
----
-
-## Overview
-
-| Connector | Capabilities | Auth method |
-|-----------|-------------|-------------|
-| Datadog | Logs, Metrics, Traces, Alerts | API key + App key |
-| Grafana | Metrics, Alerts | API token |
-| AWS CloudWatch | Logs, Metrics, Alerts | Access key + Secret key |
-| GitHub | Code changes, Deployments | Personal access token |
-| Kubernetes | Infrastructure state, Deployments | Bearer token |
-| PagerDuty | Incidents, Alerts | REST API key |
-
----
-
-## Configuring Connectors via the Admin API
-
-\`\`\`bash
-# Configure a Datadog connector
-curl -X POST http://localhost:8000/api/v1/admin/connectors \\
-  -H "Authorization: Bearer $TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "connector_type": "datadog",
-    "env_label": "production",
-    "credentials": {
-      "api_key": "YOUR_DATADOG_API_KEY",
-      "app_key": "YOUR_DATADOG_APP_KEY",
-      "base_url": "https://api.datadoghq.com"
-    }
-  }'
-\`\`\`
-
-Credentials are encrypted at rest using Fernet symmetric encryption before being stored in the database. The plaintext key is never persisted.
-
----
-
-## Datadog
-
-### Required credentials
-
-| Field | Description |
-|-------|-------------|
-| \`api_key\` | Datadog API key (read-only is sufficient) |
-| \`app_key\` | Datadog Application key |
-| \`base_url\` | US: \`https://api.datadoghq.com\` · EU: \`https://api.datadoghq.eu\` |
-| \`service_tag\` | (Optional) Default Datadog service tag filter |
-
-### Capabilities
-
-| Capability | API endpoint used |
-|-----------|-------------------|
-| \`LOGS\` | \`POST /api/v2/logs/events/search\` with \`service:NAME\` filter |
-| \`METRICS\` | \`GET /api/v1/query\` — CPU user, request rate |
-| \`TRACES\` | \`GET /api/v2/spans/events\` for the service |
-| \`ALERTS\` | \`GET /api/v1/monitor\` filtered by service tag |
-
-### Minimum Datadog permissions
-
-- \`logs_read_data\`
-- \`metrics_read\`
-- \`apm_read\`
-- \`monitors_read\`
-
----
-
-## Grafana
-
-### Required credentials
-
-| Field | Description |
-|-------|-------------|
-| \`base_url\` | Grafana instance URL (e.g. \`https://grafana.example.com\`) |
-| \`api_token\` | Service account token (Viewer role) |
-| \`datasource_uid\` | (Optional) Prometheus datasource UID; auto-discovered if omitted |
-
-### Capabilities
-
-| Capability | API endpoint used |
-|-----------|-------------------|
-| \`METRICS\` | \`/api/datasources/proxy/:uid/api/v1/query_range\` |
-| \`ALERTS\` | \`/api/v1/provisioning/alert-rules\` |
-
-### Setup
-
-1. Grafana → Administration → Service accounts → Create service account (Viewer role).
-2. Generate a service account token.
-3. Copy your Prometheus datasource UID from Administration → Data sources.
-
----
-
-## AWS CloudWatch
-
-### Required credentials
-
-| Field | Description |
-|-------|-------------|
-| \`access_key_id\` | AWS access key ID |
-| \`secret_access_key\` | AWS secret access key |
-| \`region\` | AWS region (e.g. \`us-east-1\`) |
-| \`log_group_prefix\` | (Optional) CloudWatch log group name or prefix |
-
-### Capabilities
-
-| Capability | AWS API used |
-|-----------|--------------|
-| \`LOGS\` | \`StartQuery\` + \`GetQueryResults\` (CloudWatch Insights) |
-| \`METRICS\` | \`GetMetricData\` (CPUUtilization, RequestCount) |
-| \`ALERTS\` | \`DescribeAlarms\` (state=ALARM) |
-
-### Minimum IAM permissions
-
-\`\`\`json
-{
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": [
-      "logs:StartQuery",
-      "logs:GetQueryResults",
-      "cloudwatch:GetMetricData",
-      "cloudwatch:DescribeAlarms"
-    ],
-    "Resource": "*"
-  }]
-}
+# Verify
+bugpilot --version
 \`\`\`
 
 :::info
-BugPilot uses manual SigV4 signing (no boto3) to keep the image minimal. For production, prefer an IAM role on your EC2/ECS instance.
+The distributed CLI binary is compiled from this source. Users never install from source — they download the pre-built binary from bugpilot.io.
 :::
 
 ---
 
-## GitHub
+## Running Tests
 
-### Required credentials
-
-| Field | Description |
-|-------|-------------|
-| \`token\` | Personal access token or GitHub App installation token |
-| \`owner\` | GitHub organisation or username |
-| \`repo\` | Default repository name |
-
-### Capabilities
-
-| Capability | API endpoint used |
-|-----------|-------------------|
-| \`CODE_CHANGES\` | \`GET /repos/{owner}/{repo}/commits\` with since/until |
-| \`DEPLOYMENTS\` | \`GET /repos/{owner}/{repo}/deployments\` |
-
-### Minimum token scopes
-
-- \`repo:status\` (read commit statuses)
-- \`read:repo_hook\` (optional, deployment events)
-
-:::info
-Pass \`owner/repo\` as the service name in \`investigate create\` to target a specific repository.
-:::
-
----
-
-## Kubernetes
-
-### Required credentials
-
-| Field | Description |
-|-------|-------------|
-| \`base_url\` | API server URL (e.g. \`https://k8s.example.com:6443\`) |
-| \`token\` | Service account bearer token |
-| \`namespace\` | Namespace to query (default: \`default\`) |
-| \`ca_cert_pem\` | (Optional) PEM CA cert for TLS verification |
-| \`verify_ssl\` | \`false\` to skip TLS (not recommended in production) |
-
-### Capabilities
-
-| Capability | Kubernetes resources |
-|-----------|---------------------|
-| \`INFRASTRUCTURE_STATE\` | Pods, Nodes, Events (namespaced) |
-| \`DEPLOYMENTS\` | \`apps/v1\` Deployments matching service label |
-
-### Creating a read-only service account
+The test suite uses an in-memory SQLite database — no running PostgreSQL needed.
 
 \`\`\`bash
-kubectl create serviceaccount bugpilot-reader -n default
+cd src/backend
 
-kubectl create clusterrole bugpilot-reader \\
-  --verb=get,list \\
-  --resource=pods,nodes,events,deployments
+# Run all tests
+pytest
 
-kubectl create clusterrolebinding bugpilot-reader \\
-  --clusterrole=bugpilot-reader \\
-  --serviceaccount=default:bugpilot-reader
+# Run a specific file
+pytest tests/test_hypothesis.py -v
 
-# Get a long-lived token
-kubectl create token bugpilot-reader -n default --duration=8760h
+# Run with coverage report
+pytest --cov=app --cov-report=term-missing
+
+# Run tests matching a keyword
+pytest -k "test_dedup" -v
 \`\`\`
+
+The test suite uses \`sqlite+aiosqlite:///:memory:\` via a cross-dialect \`JSONB\` TypeDecorator in \`app/models/all_models.py\` that routes to \`JSON\` on SQLite automatically.
 
 ---
 
-## PagerDuty
+## Code Style
 
-### Required credentials
-
-| Field | Description |
-|-------|-------------|
-| \`api_key\` | PagerDuty REST API key (read-only) |
-| \`service_id\` | (Optional) Filter incidents to one service |
-
-### Capabilities
-
-| Capability | API endpoint used |
-|-----------|-------------------|
-| \`INCIDENTS\` | \`GET /incidents\` filtered by service and date range |
-| \`ALERTS\` | \`GET /incidents/{id}/alerts\` for each matching incident |
+- **Type hints** on all function signatures
+- **Async/await** throughout — no sync blocking calls in API handlers or connectors
+- **structlog** for all logging — never \`print()\`
+- **Pydantic v2** with \`ConfigDict\` (not the deprecated \`class Config\`)
+- **SQLAlchemy 2.0** declarative style with \`Mapped\` / \`mapped_column\`
 
 ---
 
-## Retry and Timeout Behaviour
+## Adding a New API Endpoint
 
-All connectors share a consistent policy:
-
-| Setting | Value |
-|---------|-------|
-| Request timeout | 30 seconds |
-| Collection timeout (per connector) | 45 seconds |
-| Retry on | 429, 500, 502, 503, 504 |
-| Max attempts | 3 |
-| Backoff strategy | Exponential with jitter |
-| Retry-After header | Respected |
-
-If a connector exceeds the collection timeout or exhausts retries, it is marked **degraded**. The investigation continues with data from other connectors. Degraded connectors are listed in evidence output:
-
-\`\`\`
-  grafana/metrics   —   degraded: connection timeout after 45s
-\`\`\`
-
----
-
-## Validating Connector Connectivity
-
-\`\`\`bash
-curl http://localhost:8000/api/v1/admin/connectors/validate \\
-  -H "Authorization: Bearer $TOKEN"
-
-# [
-#   {"connector_id":"c1d9...","type":"datadog","valid":true,"latency_ms":210},
-#   {"connector_id":"a2f8...","type":"grafana","valid":false,"error":"401 Unauthorized"}
-# ]
-\`\`\`
-
----
-
-## Adding a Custom Connector
-
-Subclass \`BaseConnector\` from \`app.connectors.base\`:
+1. Add a route handler to the appropriate file in \`app/api/v1/\`
+2. Add request/response Pydantic schemas to \`app/schemas/base.py\`
+3. Mount the router in \`app/main.py\` if it's a new file
+4. Write tests in \`backend/tests/\`
 
 \`\`\`python
-from app.connectors.base import (
-    BaseConnector, ConnectorCapability, RawEvidenceItem, ValidationResult
-)
-from datetime import datetime
+# app/api/v1/my_feature.py
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.db import get_db
+from app.core.rbac import TokenPayload, require_role, Role
 
-class MyConnector(BaseConnector):
-    def __init__(self, config: dict):
-        self.base_url = config["base_url"]
-        self.api_key  = config["api_key"]
+router = APIRouter(prefix="/my-feature", tags=["my-feature"])
 
-    def capabilities(self) -> list[ConnectorCapability]:
-        return [ConnectorCapability.LOGS]
+class MyFeatureResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
 
-    async def validate(self) -> ValidationResult:
-        import httpx
-        async with httpx.AsyncClient() as c:
-            try:
-                r = await c.get(f"{self.base_url}/health",
-                                headers={"X-Api-Key": self.api_key}, timeout=5)
-                return ValidationResult(
-                    is_valid=(r.status_code == 200),
-                    latency_ms=r.elapsed.total_seconds() * 1000,
-                )
-            except Exception as e:
-                return ValidationResult(is_valid=False, error=str(e))
-
-    async def fetch_evidence(
-        self,
-        capability: ConnectorCapability,
-        service: str,
-        since: datetime,
-        until: datetime,
-        limit: int = 500,
-    ) -> list[RawEvidenceItem]:
-        # implement per capability
-        return []
+@router.get("/{item_id}", response_model=MyFeatureResponse)
+async def get_item(
+    item_id: str,
+    current_user: TokenPayload = Depends(require_role(Role.viewer)),
+    db: AsyncSession = Depends(get_db),
+):
+    ...
 \`\`\`
 
-Register it in \`ConnectorType\` enum (\`app/models/all_models.py\`) and add factory logic in the connector admin router.`,
+---
+
+## Adding a New Connector
+
+1. Create \`app/connectors/myplatform/__init__.py\` and \`connector.py\`
+2. Subclass \`BaseConnector\` from \`app.connectors.base\`
+3. Implement \`capabilities()\`, \`validate()\`, and \`fetch_evidence()\`
+4. Add a value to the \`ConnectorType\` enum in \`app/models/all_models.py\`
+5. Register the connector in the connector factory
+6. Add a sample config to \`fixtures/sample_configs/sample_connector_config.yaml\`
+7. Write tests in \`backend/tests/test_connectors.py\`
+
+---
+
+## Database Migrations
+
+When you modify \`app/models/all_models.py\`, generate a new Alembic migration:
+
+\`\`\`bash
+cd src/backend
+
+# Auto-generate from model diff
+alembic revision --autogenerate -m "add_my_new_column"
+
+# Review the generated file in migrations/versions/
+# Always review before applying — autogenerate is not perfect
+
+# Apply
+alembic upgrade head
+
+# Rollback one step
+alembic downgrade -1
+\`\`\`
+
+---
+
+## Common Issues
+
+### \`FERNET_KEY\` is not valid
+
+Generate a proper key:
+
+\`\`\`bash
+python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+\`\`\`
+
+### \`asyncpg\` SSL error on local dev
+
+Add \`?ssl=disable\` to the local database URL:
+
+\`\`\`
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost/bugpilot_dev?ssl=disable
+\`\`\`
+
+### \`aiosqlite\` not found (test suite)
+
+\`\`\`bash
+pip install aiosqlite
+\`\`\`
+
+---
+
+## Pull Request Guidelines
+
+1. Run the full test suite before submitting: \`pytest\`
+2. Add tests for any new feature or bug fix
+3. Keep changes focused — one feature or fix per PR
+4. Update the relevant doc file if your change affects user-facing behaviour
+5. Ensure no Pydantic deprecation warnings (\`class Config\` → \`model_config = ConfigDict(...)\`)`,
   },
-  webhooks: {
-    slug: "webhooks",
-    title: "Configure Webhooks",
-    category: "Investigating Incidents",
-    content: `# How to Configure Webhooks
 
-BugPilot can receive webhooks from monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
-
----
-
-## How It Works
-
-\`\`\`
-Monitoring platform fires alert
-        │
-        ▼
-POST /api/v1/webhooks/{source}
-        │
-        ▼
-BugPilot verifies HMAC-SHA256 signature
-        │
-        ├── invalid signature → 401, metric incremented, logged
-        │
-        ▼
-Dedup check: is there already an open investigation?
-        │
-        ├── duplicate found → attach evidence to existing investigation
-        │
-        ▼
-Create new investigation (if no duplicate)
-        │
-        ▼
-Enqueue evidence collection
-\`\`\`
-
----
-
-## Supported Webhook Sources
-
-| Source | Path | Signature header |
-|--------|------|-----------------|
-| Datadog | \`/api/v1/webhooks/datadog\` | \`X-Hub-Signature\` (hex HMAC) |
-| Grafana | \`/api/v1/webhooks/grafana\` | \`X-Grafana-Signature\` (\`sha256=HMAC\`) |
-| AWS CloudWatch (SNS) | \`/api/v1/webhooks/cloudwatch\` | Certificate-based SNS signature |
-| PagerDuty | \`/api/v1/webhooks/pagerduty\` | \`X-PagerDuty-Signature\` (\`v1=HMAC\`) |
-
----
-
-## Registering a Webhook Secret
-
-\`\`\`bash
-# Register a new webhook for Datadog
-curl -X POST http://localhost:8000/api/v1/admin/webhooks \\
-  -H "Authorization: Bearer $ADMIN_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "source": "datadog",
-    "secret": "YOUR_SHARED_SECRET_MIN_32_CHARS",
-    "description": "Production Datadog webhook"
-  }'
-
-# Returns: { "webhook_id": "wh_abc123", "source": "datadog" }
-\`\`\`
-
----
-
-## Setting Up Each Source
-
-### Datadog
-
-1. In Datadog → Integrations → Webhooks → Add Webhook
-2. **URL:** \`https://your-bugpilot.example.com/api/v1/webhooks/datadog?org_id=YOUR_ORG_ID\`
-3. **Payload:** Default (or custom JSON)
-4. **Custom Headers:**
-   \`\`\`
-   X-Hub-Signature: sha256=\${signature}
-   \`\`\`
-5. In Datadog, set the Webhook secret to match the one you registered with BugPilot
-
-**Sample payload sent by Datadog:**
-
-\`\`\`json
-{
-  "title": "High 5xx error rate on payment-service",
-  "alert_id": "1234567",
-  "severity": "critical",
-  "tags": ["service:payment-service", "env:production"],
-  "date": 1705330271,
-  "org": { "id": "abc123", "name": "ACME Corp" }
-}
-\`\`\`
-
----
-
-### Grafana
-
-1. In Grafana → Alerting → Contact points → Add contact point
-2. **Integration:** Webhook
-3. **URL:** \`https://your-bugpilot.example.com/api/v1/webhooks/grafana?org_id=YOUR_ORG_ID\`
-4. **Authorization Header:** Leave blank (Grafana uses \`X-Grafana-Signature\`)
-5. Under **Settings** → **Webhook secret**, set the same secret registered in BugPilot
-
-**Sample payload:**
-
-\`\`\`json
-{
-  "alerts": [
-    {
-      "status": "firing",
-      "labels": { "alertname": "HighLatency", "service": "checkout-svc" },
-      "annotations": { "summary": "p99 latency > 5s" },
-      "startsAt": "2024-01-15T14:31:00Z",
-      "fingerprint": "abc123def456"
-    }
-  ],
-  "receiver": "bugpilot",
-  "externalURL": "https://grafana.example.com"
-}
-\`\`\`
-
-The \`fingerprint\` field is used for deduplication.
-
----
-
-### AWS CloudWatch (via SNS)
-
-1. In AWS → SNS → Create topic → HTTPS subscription
-2. **Endpoint:** \`https://your-bugpilot.example.com/api/v1/webhooks/cloudwatch?org_id=YOUR_ORG_ID\`
-3. Confirm the SNS subscription (BugPilot auto-confirms \`SubscriptionConfirmation\` messages)
-4. Attach the SNS topic to your CloudWatch alarm
-
-BugPilot verifies SNS messages using AWS certificate-based signature validation. The certificate URL must match \`*.amazonaws.com\` to prevent SSRF attacks.
-
-**Sample alarm notification:**
-
-\`\`\`json
-{
-  "Type": "Notification",
-  "MessageId": "abc123",
-  "Subject": "ALARM: \\"payment-service-5xx\\" in us-east-1",
-  "Message": "{\\"AlarmName\\":\\"payment-service-5xx\\",\\"NewStateValue\\":\\"ALARM\\",\\"NewStateReason\\":\\"Threshold Crossed: 1 out of the last 1 datapoints (7.8%) was greater than the threshold (5.0%)\\"}",
-  "Timestamp": "2024-01-15T14:31:00.000Z",
-  "Signature": "...",
-  "SigningCertURL": "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-..."
-}
-\`\`\`
-
----
-
-### PagerDuty
-
-1. In PagerDuty → Service → Webhooks → Add Webhook
-2. **Delivery URL:** \`https://your-bugpilot.example.com/api/v1/webhooks/pagerduty?org_id=YOUR_ORG_ID\`
-3. **Event types:** \`incident.triggered\`, \`incident.acknowledged\`, \`incident.resolved\`
-4. Copy the webhook secret from PagerDuty and register it in BugPilot
-
-PagerDuty sends multiple signatures in a comma-separated header for key rotation. BugPilot accepts any valid signature from the list.
-
-**Sample payload:**
-
-\`\`\`json
-{
-  "event": {
-    "id": "evt_abc",
-    "event_type": "incident.triggered",
-    "data": {
-      "id": "P1ABC12",
-      "title": "High 5xx rate - payment-service",
-      "urgency": "high",
-      "service": { "id": "SVC001", "summary": "payment-service" },
-      "created_at": "2024-01-15T14:31:00Z"
-    }
-  }
-}
-\`\`\`
-
----
-
-## Secret Rotation (Zero-downtime)
-
-BugPilot supports a **dual-secret grace window** for rotating webhook secrets without downtime:
-
-\`\`\`bash
-# 1. Register the new secret as the "previous" secret on your webhook
-curl -X PATCH http://localhost:8000/api/v1/admin/webhooks/wh_abc123 \\
-  -H "Authorization: Bearer $ADMIN_TOKEN" \\
-  -d '{"secret": "NEW_SECRET", "previous_secret": "OLD_SECRET"}'
-
-# 2. Update the secret in your monitoring platform
-
-# 3. After all platforms are updated, clear the previous secret
-curl -X PATCH http://localhost:8000/api/v1/admin/webhooks/wh_abc123 \\
-  -H "Authorization: Bearer $ADMIN_TOKEN" \\
-  -d '{"previous_secret": null}'
-\`\`\`
-
-During the grace window, BugPilot accepts signatures from either the current or previous secret.
-
----
-
-## Rate Limiting
-
-Webhook endpoints enforce **100 requests per minute per source IP + org combination**. When exceeded, BugPilot returns \`429 Too Many Requests\` and logs the event.
-
-Legitimate monitoring platforms typically send far fewer webhooks than this limit. If you exceed it, consider consolidating multiple alert rules into fewer webhook calls.
-
----
-
-## Testing Webhooks Locally
-
-Use the sample payloads in \`fixtures/sample_configs/sample_webhook_payloads/\`:
-
-\`\`\`bash
-# Test Datadog webhook locally
-SIGNATURE=$(echo -n '{"title":"Test Alert"}' | openssl dgst -sha256 -hmac "YOUR_SECRET" | awk '{print $2}')
-
-curl -X POST http://localhost:8000/api/v1/webhooks/datadog?org_id=YOUR_ORG_ID \\
-  -H "Content-Type: application/json" \\
-  -H "X-Hub-Signature: sha256=$SIGNATURE" \\
-  -d @fixtures/sample_configs/sample_webhook_payloads/datadog.json
-\`\`\`
-
----
-
-## Webhook Verification Failures
-
-If a webhook fails signature verification, BugPilot:
-1. Returns \`401 Unauthorized\`
-2. Increments \`bugpilot_webhook_verification_failures_total{source="datadog"}\` Prometheus counter
-3. Logs at \`warning\` level with \`event=webhook_verification_failed\`
-
-Monitor for verification failures to detect misconfigured secrets or potential replay attacks:
-
-\`\`\`yaml
-# Prometheus alert
-- alert: WebhookVerificationFailures
-  expr: increase(bugpilot_webhook_verification_failures_total[5m]) > 10
-  labels:
-    severity: warning
-  annotations:
-    summary: "Webhook signature verification failures — check secret configuration"
-\`\`\``,
-  },
-  "llm-providers": {
-    slug: "llm-providers",
-    title: "LLM Providers",
-    category: "Configuration",
-    content: `# How to Configure LLM Providers
-
-BugPilot uses LLMs to synthesize additional hypotheses when evidence is complex or when rule-based patterns don't fully explain an incident. LLM usage is **optional** — BugPilot works without one using its rule-based and graph correlation engines.
-
----
-
-## Overview
-
-When an LLM is configured, BugPilot uses it in the 4th pass of the hypothesis pipeline:
-
-1. Rule-based pass (always runs)
-2. Graph correlation pass (always runs)
-3. Historical reranking (runs if DB context available)
-4. **LLM synthesis** ← only runs if configured and slice is redacted
-5. Dedup + rank (always runs)
-
-The LLM is given the redacted investigation graph and asked to suggest hypotheses not already identified by earlier passes. **No raw evidence, no PII, no secrets are ever sent to the LLM.**
-
----
-
-## Supported Providers
-
-| Provider | Model | Notes |
-|----------|-------|-------|
-| OpenAI | gpt-4o (default) | Best hypothesis quality |
-| Anthropic | claude-sonnet-4-6 (default) | Strong reasoning, supports prompt caching |
-| Azure OpenAI | Your deployment | GPT-4 family via your Azure resource |
-| Ollama | Any local model | No external API calls; privacy-first |
-
----
-
-## OpenAI
-
-\`\`\`bash
-export LLM_PROVIDER=openai
-export OPENAI_API_KEY=sk-...
-\`\`\`
-
-Or in \`backend/.env\`:
-
-\`\`\`env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-proj-...
-\`\`\`
-
-**Supported models:** \`gpt-4o\`, \`gpt-4o-mini\`, \`gpt-4-turbo\`. Default: \`gpt-4o\`.
-
-To change the model, set \`LLM_MODEL=gpt-4o-mini\` in your environment.
-
----
-
-## Anthropic
-
-\`\`\`env
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-\`\`\`
-
-**Supported models:** \`claude-opus-4-6\`, \`claude-sonnet-4-6\`, \`claude-haiku-4-5-20251001\`. Default: \`claude-sonnet-4-6\`.
-
-BugPilot takes advantage of Anthropic's **prompt caching** for repeated investigation context, reducing token costs on follow-up hypothesis refinements.
-
----
-
-## Azure OpenAI
-
-\`\`\`env
-LLM_PROVIDER=azure_openai
-AZURE_OPENAI_ENDPOINT=https://YOUR-RESOURCE.openai.azure.com
-AZURE_OPENAI_API_KEY=...
-AZURE_OPENAI_DEPLOYMENT=gpt-4o-deployment
-\`\`\`
-
-Azure OpenAI is recommended for organisations with data residency requirements or enterprise agreements.
-
----
-
-## Ollama (Local / Air-gapped)
-
-For privacy-sensitive environments where data cannot leave your network:
-
-\`\`\`bash
-# Install and start Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull llama3.2
-
-# Configure BugPilot
-export LLM_PROVIDER=ollama
-export OLLAMA_BASE_URL=http://localhost:11434
-export LLM_MODEL=llama3.2
-\`\`\`
-
-**Recommended models for hypothesis generation:**
-- \`llama3.2\` — Good balance of quality and speed
-- \`mixtral\` — Higher quality, higher resource usage
-- \`codellama\` — Better for code-related incidents
-
-:::info
-Ollama models are typically less capable at complex reasoning than GPT-4o or Claude. Consider using them for lower-severity incidents or as a complement to rule-based hypotheses.
-:::
-
----
-
-## Privacy Guarantee
-
-Regardless of which LLM provider you use, BugPilot enforces a strict privacy boundary in code:
-
-\`\`\`python
-# In app/llm/llm_service.py — enforced at runtime, not configuration
-if not getattr(slice, 'is_redacted', False):
-    raise ValueError(
-        "SECURITY: Attempted to send non-redacted GraphSlice to LLM provider."
-    )
-\`\`\`
-
-Before a \`GraphSlice\` is sent to any LLM, the privacy pipeline:
-1. Scrubs emails, phone numbers, JWTs, bearer tokens, payment cards, AWS keys, PEM keys
-2. Sets \`is_redacted=True\` on the slice
-3. Records a \`RedactionManifest\` with what was removed
-
-The LLM never sees raw log lines, actual error messages with PII, or secrets.
-
----
-
-## Token Budget and Caching
-
-BugPilot enforces a **token budget** per LLM call to prevent runaway costs:
-
-| Setting | Default |
-|---------|---------|
-| Max prompt tokens | 8,000 |
-| Max completion tokens | 2,000 |
-| Max total tokens per investigation | 40,000 |
-
-The LLM service maintains an **in-memory cache** keyed by a SHA-256 hash of the graph content, task description, model name, and prompt version. Identical investigation states return cached results without a new API call.
-
-Cache entries are invalidated when new evidence is added to an investigation via \`invalidate_cache_for_investigation(investigation_id)\`.
-
----
-
-## LLM Usage Tracking
-
-All LLM calls are logged to the \`llm_usage_logs\` table:
-
-\`\`\`bash
-curl http://localhost:8000/api/v1/admin/llm-usage \\
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-
-# {
-#   "total_requests": 142,
-#   "total_tokens": 287450,
-#   "total_cost_usd": 8.62,
-#   "by_provider": {
-#     "openai": {"requests": 142, "tokens": 287450, "cost_usd": 8.62}
-#   }
-# }
-\`\`\`
-
-A Prometheus counter also tracks usage:
-
-\`\`\`
-bugpilot_llm_requests_total{provider="openai"} 142
-bugpilot_llm_tokens_total{provider="openai",type="prompt"} 245230
-bugpilot_llm_tokens_total{provider="openai",type="completion"} 42220
-\`\`\`
-
----
-
-## Disabling LLM (Rule-based only mode)
-
-To run BugPilot entirely without an LLM:
-
-\`\`\`env
-# Simply don't set LLM_PROVIDER
-# BugPilot will use rule-based + graph correlation only
-\`\`\`
-
-Rule-based and graph correlation hypotheses are available instantly without any API calls, latency, or cost.`,
-  },
-  rbac: {
-    slug: "rbac",
-    title: "Users & Roles",
-    category: "Administration",
-    content: `# How to Manage Users and Roles
-
-BugPilot uses role-based access control (RBAC) with four roles. This guide covers role assignments, permissions, and common administration tasks.
-
----
-
-## Roles
-
-| Role | Description |
-|------|-------------|
-| \`viewer\` | Read-only access to investigations, evidence, and hypotheses |
-| \`investigator\` | Can create and work investigations, collect evidence, run low-risk actions |
-| \`approver\` | Inherits investigator + can approve medium/high/critical risk actions |
-| \`admin\` | Full access including connector management, user management, org settings |
-
----
-
-## Permission Matrix
-
-| Permission | viewer | investigator | approver | admin |
-|-----------|:------:|:------------:|:--------:|:-----:|
-| \`investigations:read\` | ✓ | ✓ | ✓ | ✓ |
-| \`investigations:write\` | | ✓ | ✓ | ✓ |
-| \`evidence:read\` | ✓ | ✓ | ✓ | ✓ |
-| \`evidence:write\` | | ✓ | ✓ | ✓ |
-| \`hypotheses:read\` | ✓ | ✓ | ✓ | ✓ |
-| \`hypotheses:write\` | | ✓ | ✓ | ✓ |
-| \`actions:read\` | ✓ | ✓ | ✓ | ✓ |
-| \`actions:write\` | | ✓ | ✓ | ✓ |
-| \`actions:approve\` | | | ✓ | ✓ |
-| \`admin:manage\` | | | | ✓ |
-
----
-
-## Listing Users
-
-\`\`\`bash
-curl http://localhost:8000/api/v1/admin/users \\
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-
-# [
-#   {"id": "usr_abc", "email": "alice@acme.com", "role": "investigator", "is_active": true},
-#   {"id": "usr_def", "email": "bob@acme.com",   "role": "approver",     "is_active": true},
-#   {"id": "usr_ghi", "email": "carol@acme.com", "role": "viewer",       "is_active": true}
-# ]
-\`\`\`
-
----
-
-## Changing a User's Role
-
-\`\`\`bash
-curl -X PATCH http://localhost:8000/api/v1/admin/users/usr_abc \\
-  -H "Authorization: Bearer $ADMIN_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{"role": "approver"}'
-\`\`\`
-
-Role changes take effect on the next API request — existing sessions are not invalidated immediately.
-
----
-
-## Deactivating a User
-
-\`\`\`bash
-curl -X DELETE http://localhost:8000/api/v1/admin/users/usr_abc \\
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-\`\`\`
-
-Deactivated users cannot create new sessions. Existing tokens will be rejected at the next request.
-
----
-
-## Approval Workflow
-
-When a user runs \`bugpilot fix suggest\`, each action is assigned a risk level. The approval gate:
-
-| Risk level | Approval required | Who can approve |
-|-----------|-------------------|-----------------|
-| \`low\` | No | Anyone (investigator+) can run immediately |
-| \`medium\` | Yes | \`approver\` or \`admin\` role |
-| \`high\` | Yes | \`approver\` or \`admin\` role |
-| \`critical\` | Yes | \`approver\` or \`admin\` role |
-
-### Approving an action (CLI)
-
-\`\`\`bash
-# As a user with approver role:
-bugpilot fix approve act_d2f4e1 \\
-  --note "Verified rollback path with infra team. Safe to proceed."
-\`\`\`
-
-### Approving via API
-
-\`\`\`bash
-curl -X POST http://localhost:8000/api/v1/actions/act_d2f4e1/approve \\
-  -H "Authorization: Bearer $APPROVER_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{"note": "Approved — rollback verified safe."}'
-\`\`\`
-
-### What happens after approval
-
-1. The action status changes from \`pending\` → \`approved\`
-2. Any \`investigator\` in the org can now run the action
-3. The approval is recorded in the \`approvals\` table with approver user ID, timestamp, and note
-4. The action execution is also logged to \`audit_logs\`
-
----
-
-## Audit Log
-
-All write operations are logged to the audit trail. Query it:
-
-\`\`\`bash
-curl "http://localhost:8000/api/v1/admin/audit-logs?limit=50" \\
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-
-# [
-#   {
-#     "id": "aud_abc",
-#     "event_type": "action_approved",
-#     "entity_type": "action",
-#     "entity_id": "act_d2f4e1",
-#     "user_id": "usr_def",
-#     "ip_address": "10.0.1.42",
-#     "occurred_at": "2024-01-15T15:12:00Z",
-#     "metadata": {"note": "Approved — rollback verified safe."}
-#   }
-# ]
-\`\`\`
-
-Audit logs are retained according to the org's retention policy (default: 365 days).
-
----
-
-## Org Settings
-
-\`\`\`bash
-# Get current settings
-curl http://localhost:8000/api/v1/admin/org/settings \\
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-
-# Update retention policy
-curl -X PATCH http://localhost:8000/api/v1/admin/org/settings \\
-  -H "Authorization: Bearer $ADMIN_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "retention": {
-      "investigations_days": 180,
-      "evidence_metadata_days": 60,
-      "raw_payload_days": 14
-    }
-  }'
-\`\`\`
-
-Retention changes apply to the next daily purge run.`,
-  },
-  "data-retention": {
-    slug: "data-retention",
-    title: "Data Retention",
-    category: "Administration",
-    content: `# How to Configure Data Retention
-
-BugPilot implements a three-phase data retention policy that is configurable per organisation. This guide explains the phases, defaults, and how to tune them.
-
----
-
-## Retention Phases
-
-BugPilot retains data in three progressively smaller windows:
-
-| Phase | Default | What happens |
-|-------|---------|-------------|
-| **Investigation archive** | 365 days | Resolved/closed investigations are archived after this period |
-| **Evidence metadata** | 90 days | Evidence rows (normalized_summary, reliability_score, etc.) are deleted |
-| **Raw payload expiry** | 30 days | \`payload_ref\` column is set to \`NULL\` — the actual raw payload in external storage is no longer referenced |
-
-The retention service runs a **three-phase idempotent purge** daily. Each phase writes an \`AuditLog\` entry *before* making any deletions, ensuring full auditability.
-
----
-
-## Configuring Retention
-
-Set retention policy per organisation via the admin API:
-
-\`\`\`bash
-curl -X PATCH http://localhost:8000/api/v1/admin/org/settings \\
-  -H "Authorization: Bearer $ADMIN_TOKEN" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "retention": {
-      "investigations_days": 180,
-      "evidence_metadata_days": 60,
-      "raw_payload_days": 14
-    }
-  }'
-\`\`\`
-
-Changes take effect on the next daily purge run.
-
----
-
-## Common Retention Configurations
-
-### Compliance-heavy (HIPAA / SOC 2)
-
-\`\`\`json
-{
-  "investigations_days": 365,
-  "evidence_metadata_days": 365,
-  "raw_payload_days": 7
-}
-\`\`\`
-
-Keep investigation and evidence metadata for a full year for audit purposes. Expire raw payloads quickly since they may contain PII.
-
-### Cost-optimised
-
-\`\`\`json
-{
-  "investigations_days": 90,
-  "evidence_metadata_days": 30,
-  "raw_payload_days": 7
-}
-\`\`\`
-
-Shorter windows reduce database size and storage costs.
-
-### Development / testing
-
-\`\`\`json
-{
-  "investigations_days": 30,
-  "evidence_metadata_days": 7,
-  "raw_payload_days": 1
-}
-\`\`\`
-
-Aggressive purging for dev environments.
-
----
-
-## What Each Phase Deletes
-
-### Phase 1 — Investigation archive
-
-\`\`\`sql
--- Archive investigations resolved > N days ago
-UPDATE investigations
-SET status = 'archived'
-WHERE status IN ('resolved', 'closed')
-  AND resolved_at < NOW() - INTERVAL 'N days';
-\`\`\`
-
-Before archiving, an \`AuditLog\` entry is written:
-
-\`\`\`json
-{
-  "event_type": "retention_phase1_archive",
-  "entity_type": "investigation",
-  "metadata": { "count": 12, "cutoff": "2023-10-12T02:00:00Z" }
-}
-\`\`\`
-
-### Phase 2 — Evidence metadata deletion
-
-\`\`\`sql
--- Delete evidence for archived investigations older than evidence_metadata_days
-DELETE FROM evidence_items
-WHERE investigation_id IN (
-  SELECT id FROM investigations WHERE status = 'archived'
-)
-AND fetched_at < NOW() - INTERVAL 'N days';
-\`\`\`
-
-### Phase 3 — Raw payload expiry
-
-\`\`\`sql
--- Null the payload_ref for evidence older than raw_payload_days
-UPDATE evidence_items
-SET payload_ref = NULL
-WHERE fetched_at < NOW() - INTERVAL 'N days'
-  AND payload_ref IS NOT NULL;
-\`\`\`
-
-The evidence row is kept (normalized_summary and metadata are preserved). Only the reference to the external raw payload is cleared.
-
----
-
-## Running the Purge Manually
-
-\`\`\`bash
-# In a container or locally
-cd backend
-python3 -c "
-import asyncio
-from app.services.retention_service import RetentionService
-from app.core.db import get_async_session
-
-async def run():
-    async with get_async_session() as db:
-        service = RetentionService(db)
-        await service.run_daily_purge()
-        print('Purge complete')
-
-asyncio.run(run())
-"
-\`\`\`
-
----
-
-## Idempotency
-
-The purge is fully idempotent. Running it twice produces the same result as running it once. This makes it safe to retry on failure or run from multiple processes (with appropriate database-level concurrency controls).
-
----
-
-## Monitoring Retention
-
-The purge writes to the audit log, which you can query:
-
-\`\`\`bash
-curl "http://localhost:8000/api/v1/admin/audit-logs?event_type=retention_phase1_archive" \\
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-\`\`\`
-
-You can also alert on absence of purge runs:
-
-\`\`\`yaml
-# Prometheus — alert if no retention log entries in 25h
-- alert: BugPilotRetentionNotRunning
-  expr: |
-    (time() - bugpilot_last_retention_run_timestamp) > 90000
-  labels:
-    severity: warning
-  annotations:
-    summary: "BugPilot retention job has not run in > 25 hours"
-\`\`\``,
-  },
-  "cli-reference": {
-    slug: "cli-reference",
-    title: "CLI Reference",
-    category: "Reference",
-    content: `# CLI Reference
-
-The \`bugpilot\` CLI is the primary interface for interacting with the BugPilot platform. Every command supports three output formats via the global \`--output\` / \`-o\` flag.
-
----
-
-## Global Options
-
-\`\`\`
-bugpilot [OPTIONS] COMMAND [ARGS]...
-\`\`\`
-
-| Option | Env var | Default | Description |
-|--------|---------|---------|-------------|
-| \`--api-url TEXT\` | \`BUGPILOT_API_URL\` | \`http://localhost:8000\` | BugPilot backend URL |
-| \`-o, --output TEXT\` | \`BUGPILOT_OUTPUT\` | \`human\` | Output format: \`human\` \\| \`json\` \\| \`verbose\` |
-| \`--no-color\` | \`NO_COLOR\` | false | Disable Rich colour output |
-| \`-v, --version\` | — | — | Print version and exit |
-
-### Output Formats
-
-**\`human\`** (default) — Rich-formatted tables and panels with colour-coded status and severity. Best for terminal use.
-
-**\`json\`** — Machine-readable JSON on stdout. Every command writes a single JSON object or array. Ideal for scripting and CI pipelines.
-
-\`\`\`bash
-bugpilot investigate list -o json | jq '.[] | select(.status == "open")'
-\`\`\`
-
-**\`verbose\`** — Includes all fields including internal metadata, formatted with syntax highlighting. Useful for debugging.
-
----
-
-## \`bugpilot auth\` — Authentication
-
-### \`auth activate\`
-
-Activate a BugPilot license on this device.
-
-\`\`\`bash
-bugpilot auth activate --license-key bp_<KEY>
-\`\`\`
-
-| Option | Required | Description |
-|--------|----------|-------------|
-| \`--license-key\` | Yes | License key (format: \`bp_...\`) |
-
-**Example:**
-
-\`\`\`
-$ bugpilot auth activate --license-key bp_T7zK9mNvXq...
-
-✓ License activated
-  Org:        acme-corp
-  Tier:       pro
-  Seats:      8 / 10 available
-  Expires:    2027-03-01
-  Device ID:  dev_a3f8c2d1e9
-\`\`\`
-
-Credentials are stored at \`~/.config/bugpilot/credentials.json\` with permissions \`600\`.
-
----
-
-### \`auth logout\`
-
-Revoke the current session and clear local credentials.
-
-\`\`\`bash
-bugpilot auth logout
-\`\`\`
-
----
-
-### \`auth whoami\`
-
-Display the currently authenticated user and org.
-
-\`\`\`bash
-bugpilot auth whoami
-\`\`\`
-
-\`\`\`
-  User:  alice@acme.com
-  Role:  investigator
-  Org:   acme-corp
-  Tier:  pro
-\`\`\`
-
----
-
-## \`bugpilot investigate\` — Investigations
-
-### \`investigate list\`
-
-List all investigations for your org.
-
-\`\`\`bash
-bugpilot investigate list [--status STATUS] [--service SERVICE] [--limit N]
-\`\`\`
-
-| Option | Description |
-|--------|-------------|
-| \`--status\` | Filter: \`open\` \\| \`in_progress\` \\| \`resolved\` \\| \`closed\` |
-| \`--service\` | Filter by service name |
-| \`--limit\` | Max results (default: 20) |
-
-**Example:**
-
-\`\`\`
-$ bugpilot investigate list --status open
-
-  ID             TITLE                                 SERVICE           STATUS     STARTED
-  inv_7f3a2b...  High error rate on payment-service    payment-service   open       2 hours ago
-  inv_c1d9e0...  Database connection pool exhausted    orders-db         open       45 min ago
-  inv_8a2f1c...  Latency spike - checkout flow         checkout-svc      open       12 min ago
-\`\`\`
-
----
-
-### \`investigate create\`
-
-Open a new investigation.
-
-\`\`\`bash
-bugpilot investigate create \\
-  --title "TITLE" \\
-  --service SERVICE \\
-  [--severity critical|high|medium|low]
-\`\`\`
-
-| Option | Required | Description |
-|--------|----------|-------------|
-| \`--title\` | Yes | Short description of the symptom |
-| \`--service\` | Yes | Affected service name (must match connector service labels) |
-| \`--severity\` | No | \`critical\` \\| \`high\` \\| \`medium\` \\| \`low\` (default: \`high\`) |
-
----
-
-### \`investigate get\`
-
-Fetch full details of one investigation.
-
-\`\`\`bash
-bugpilot investigate get <INVESTIGATION_ID>
-\`\`\`
-
----
-
-### \`investigate update\`
-
-Update investigation fields.
-
-\`\`\`bash
-bugpilot investigate update <INVESTIGATION_ID> \\
-  [--title "NEW TITLE"] \\
-  [--status in_progress|resolved]
-\`\`\`
-
----
-
-### \`investigate close\`
-
-Mark an investigation as resolved and record the root cause.
-
-\`\`\`bash
-bugpilot investigate close <INVESTIGATION_ID> \\
-  --root-cause "Description of what caused the issue"
-\`\`\`
-
----
-
-## \`bugpilot incident\` — Incident Triage
-
-### \`incident triage\`
-
-Run automated triage on a new incoming alert or incident. BugPilot checks for existing open investigations (deduplication), creates or updates an investigation, collects initial evidence, and prints the top hypothesis.
-
-\`\`\`bash
-bugpilot incident triage \\
-  --service SERVICE \\
-  --alert-name "ALERT_NAME" \\
-  [--severity critical|high|medium|low] \\
-  [--since DURATION]
-\`\`\`
-
-| Option | Required | Description |
-|--------|----------|-------------|
-| \`--service\` | Yes | Affected service |
-| \`--alert-name\` | Yes | Alert or incident name |
-| \`--severity\` | No | Incident severity |
-| \`--since\` | No | How far back to look for evidence (e.g. \`2h\`, \`30m\`, \`1d\`). Default: \`1h\` |
-
-**Example:**
-
-\`\`\`
-$ bugpilot incident triage \\
-    --service payment-service \\
-    --alert-name "HTTP 5xx rate > 5%" \\
-    --severity critical \\
-    --since 2h
-
-  ⚡ Dedup check: No similar open investigations found
-  ✓ Investigation created: inv_7f3a2b...
-  ↓ Collecting evidence (4 connectors)...
-    ✓ datadog/logs      (47 items, 0.3s)
-    ✓ datadog/metrics   (12 items, 0.4s)
-    ✓ github/deploys    (3 items, 0.2s)
-    ✗ grafana/metrics   degraded: connection timeout
-  ✓ Hypotheses generated (3)
-
-  TOP HYPOTHESIS
-  ───────────────────────────────────────────────────────
-  Rank 1  │  Bad Deployment Introduced Regression      ▓▓▓▓▓▓▓▒ 72%
-          │  A deployment at 14:23 UTC correlates with the onset
-          │  of 5xx errors. Commit a3f8c2d: "Update Stripe SDK v4"
-          │  may have introduced a breaking change.
-  ───────────────────────────────────────────────────────
-  Run: bugpilot fix suggest inv_7f3a2b
-\`\`\`
-
----
-
-### \`incident status\`
-
-Show the current status and summary of an ongoing incident.
-
-\`\`\`bash
-bugpilot incident status <INVESTIGATION_ID>
-\`\`\`
-
----
-
-## \`bugpilot evidence\` — Evidence
-
-### \`evidence collect\`
-
-Trigger evidence collection from all configured connectors for a given investigation.
-
-\`\`\`bash
-bugpilot evidence collect <INVESTIGATION_ID> \\
-  [--since DURATION] \\
-  [--until DATETIME] \\
-  [--connector CONNECTOR_ID] \\
-  [--capability logs|metrics|traces|alerts|incidents|deployments]
-\`\`\`
-
-| Option | Description |
-|--------|-------------|
-| \`--since\` | Duration string: \`30m\`, \`2h\`, \`1d\` (default: \`1h\`) |
-| \`--until\` | ISO-8601 datetime. Default: now |
-| \`--connector\` | Restrict to one connector ID |
-| \`--capability\` | Restrict to one capability type |
-
-**Example output:**
-
-\`\`\`
-$ bugpilot evidence collect inv_7f3a2b --since 2h
-
-  Collecting evidence (since 2h ago)...
-
-  CONNECTOR            CAPABILITY    ITEMS    LATENCY    STATUS
-  datadog              logs          47       0.34s      ok
-  datadog              metrics       12       0.41s      ok
-  datadog              alerts        3        0.28s      ok
-  grafana              metrics       —        —          degraded: timeout
-  github               deployments   2        0.19s      ok
-  pagerduty            incidents     1        0.22s      ok
-
-  Total: 65 items collected (1 connector degraded)
-\`\`\`
-
----
-
-### \`evidence list\`
-
-List evidence items for an investigation.
-
-\`\`\`bash
-bugpilot evidence list <INVESTIGATION_ID> \\
-  [--capability logs|metrics|traces|alerts|incidents|deployments] \\
-  [--limit N]
-\`\`\`
-
----
-
-### \`evidence get\`
-
-Show the full normalized evidence item.
-
-\`\`\`bash
-bugpilot evidence get <EVIDENCE_ID>
-\`\`\`
-
----
-
-## \`bugpilot hypotheses\` — Hypotheses
-
-### \`hypotheses list\`
-
-List all hypotheses for an investigation, ranked by confidence.
-
-\`\`\`bash
-bugpilot hypotheses list <INVESTIGATION_ID> [--status active|confirmed|rejected]
-\`\`\`
-
-**Example:**
-
-\`\`\`
-$ bugpilot hypotheses list inv_7f3a2b
-
-  RANK  HYPOTHESIS                              CONFIDENCE  STATUS    SOURCE
-  1     Bad Deployment Introduced Regression    72%         active    rule
-  2     Memory Exhaustion                       58%         active    rule
-  3     Upstream Dependency Degradation         41%         active    graph
-
-  ⚠ Evidence from single source only (logs). Confidence scores are capped at 40%.
-    Collect metrics or traces to improve hypothesis quality.
-\`\`\`
-
----
-
-### \`hypotheses confirm\`
-
-Mark a hypothesis as confirmed (the root cause).
-
-\`\`\`bash
-bugpilot hypotheses confirm <HYPOTHESIS_ID>
-\`\`\`
-
----
-
-### \`hypotheses reject\`
-
-Mark a hypothesis as ruled out.
-
-\`\`\`bash
-bugpilot hypotheses reject <HYPOTHESIS_ID> [--reason "REASON"]
-\`\`\`
-
----
-
-## \`bugpilot fix\` — Remediation Actions
-
-### \`fix suggest\`
-
-Generate safe remediation actions for an investigation.
-
-\`\`\`bash
-bugpilot fix suggest <INVESTIGATION_ID> [--hypothesis-id HYPOTHESIS_ID]
-\`\`\`
-
-**Example:**
-
-\`\`\`
-$ bugpilot fix suggest inv_7f3a2b
-
-  SUGGESTED ACTIONS
-
-  #1  Rollback deployment a3f8c2d                         RISK: low
-      Expected effect: Restore previous stable version
-      Rollback path:   git revert a3f8c2d && redeploy
-      Approval needed: No
-
-  #2  Increase memory limit to 1Gi                        RISK: medium
-      Expected effect: Prevent OOMKill recurrence
-      Rollback path:   Revert resource quota change
-      Approval needed: Yes (approver role)
-
-  #3  Temporarily disable Stripe SDK v4 feature flag      RISK: low
-      Expected effect: Bypass potentially broken code path
-      Rollback path:   Re-enable feature flag
-      Approval needed: No
-\`\`\`
-
----
-
-### \`fix approve\`
-
-Approve a medium/high-risk action (requires \`approver\` role).
-
-\`\`\`bash
-bugpilot fix approve <ACTION_ID> [--note "APPROVAL_NOTE"]
-\`\`\`
-
----
-
-### \`fix run\`
-
-Execute an approved action.
-
-\`\`\`bash
-bugpilot fix run <ACTION_ID> [--dry-run]
-\`\`\`
-
-| Option | Description |
-|--------|-------------|
-| \`--dry-run\` | Simulate the action without making changes. Prints what would happen. |
-
-**Dry-run example:**
-
-\`\`\`
-$ bugpilot fix run act_d2f4e1 --dry-run
-
-  DRY RUN: Rollback deployment a3f8c2d
-  ─────────────────────────────────────
-  Would execute:
-    1. git revert a3f8c2d
-    2. docker build -t payment-service:rollback .
-    3. kubectl set image deployment/payment-service app=payment-service:rollback
-
-  Estimated downtime: 0s (rolling update)
-  Risk assessment:    LOW — previous version was stable for 3 days
-
-  To apply: bugpilot fix run act_d2f4e1
-\`\`\`
-
----
-
-### \`fix cancel\`
-
-Cancel a pending or approved action.
-
-\`\`\`bash
-bugpilot fix cancel <ACTION_ID>
-\`\`\`
-
----
-
-### \`fix list\`
-
-List all actions for an investigation.
-
-\`\`\`bash
-bugpilot fix list <INVESTIGATION_ID> [--status pending|approved|running|completed|cancelled]
-\`\`\`
-
----
-
-## \`bugpilot export\` — Export
-
-### \`export json\`
-
-Export a complete investigation as structured JSON.
-
-\`\`\`bash
-bugpilot export json <INVESTIGATION_ID> [--output-file FILE]
-\`\`\`
-
-The exported JSON includes: investigation metadata, timeline, evidence summary (redacted, no raw payloads), all hypotheses with rankings, all actions and approval decisions, and outcome.
-
----
-
-### \`export markdown\`
-
-Export a human-readable incident report in Markdown format suitable for wikis, Confluence, or GitHub.
-
-\`\`\`bash
-bugpilot export markdown <INVESTIGATION_ID> [--output-file FILE]
-\`\`\`
-
-**Sample output (truncated):**
-
-\`\`\`markdown
-# Incident Report: High error rate on payment-service
-**ID:** inv_7f3a2b  **Severity:** critical  **Resolved:** 2024-01-15 16:42 UTC
-
-## Timeline
-| Time (UTC) | Event |
-|------------|-------|
-| 14:23      | Deployment a3f8c2d merged by alice@acme.com |
-| 14:31      | HTTP 5xx rate exceeded 5% threshold |
-| 14:33      | PagerDuty incident created |
-| 14:35      | BugPilot investigation opened |
-
-## Root Cause
-Bad Deployment Introduced Regression (confidence: 72%)
-
-## Actions Taken
-1. ✓ Rollback deployment a3f8c2d (approved by bob@acme.com)
-\`\`\`
-
----
-
-## Shell Completion
-
-\`\`\`bash
-# bash
-bugpilot --install-completion bash
-source ~/.bashrc
-
-# zsh
-bugpilot --install-completion zsh
-source ~/.zshrc
-
-# fish
-bugpilot --install-completion fish
-\`\`\`
-
----
-
-## Using with CI/CD
-
-In CI pipelines, use \`--output json\` and \`BUGPILOT_API_URL\` / \`BUGPILOT_LICENSE_KEY\` environment variables:
-
-\`\`\`yaml
-# GitHub Actions example
-- name: Triage deployment incident
-  env:
-    BUGPILOT_API_URL: \${{ secrets.BUGPILOT_URL }}
-    BUGPILOT_LICENSE_KEY: \${{ secrets.BUGPILOT_KEY }}
-  run: |
-    bugpilot auth activate --license-key "$BUGPILOT_LICENSE_KEY"
-    bugpilot incident triage \\
-      --service "$SERVICE" \\
-      --alert-name "Deployment smoke test failed" \\
-      --severity high \\
-      --since 15m \\
-      --output json > triage-result.json
-    cat triage-result.json | jq '.top_hypothesis'
-\`\`\``,
-  },
-  "api-reference": {
-    slug: "api-reference",
-    title: "API Reference",
-    category: "Reference",
-    content: `# API Reference
-
-The BugPilot REST API follows standard HTTP conventions. All endpoints are versioned under \`/api/v1/\`. Request and response bodies use JSON (\`Content-Type: application/json\`).
-
----
-
-## Authentication
-
-All endpoints except \`/auth/activate\` require a valid JWT in the Authorization header:
-
-\`\`\`
-Authorization: Bearer <jwt_token>
-\`\`\`
-
-JWTs expire after 1 hour. Use \`POST /auth/refresh\` with a valid refresh token to obtain a new pair.
-
----
-
-## Authentication Endpoints
-
-### \`POST /api/v1/auth/activate\`
-
-Activate a license on a device and create a session.
-
-**Request body:**
-
-\`\`\`json
-{
-  "license_key": "bp_T7zK9mNvXqAbCdEfGhIjKlMnOpQrStUvWxYz",
-  "device_fingerprint": "sha256-of-mac-hostname-machine"
-}
-\`\`\`
-
-**Response \`200\`:**
-
-\`\`\`json
-{
-  "access_token": "eyJ...",
-  "refresh_token": "opaque-64-byte-hex",
-  "token_type": "bearer",
-  "org_id": "3f8a...",
-  "user_id": "9c1b..."
-}
-\`\`\`
-
----
-
-### \`POST /api/v1/auth/refresh\`
-
-Rotate the access and refresh tokens.
-
-**Request body:**
-
-\`\`\`json
-{
-  "refresh_token": "opaque-64-byte-hex"
-}
-\`\`\`
-
-**Response \`200\`:** Same structure as \`/activate\`.
-
----
-
-### \`POST /api/v1/auth/logout\`
-
-Revoke the current session.
-
-**Response \`204\`:** No body.
-
----
-
-### \`GET /api/v1/auth/whoami\`
-
-Return the authenticated user's details.
-
-**Response \`200\`:**
-
-\`\`\`json
-{
-  "user_id": "9c1b...",
-  "email": "alice@acme.com",
-  "role": "investigator",
-  "org_id": "3f8a...",
-  "org_slug": "acme-corp"
-}
-\`\`\`
-
----
-
-## Investigation Endpoints
-
-### \`GET /api/v1/investigations\`
-
-List investigations for the authenticated org.
-
-**Query parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| \`status\` | string | — | \`open\` \\| \`in_progress\` \\| \`resolved\` \\| \`closed\` |
-| \`service\` | string | — | Filter by linked service name |
-| \`limit\` | int | 20 | Max results |
-| \`offset\` | int | 0 | Pagination offset |
-
-**Response \`200\`:**
-
-\`\`\`json
-[
-  {
-    "id": "inv_7f3a2b",
-    "title": "High error rate on payment-service",
-    "status": "open",
-    "linked_services": ["payment-service"],
-    "started_at": "2024-01-15T14:35:00Z",
-    "resolved_at": null,
-    "hypothesis_count": 3,
-    "evidence_count": 65
-  }
-]
-\`\`\`
-
----
-
-### \`POST /api/v1/investigations\`
-
-Create a new investigation.
-
-**Request body:**
-
-\`\`\`json
-{
-  "title": "High error rate on payment-service",
-  "linked_services": ["payment-service"],
-  "context": {
-    "alert_name": "HTTP 5xx rate > 5%",
-    "severity": "critical"
-  }
-}
-\`\`\`
-
-**Response \`201\`:**
-
-\`\`\`json
-{
-  "id": "inv_7f3a2b",
-  "title": "High error rate on payment-service",
-  "status": "open",
-  "branch_id": "branch_main",
-  "linked_services": ["payment-service"],
-  "started_at": "2024-01-15T14:35:00Z"
-}
-\`\`\`
-
----
-
-### \`GET /api/v1/investigations/{investigation_id}\`
-
-Fetch a single investigation with full detail.
-
----
-
-### \`PATCH /api/v1/investigations/{investigation_id}\`
-
-Update investigation fields.
-
-**Request body (all fields optional):**
-
-\`\`\`json
-{
-  "title": "Updated title",
-  "status": "in_progress",
-  "linked_services": ["payment-service", "stripe-gateway"]
-}
-\`\`\`
-
----
-
-### \`DELETE /api/v1/investigations/{investigation_id}\`
-
-Delete an investigation and all associated data. Requires \`admin\` role.
-
----
-
-## Evidence Endpoints
-
-### \`POST /api/v1/evidence/collect\`
-
-Trigger evidence collection from all configured connectors.
-
-**Request body:**
-
-\`\`\`json
-{
-  "investigation_id": "inv_7f3a2b",
-  "since": "2024-01-15T12:00:00Z",
-  "until": "2024-01-15T15:00:00Z",
-  "capabilities": ["LOGS", "METRICS", "DEPLOYMENTS"]
-}
-\`\`\`
-
-**Response \`200\`:**
-
-\`\`\`json
-{
-  "collected": 65,
-  "degraded_connectors": ["grafana"],
-  "duration_seconds": 3.2,
-  "evidence_ids": ["ev_a1b2...", "..."]
-}
-\`\`\`
-
----
-
-### \`GET /api/v1/evidence\`
-
-List evidence for an investigation.
-
-**Query parameters:** \`investigation_id\` (required), \`capability\`, \`limit\`, \`offset\`.
-
----
-
-### \`GET /api/v1/evidence/{evidence_id}\`
-
-Fetch a single evidence item.
-
-**Response \`200\`:**
-
-\`\`\`json
-{
-  "id": "ev_a1b2",
-  "investigation_id": "inv_7f3a2b",
-  "source_system": "datadog",
-  "capability": "LOGS",
-  "normalized_summary": "ERROR: NullPointerException in PaymentProcessor.charge() at 14:31:42",
-  "reliability_score": 0.92,
-  "is_redacted": true,
-  "fetched_at": "2024-01-15T14:36:10Z",
-  "ttl_expires_at": "2024-01-22T14:36:10Z"
-}
-\`\`\`
-
----
-
-## Hypothesis Endpoints
-
-### \`GET /api/v1/hypotheses\`
-
-List hypotheses for an investigation.
-
-**Query parameters:** \`investigation_id\` (required), \`status\` (\`active\` \\| \`confirmed\` \\| \`rejected\`).
-
-**Response \`200\`:**
-
-\`\`\`json
-[
-  {
-    "id": "hyp_c9e1",
-    "investigation_id": "inv_7f3a2b",
-    "title": "Bad Deployment Introduced Regression",
-    "description": "A deployment at 14:23 UTC correlates with 5xx onset...",
-    "confidence_score": 0.72,
-    "rank": 1,
-    "status": "active",
-    "generated_by": "rule",
-    "is_single_lane": false,
-    "evidence_ids": ["ev_a1b2", "ev_c3d4"]
-  }
-]
-\`\`\`
-
----
-
-### \`POST /api/v1/hypotheses/{hypothesis_id}/confirm\`
-
-Mark a hypothesis as confirmed (the root cause).
-
-**Response \`200\`:** Updated hypothesis object.
-
----
-
-### \`POST /api/v1/hypotheses/{hypothesis_id}/reject\`
-
-Mark a hypothesis as rejected.
-
-**Request body (optional):**
-
-\`\`\`json
-{ "reason": "Deployment was rolled back before the spike started" }
-\`\`\`
-
----
-
-## Action Endpoints
-
-### \`POST /api/v1/actions/suggest\`
-
-Generate remediation action candidates for an investigation.
-
-**Request body:**
-
-\`\`\`json
-{
-  "investigation_id": "inv_7f3a2b",
-  "hypothesis_id": "hyp_c9e1"
-}
-\`\`\`
-
-**Response \`200\`:**
-
-\`\`\`json
-[
-  {
-    "id": "act_d2f4",
-    "description": "Rollback deployment a3f8c2d",
-    "rationale": "Deployment correlates with 5xx onset",
-    "risk_level": "low",
-    "expected_effect": "Restore previous stable version",
-    "rollback_path": "git revert a3f8c2d && redeploy",
-    "status": "pending"
-  }
-]
-\`\`\`
-
----
-
-### \`POST /api/v1/actions/{action_id}/approve\`
-
-Approve a medium/high/critical risk action. Requires \`approver\` role.
-
-**Request body:**
-
-\`\`\`json
-{ "note": "Approved after verifying rollback path with infra team" }
-\`\`\`
-
----
-
-### \`POST /api/v1/actions/{action_id}/run\`
-
-Execute an action. For \`--dry-run\`, pass \`"dry_run": true\`.
-
-**Request body:**
-
-\`\`\`json
-{ "dry_run": false }
-\`\`\`
-
-**Response \`200\`:**
-
-\`\`\`json
-{
-  "action_id": "act_d2f4",
-  "status": "completed",
-  "dry_run": false,
-  "output": "Deployment rolled back successfully. Pod restarts: 3/3 ready."
-}
-\`\`\`
-
----
-
-## Graph Endpoints
-
-### \`GET /api/v1/graph/timeline/{investigation_id}\`
-
-Return the investigation timeline as a list of events sorted by time.
-
-**Response \`200\`:**
-
-\`\`\`json
-[
-  {
-    "id": "node_1a2b",
-    "node_type": "deployment",
-    "label": "Deploy a3f8c2d",
-    "timestamp": "2024-01-15T14:23:00Z",
-    "properties": { "commit": "a3f8c2d", "author": "alice@acme.com" }
-  },
-  {
-    "id": "node_3c4d",
-    "node_type": "symptom",
-    "label": "HTTP 5xx rate spike",
-    "timestamp": "2024-01-15T14:31:00Z"
-  }
-]
-\`\`\`
-
----
-
-### \`GET /api/v1/graph/causal/{investigation_id}\`
-
-Return the full causal graph as nodes + edges.
-
-**Response \`200\`:**
-
-\`\`\`json
-{
-  "nodes": [...],
-  "edges": [
-    {
-      "id": "edge_e5f6",
-      "from_node_id": "node_3c4d",
-      "to_node_id": "node_1a2b",
-      "edge_type": "caused_by"
-    }
-  ]
-}
-\`\`\`
-
----
-
-## Webhook Endpoints
-
-### \`POST /api/v1/webhooks/datadog\`
-
-Receive a Datadog webhook. Requires \`X-Datadog-Webhook-ID\` and \`X-Hub-Signature\` headers.
-
-### \`POST /api/v1/webhooks/grafana\`
-
-Receive a Grafana alerting webhook. Requires \`X-Grafana-Signature\` header (format: \`sha256=HMAC\`).
-
-### \`POST /api/v1/webhooks/cloudwatch\`
-
-Receive an AWS SNS/CloudWatch notification. Signature verified against SNS certificate.
-
-### \`POST /api/v1/webhooks/pagerduty\`
-
-Receive a PagerDuty webhook. Requires \`X-PagerDuty-Signature\` header (format: \`v1=HMAC\`). Supports multiple signatures for key rotation.
-
-All webhook handlers:
-- Verify the HMAC-SHA256 signature
-- Support a dual-secret grace window for key rotation
-- Apply per-IP+org rate limiting (100 requests/minute)
-- Log verification failures to Prometheus and structlog
-
----
-
-## Admin Endpoints
-
-Admin endpoints require the \`admin\` role.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| \`GET\` | \`/api/v1/admin/connectors\` | List configured connectors |
-| \`POST\` | \`/api/v1/admin/connectors\` | Add a new connector |
-| \`DELETE\` | \`/api/v1/admin/connectors/{id}\` | Remove a connector |
-| \`GET\` | \`/api/v1/admin/connectors/validate\` | Test all connector connections |
-| \`GET\` | \`/api/v1/admin/users\` | List org users |
-| \`PATCH\` | \`/api/v1/admin/users/{id}\` | Update user role |
-| \`DELETE\` | \`/api/v1/admin/users/{id}\` | Deactivate user |
-| \`GET\` | \`/api/v1/admin/audit-logs\` | Query audit log |
-| \`GET\` | \`/api/v1/admin/org/settings\` | Get org settings |
-| \`PATCH\` | \`/api/v1/admin/org/settings\` | Update org settings (retention, etc.) |
-| \`GET\` | \`/api/v1/admin/webhooks\` | List configured webhooks |
-| \`POST\` | \`/api/v1/admin/webhooks\` | Register a new webhook secret |
-| \`DELETE\` | \`/api/v1/admin/webhooks/{id}\` | Revoke a webhook |
-
----
-
-## Health Endpoints
-
-### \`GET /health\`
-
-Liveness probe. Always returns \`200\` if the process is running.
-
-\`\`\`json
-{ "status": "ok" }
-\`\`\`
-
-### \`GET /health/ready\`
-
-Readiness probe. Returns \`200\` if the database is reachable.
-
-\`\`\`json
-{ "status": "ready", "db": "ok" }
-\`\`\`
-
-Returns \`503\` with \`{ "status": "not_ready", "db": "error: ..." }\` if the DB is unavailable.
-
-### \`GET /metrics\`
-
-Prometheus metrics in text/plain exposition format.
-
----
-
-## Error Responses
-
-All errors follow a consistent structure:
-
-\`\`\`json
-{
-  "detail": "Human-readable error message"
-}
-\`\`\`
-
-| Status | Meaning |
-|--------|---------|
-| \`400\` | Bad request / validation error |
-| \`401\` | Missing or invalid JWT |
-| \`403\` | Insufficient role/permission |
-| \`404\` | Resource not found |
-| \`409\` | Conflict (e.g. duplicate org slug) |
-| \`422\` | Request body validation failed |
-| \`429\` | Rate limit exceeded |
-| \`500\` | Internal server error |
-
----
-
-## Rate Limiting
-
-Webhook endpoints are rate-limited to **100 requests per minute per source IP + org combination**. Other API endpoints do not currently enforce client-side rate limits but rely on the database connection pool as a natural backpressure mechanism.
-
----
-
-## OpenAPI Specification
-
-The full OpenAPI 3.1 spec is served at:
-
-\`\`\`
-GET /openapi.json
-GET /docs           (Swagger UI)
-GET /redoc          (ReDoc)
-\`\`\`
-
-To export the spec to a file:
-
-\`\`\`bash
-curl http://localhost:8000/openapi.json > openapi/bugpilot_v1.json
-\`\`\``,
-  },
-  architecture: {
-    slug: "architecture",
-    title: "Architecture",
-    category: "Reference",
-    content: `# Architecture Overview
-
-BugPilot turns a vague symptom — "payment service is slow" — into ranked, evidence-backed debugging hypotheses with suggested safe actions. This document explains the system architecture, data flow, and key design decisions.
-
----
-
-## System Diagram
-
-\`\`\`
-┌─────────────────────────────────────────────────────────────────────┐
-│                          User / CI Pipeline                         │
-└───────────────────────────────┬─────────────────────────────────────┘
-                                │ CLI (typer + rich)
-                                ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      BugPilot REST API (FastAPI)                     │
-│                                                                     │
-│  /auth  /investigations  /evidence  /hypotheses  /actions           │
-│  /graph  /webhooks  /service-mappings  /admin  /health  /metrics    │
-└──────────┬───────────────────────────────────────────────┬──────────┘
-           │                                               │
-           ▼                                               ▼
-┌──────────────────┐                           ┌──────────────────────┐
-│   PostgreSQL     │                           │   Evidence Collector  │
-│  (async/asyncpg) │◄──────────────────────────│  (asyncio.gather)    │
-└──────────────────┘                           └──────┬───────────────┘
-                                                      │ concurrent
-           ┌──────────────────────────────────────────┼──────────────────┐
-           ▼                 ▼                ▼        ▼       ▼         ▼
-     ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌────┐  ┌────┐  ┌───────┐
-     │ Datadog  │  │   Grafana    │  │CloudWatch│  │ K8s│  │ GH │  │  PD   │
-     └──────────┘  └──────────────┘  └──────────┘  └────┘  └────┘  └───────┘
-\`\`\`
-
----
-
-## Core Concepts
-
-### Investigation
-
-An **Investigation** is the top-level container for a debugging session. It is created either manually via CLI/API or automatically when a webhook alert arrives. An investigation tracks:
-
-- The affected service(s)
-- A timeline of events
-- Evidence collected from connectors
-- Hypotheses about the root cause
-- Actions taken (with approvals)
-- The final outcome
-
-Investigations can be **branched** for parallel hypothesis exploration. Each branch gets its own graph slice without affecting the main investigation.
-
-### Evidence
-
-**Evidence items** are normalised facts collected from connectors. Each item has:
-
-- \`source_system\` — which connector produced it (e.g. \`datadog\`, \`github\`)
-- \`capability\` — what kind of data it is (\`LOGS\`, \`METRICS\`, \`DEPLOYMENTS\`, etc.)
-- \`normalized_summary\` — a ≤500-character human-readable summary (always kept)
-- \`payload_ref\` — reference to the full raw payload in external storage (nulled after TTL)
-- \`reliability_score\` — 0-1 score adjusted for staleness and source quality
-- \`is_redacted\` — whether PII/secrets have been scrubbed
-- \`redaction_manifest\` — a log of what was redacted and why
-
-Evidence is **never sent to an LLM in raw form**. The privacy layer redacts it first.
-
-### Investigation Graph
-
-Every investigation maintains a **graph** (not a simple list) of nodes and edges. Nodes represent symptoms, services, evidence items, and deployment events. Edges represent causal and temporal relationships.
-
-\`\`\`
-[Symptom: 5xx rate spike]
-       │
-       ├──caused_by──► [Evidence: Datadog alert at 14:31]
-       │
-       └──correlates_with──► [Deployment: a3f8c2d at 14:23]
-                                    │
-                                    └──code_change──► [GitHub commit: Update Stripe SDK v4]
-\`\`\`
-
-The graph is stored as \`GraphNodeModel\` and \`GraphEdgeModel\` rows, and can be queried as a \`GraphSlice\` — a lightweight in-memory snapshot used by the hypothesis engine and LLM layer.
-
-### Hypothesis Engine
-
-The hypothesis engine runs a **6-pass pipeline** on each \`GraphSlice\`:
-
-1. **Rule-based pass** — Pattern matching for known failure modes:
-   - OOMKilled / memory spike → Memory Exhaustion hypothesis
-   - 5xx errors + recent deployment → Bad Deployment Introduced Regression
-   - High latency + multiple services → Upstream Dependency Degradation
-
-2. **Graph correlation pass** — Scores hypotheses by edge density. Symptoms with ≥3 connected edges and related services generate Service Graph Anomaly hypotheses with confidence proportional to edge count.
-
-3. **Historical reranking** — (When DB context is available) Previous investigations with similar evidence patterns adjust confidence scores.
-
-4. **LLM synthesis pass** — If the graph slice is redacted (\`is_redacted=True\`), the LLM is asked to generate additional hypotheses not already covered by rule-based or graph passes. **The LLM never receives raw evidence.**
-
-5. **Merge and deduplicate** — Jaccard word-overlap similarity. Duplicates above the threshold (0.75) are merged, keeping the higher-confidence version.
-
-6. **Rank** — Sorted by confidence_score descending. In single-lane investigations (evidence from only one capability type), all scores are capped at 0.4 and \`is_single_lane=True\` is set.
-
-### Privacy and Redaction
-
-BugPilot enforces a strict privacy boundary. Before any data can be sent to an LLM provider, it must pass through the redaction pipeline:
-
-**Patterns scrubbed:**
-- Email addresses
-- Phone numbers (E.164 and US formats)
-- JSON Web Tokens
-- Bearer tokens
-- Payment card numbers (Luhn)
-- AWS secret access keys
-- PEM private keys
-
-The \`LLMService.complete()\` method raises \`ValueError\` if a non-redacted \`GraphSlice\` is passed. This is enforced at the code level, not configuration.
-
-### Deduplication
-
-When a new investigation is created (manually or via webhook), BugPilot checks for existing open investigations with overlapping context using a **weighted similarity score**:
-
-| Dimension | Weight | Description |
-|-----------|--------|-------------|
-| Service overlap | 40% | Jaccard overlap of linked service names |
-| Time overlap | 30% | Overlap of evidence time windows |
-| Alert signature | 20% | Hash match on alert name / monitor name |
-| Symptom text | 10% | Word-overlap on title strings |
-
-If the score exceeds 0.85, the new investigation is flagged as a potential duplicate. BugPilot **never silently merges** — it reports the match and lets the user decide.
-
-### Remediation and Approval
-
-Actions suggested by BugPilot are assigned a risk level. The approval requirement depends on role:
-
-| Risk level | Approval required |
-|-----------|-------------------|
-| \`low\` | None — any investigator can run |
-| \`medium\` | \`approver\` role |
-| \`high\` | \`approver\` role |
-| \`critical\` | \`approver\` role |
-
-Every action supports a **dry-run mode** that simulates the action and prints what would happen without making any changes.
-
----
-
-## Database Schema Summary
-
-BugPilot uses 21 PostgreSQL tables:
-
-\`\`\`
-organisations → licenses → users → sessions
-organisations → investigations → branches
-investigations → graph_nodes
-investigations → graph_edges
-investigations → evidence_items → hypothesis_evidence_links → hypotheses
-hypotheses → actions → approvals
-investigations → outcomes
-organisations → connector_configs
-organisations → service_mapping_models
-organisations → retention_policies
-organisations → audit_logs
-organisations → llm_usage_logs
-\`\`\`
-
-All primary keys are UUIDs. All timestamps are \`TIMESTAMPTZ\`. JSON columns use PostgreSQL's \`JSONB\` type for indexability. A cross-dialect \`TypeDecorator\` ensures the test suite works with SQLite.
-
----
-
-## Authentication Flow
-
-\`\`\`
-CLI                         API                      DB
- │                           │                        │
- │── POST /auth/activate ───►│                        │
- │   {license_key, device_fp}│                        │
- │                           │── verify license ─────►│
- │                           │── check device count ──►│
- │                           │── create Session ──────►│
- │◄── {jwt_token, refresh} ──│                        │
- │                           │                        │
- │── (on expiry) POST /auth/ │                        │
- │   refresh {refresh_token} │                        │
- │◄── {new_jwt, new_refresh} │                        │
-\`\`\`
-
-- JWT tokens are short-lived (1 hour by default)
-- Refresh tokens are opaque (stored as bcrypt hashes)
-- Each refresh rotates both tokens
-- \`logout\` revokes the session row
-
----
-
-## API Versioning
-
-All routes live under \`/api/v1/\`. The health and metrics endpoints are at the root:
-
-\`\`\`
-GET  /health           Liveness probe
-GET  /health/ready     Readiness probe (checks DB)
-GET  /metrics          Prometheus metrics (text/plain)
-\`\`\`
-
----
-
-## Observability
-
-### Prometheus Metrics
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| \`bugpilot_activations_total\` | Counter | License activations |
-| \`bugpilot_active_investigations\` | Gauge | Open investigations |
-| \`bugpilot_investigation_duration_seconds\` | Histogram | Time from open to resolved |
-| \`bugpilot_time_to_first_hypothesis_seconds\` | Histogram | Time from open to first hypothesis |
-| \`bugpilot_connector_errors_total\` | Counter | Per-connector errors (label: connector) |
-| \`bugpilot_connector_rate_limits_total\` | Counter | Per-connector 429s |
-| \`bugpilot_webhook_verification_failures_total\` | Counter | Webhook HMAC failures |
-| \`bugpilot_llm_requests_total\` | Counter | LLM completions (label: provider) |
-| \`bugpilot_llm_tokens_total\` | Counter | LLM tokens used |
-| \`bugpilot_http_requests_total\` | Counter | HTTP requests (label: method, path, status) |
-| \`bugpilot_http_request_duration_seconds\` | Histogram | HTTP latency |
-
-### Structured Logging
-
-All log output is structured JSON (via structlog) with consistent fields:
-
-\`\`\`json
-{
-  "timestamp": "2024-01-15T14:31:00.123Z",
-  "level": "info",
-  "event": "hypothesis_generated",
-  "investigation_id": "inv_7f3a2b",
-  "count": 3,
-  "is_single_lane": false
-}
-\`\`\`
-
-In development (TTY), logs are printed in a human-readable format with colour.
-
----
-
-## Retention and Data Lifecycle
-
-BugPilot implements a three-phase retention policy configurable per organisation:
-
-| Phase | Default | Action |
-|-------|---------|--------|
-| Investigation archive | 365 days | Resolved investigations are archived |
-| Evidence metadata | 90 days | Evidence rows are deleted |
-| Raw payload expiry | 30 days | \`payload_ref\` is nulled (row kept) |
-
-Each phase writes an \`AuditLog\` entry before any data mutation, making the operation fully auditable and idempotent. A daily purge job runs \`RetentionService.run_daily_purge()\` across all organisations.
-
----
-
-## Security Design Principles
-
-1. **Credentials never stored plaintext.** Connector credentials are Fernet-encrypted before database storage.
-2. **Passwords hashed with bcrypt.** All secrets (license keys, tokens) are stored as bcrypt or SHA-256 hashes.
-3. **LLM boundary enforced in code.** \`LLMService\` raises \`ValueError\` for non-redacted input — not a config flag.
-4. **Org isolation at every query.** All database queries filter by \`org_id\`. No cross-org data access is possible through the API.
-5. **Webhook signatures verified.** All four webhook handlers verify HMAC-SHA256 signatures with a dual-secret grace window for rotation.
-6. **Role-based access control.** Four roles (viewer, investigator, approver, admin) with a typed permission matrix. Elevation is never implicit.`,
-  },
   troubleshooting: {
     slug: "troubleshooting",
     title: "Troubleshooting",
@@ -3646,280 +3440,162 @@ Common issues and how to resolve them.
 
 ### \`bugpilot: command not found\`
 
-The CLI is not installed or not on \`PATH\`.
+The CLI binary is not on your \`PATH\`.
 
+**macOS (Homebrew):** Homebrew adds the binary automatically. Try opening a new terminal window, or run:
 \`\`\`bash
-pip install -e ./cli
-# or
-pip install bugpilot
+brew link bugpilot
 \`\`\`
 
-Check your Python bin directory is on PATH:
-
+**macOS (.pkg installer):** The installer places the binary at \`/usr/local/bin/bugpilot\`. If it's not found, check that \`/usr/local/bin\` is in your PATH:
 \`\`\`bash
-python3 -c "import sys; print(sys.prefix + '/bin')"
-export PATH="$PATH:$(python3 -c 'import sys; print(sys.prefix + "/bin")')"
+echo \$PATH | tr ':' '\\n' | grep /usr/local/bin
 \`\`\`
+
+**Windows (Scoop):** Scoop adds its shims directory to PATH automatically. Try opening a new PowerShell or Command Prompt window.
+
+**Windows (.msi installer):** Open a new terminal window after installation. If still not found, add the install directory to your PATH manually in **System Properties → Environment Variables**.
 
 ---
 
-### \`Error: Could not connect to BugPilot API at http://localhost:8000\`
+### \`Error: Could not connect to BugPilot API\`
 
-The backend is not running or the URL is wrong.
+The CLI cannot reach \`https://api.bugpilot.io\`.
 
+- Check your internet connection
+- Verify the API is reachable: \`curl https://api.bugpilot.io/health\`
+- If you're using a custom API URL (self-hosted), check \`BUGPILOT_API_URL\` is set correctly
+- Check if a corporate firewall or proxy is blocking outbound HTTPS
+
+---
+
+### \`401 Unauthorized\`
+
+Your session has expired or credentials are invalid.
+
+Re-activate the CLI:
 \`\`\`bash
-# Check the backend
-curl http://localhost:8000/health
-# Should return: {"status":"ok"}
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY --secret YOUR_API_SECRET
+\`\`\`
 
-# Check what URL the CLI is using
+Or check who you're currently logged in as:
+\`\`\`bash
 bugpilot auth whoami
-# Look for: connecting to: http://...
+\`\`\`
 
-# Override the URL
-export BUGPILOT_API_URL=https://your-bugpilot.example.com
+If credentials are corrupted, clear them and re-activate:
+\`\`\`bash
+rm ~/.config/bugpilot/credentials.json
+bugpilot auth activate --key bp_YOUR_LICENSE_KEY --secret YOUR_API_SECRET
 \`\`\`
 
 ---
 
-### \`Error: 401 Unauthorized — session expired\`
+### \`403 Forbidden — insufficient role\`
 
-Your JWT has expired. The CLI automatically refreshes tokens, but if the refresh token has also expired (sessions last 30 days), you need to re-activate.
+Your account role does not have permission for this action.
+
+\`\`\`
+✗ Error: 403 Forbidden — insufficient role for this action
+  Your role: investigator
+  Required:  approver
+\`\`\`
+
+Ask your admin to assign you the required role. See [Manage Users and Roles](/docs/rbac).
+
+---
+
+### \`fix run\` asks for confirmation before executing
+
+\`bugpilot fix run\` always shows the action details and prompts before executing. Use \`--yes\` / \`-y\` to skip the prompt:
 
 \`\`\`bash
-bugpilot auth activate --license-key bp_YOUR_KEY
+bugpilot fix run act_d2f4e1 --yes
 \`\`\`
 
 ---
 
-### \`Error: 403 Forbidden — insufficient role\`
+## Evidence Issues
 
-You don't have the required role for this action.
-
-| Command | Required role |
-|---------|--------------|
-| \`bugpilot fix approve\` | \`approver\` |
-| \`bugpilot auth whoami\` → admin routes | \`admin\` |
-
-Contact your org admin to update your role.
-
----
-
-## Backend / API Issues
-
-### \`sqlalchemy.exc.OperationalError: could not connect to server\`
-
-PostgreSQL is not reachable.
-
-\`\`\`bash
-# Check PostgreSQL is running
-pg_isready -h localhost -p 5432
-
-# Check the connection string
-psql "$DATABASE_URL"
-
-# For Docker Compose
-docker compose ps postgres
-docker compose logs postgres
-\`\`\`
-
----
-
-### \`alembic.util.exc.CommandError: Can't locate revision\`
-
-The database has not been migrated.
-
-\`\`\`bash
-cd backend
-alembic upgrade head
-\`\`\`
-
----
-
-### \`cryptography.fernet.InvalidToken\`
-
-The \`FERNET_KEY\` in the environment doesn't match the key used to encrypt stored credentials. This happens if you rotated the key without re-encrypting stored data.
-
-\`\`\`bash
-# Check the key format
-python3 -c "
-from cryptography.fernet import Fernet
-import base64, os
-key = os.environ['FERNET_KEY'].encode()
-# Should not raise:
-Fernet(key)
-print('Key is valid')
-"
-\`\`\`
-
-If you have changed the key, you need to re-enter credentials for all configured connectors via the admin API.
-
----
-
-### \`ValueError: SECURITY: Attempted to send non-redacted GraphSlice to LLM provider\`
-
-This is a safety check — BugPilot is preventing raw (potentially sensitive) evidence from being sent to an LLM. This should not appear in normal use. If you see it:
-
-1. Check that evidence collection is calling the redaction pipeline before passing data to the hypothesis engine
-2. In tests, ensure \`GraphSlice.is_redacted=True\` when testing LLM-related code paths
-
----
-
-### Pydantic validation error on startup
+### Hypotheses have low confidence or are capped at 40%
 
 \`\`\`
-pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
+⚠ Evidence from a single source only. Confidence scores capped at 40%.
+  Add evidence from a second source to improve hypothesis quality.
 \`\`\`
 
-A required environment variable is missing. BugPilot will tell you which one. Common missing variables:
-
-- \`DATABASE_URL\` — PostgreSQL connection string
-- \`JWT_SECRET\` — must be at least 32 characters
-- \`FERNET_KEY\` — must be a valid Fernet key (base64-encoded 32 bytes)
-
----
-
-## Connector Issues
-
-### \`Connector degraded: timeout after 45s\`
-
-A connector didn't respond within the 45-second collection window.
-
-**Check:**
-1. Is the target system reachable from the BugPilot host?
-   \`\`\`bash
-   curl -I https://api.datadoghq.com/api/v1/validate -H "DD-API-KEY: $KEY"
-   \`\`\`
-2. Are credentials valid?
-   \`\`\`bash
-   curl http://localhost:8000/api/v1/admin/connectors/validate \\
-     -H "Authorization: Bearer $TOKEN"
-   \`\`\`
-3. Is the network allowing outbound HTTPS from the container?
-
----
-
-### \`401 Unauthorized\` from Datadog/Grafana connector
-
-Credentials have expired or permissions are insufficient.
-
-- **Datadog:** Verify \`DD-API-KEY\` and \`DD-APPLICATION-KEY\` in the Datadog portal. Check that the App key has \`logs_read_data\` and \`metrics_read\` scopes.
-- **Grafana:** Check the service account token hasn't expired (Grafana → Administration → Service accounts).
-
----
-
-### \`CloudWatch: SignatureDoesNotMatch\`
-
-The AWS credentials are invalid or the request is being made too long after the timestamp in the signature.
-
-\`\`\`bash
-# Verify your credentials
-aws sts get-caller-identity \\
-  --access-key-id "$AWS_ACCESS_KEY_ID" \\
-  --secret-access-key "$AWS_SECRET_ACCESS_KEY" \\
-  --region us-east-1
-\`\`\`
-
-Ensure the BugPilot host's system clock is accurate (within 5 minutes of AWS time). Use NTP.
-
----
-
-## Webhook Issues
-
-### \`401 Unauthorized\` on webhook endpoint
-
-The HMAC signature doesn't match. Common causes:
-
-1. **Wrong secret** — The secret registered in BugPilot doesn't match the one configured in your monitoring platform.
-2. **Encoding mismatch** — The payload is being modified in transit (e.g. by a proxy that normalises JSON whitespace). BugPilot computes the HMAC over the exact raw bytes received.
-3. **Stale secret** — You rotated the secret in the monitoring platform but forgot to update BugPilot (or vice versa).
-
-Use the dual-secret rotation feature to rotate without downtime.
-
----
-
-### Webhook received but no investigation created
-
-Check the webhook delivery logs:
-
-\`\`\`bash
-curl http://localhost:8000/api/v1/admin/webhooks/deliveries \\
-  -H "Authorization: Bearer $ADMIN_TOKEN"
-\`\`\`
-
-Also check the structured logs:
-
-\`\`\`bash
-docker compose logs backend | grep webhook | jq '.'
-\`\`\`
-
----
-
-## Evidence / Hypothesis Issues
-
-### \`⚠ Evidence from single source only — confidence capped at 40%\`
-
-This is a warning, not an error. BugPilot has evidence from only one connector capability type. The hypothesis engine is working correctly but with less data.
-
-**Fix:** Configure additional connectors (e.g. if you only have Datadog logs, add Datadog metrics, or configure GitHub for deployment data).
+Add evidence from at least one additional source. Even a brief metric snapshot or deployment event significantly improves hypothesis accuracy.
 
 ---
 
 ### No hypotheses generated
 
-The hypothesis engine has minimum requirements before generating:
-- At least 1 symptom node in the graph
-- At least 1 service/component node
-- At least 2 evidence items
+Hypotheses require:
+1. At least one evidence item attached to the investigation
+2. At least one service name recorded (via \`--service\` on triage or in evidence)
+3. Evidence with sufficient content in the summary field
 
-Check evidence was collected:
-
+If you have evidence but still see no hypotheses, try updating the investigation to set a service:
 \`\`\`bash
-bugpilot evidence list INVESTIGATION_ID
-\`\`\`
-
-If evidence is empty, re-collect:
-
-\`\`\`bash
-bugpilot evidence collect INVESTIGATION_ID --since 2h
+bugpilot investigate update inv_7f3a2b --description "Affects: payment-service"
 \`\`\`
 
 ---
 
-## Performance Issues
+## Webhook Issues
 
-### Slow evidence collection
+### \`401\` on webhook delivery
 
-Evidence collection runs concurrently across all connectors. A slow connector drags out the total time. Check which connector is slow:
+The webhook signature does not match.
 
-\`\`\`bash
-bugpilot evidence collect INVESTIGATION_ID --since 1h
-# Look at per-connector latency in the output table
-\`\`\`
-
-If one connector is consistently slow, consider increasing its timeout or investigating the root cause on the source system.
+- Verify the webhook secret registered in BugPilot matches the secret configured in your monitoring platform exactly (no extra spaces or encoding differences)
+- If you recently rotated the secret, allow up to 1 hour for the grace window to expire
+- Check the \`bugpilot_webhook_verification_failures_total\` metric for patterns
 
 ---
 
-### High database memory usage
+### Webhook received but no investigation created
 
-BugPilot stores JSONB payloads in PostgreSQL. Run the retention purge to clean up old data:
+- Check the BugPilot API structured logs for the webhook receipt event
+- Verify the payload format matches the expected schema for your source (Datadog, Grafana, CloudWatch, or PagerDuty)
+- If the dedup check matched an existing open investigation, the webhook will have updated it rather than creating a new one — check \`bugpilot investigate list --status open\`
+
+---
+
+## Action Approval Issues
+
+### \`fix run\` fails with "approval required"
+
+Actions with risk level \`medium\`, \`high\`, or \`critical\` require approval from an \`approver\` or \`admin\` before they can be run.
 
 \`\`\`bash
-docker compose exec backend python3 -c "
-import asyncio
-from app.services.retention_service import RetentionService
-..."
+# Ask an approver to run:
+bugpilot fix approve act_d2f4e1
+
+# Then run:
+bugpilot fix run act_d2f4e1 --yes
 \`\`\`
 
 ---
 
-## Getting Help
+## Export Issues
 
+### \`export markdown\` produces empty sections
+
+Sections like **Root Cause** are empty if no hypothesis has been confirmed. Confirm the root cause hypothesis first:
+
+\`\`\`bash
+bugpilot hypotheses confirm hyp_f3a1d2
+bugpilot export markdown inv_7f3a2b
+\`\`\`
+
+---
+
+## Getting More Help
+
+- **Verbose output:** Add \`-o verbose\` to any command to see full request/response details
 - **GitHub Issues:** https://github.com/skonlabs/bugpilot/issues
-- **API Docs (local):** http://localhost:8000/docs
-- **Health check:** \`curl http://localhost:8000/health/ready\`
-- **Verbose logging:** Set \`LOG_LEVEL=debug\` in your environment`,
+- **Docs:** [bugpilot.io/docs](https://bugpilot.io/docs)`,
   },
 };
 
@@ -3928,7 +3604,7 @@ export function getDocPage(slug: string): DocPage | undefined {
 }
 
 export function getAdjacentPages(slug: string): { prev?: DocPage; next?: DocPage } {
-  const allSlugs = docsCategories.flatMap((c) => c.items);
+  const allSlugs = docsCategories.flatMap((cat) => cat.items);
   const idx = allSlugs.indexOf(slug);
   return {
     prev: idx > 0 ? docsPages[allSlugs[idx - 1]] : undefined,
