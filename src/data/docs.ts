@@ -533,7 +533,7 @@ bugpilot hypotheses list --investigation-id inv_7f3a2b -o json \\
   webhooks: {
     slug: "webhooks",
     title: "Configure Webhooks",
-    category: "Investigating Incidents",
+    category: "Setup & Configure",
     content: `# How to Configure Webhooks (Automatic Mode)
 
 BugPilot can receive webhooks from your monitoring platforms to automatically create and triage investigations when alerts fire — eliminating the manual step of opening an investigation.
