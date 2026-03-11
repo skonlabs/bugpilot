@@ -71,7 +71,7 @@ export default function DocsLayout() {
           <span className="text-sm font-medium">Docs</span>
           <div className="flex-1" />
           <Link to="/sign-in" className="text-sm text-muted-foreground hover:text-foreground">Sign In</Link>
-          <button className="lg:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
+          <button className="md:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
@@ -79,7 +79,7 @@ export default function DocsLayout() {
 
       <div className="flex flex-1">
         {/* Desktop sidebar */}
-        <aside className="hidden w-64 shrink-0 border-r lg:block">
+        <aside className="hidden w-64 shrink-0 border-r md:block">
           <div className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-auto">
             {sidebar}
           </div>
@@ -87,7 +87,7 @@ export default function DocsLayout() {
 
         {/* Mobile sidebar */}
         {sidebarOpen && (
-          <div className="fixed inset-0 top-14 z-40 bg-background lg:hidden">
+          <div className="fixed inset-0 top-14 z-40 bg-background md:hidden">
             {sidebar}
           </div>
         )}
