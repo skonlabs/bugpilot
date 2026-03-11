@@ -71,7 +71,7 @@ export default function DocsLayout() {
           <span className="text-sm font-medium">Docs</span>
           <div className="flex-1" />
           <Link to="/sign-in" className="text-sm text-muted-foreground hover:text-foreground">Sign In</Link>
-          <button className="lg:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
+          <button className="md:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
