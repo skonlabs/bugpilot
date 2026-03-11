@@ -5,8 +5,25 @@ build-backend = "hatchling.build"
 [project]
 name = "bugpilot"
 version = "0.1.0"
-description = "BugPilot CLI"
+description = "CLI-first developer tool for debugging production incidents"
+readme = "README.md"
+license = { text = "Proprietary" }
 requires-python = ">=3.11"
+authors = [
+    { name = "skonlabs", email = "hello@bugpilot.io" },
+]
+keywords = ["debugging", "incidents", "observability", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Monitoring",
+]
 dependencies = [
     "typer>=0.12.0",
     "rich>=13.7.0",
@@ -17,15 +34,26 @@ dependencies = [
     "pyyaml>=6.0.0",
 ]
 
+[project.urls]
+Homepage = "https://bugpilot.io"
+Documentation = "https://bugpilot.io/docs"
+Repository = "https://github.com/skonlabs/bugpilot"
+"Bug Tracker" = "https://github.com/skonlabs/bugpilot/issues"
+Changelog = "https://github.com/skonlabs/bugpilot/releases"
+
 [project.scripts]
-bugpilot = "bugpilot.main:app"
+bugpilot = "bugpilot.main:main_entry"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "respx>=0.21.0",
+    "pyinstaller>=6.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["bugpilot"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
