@@ -52,14 +52,17 @@ function renderContent(content: string) {
     }
   };
 
+  let lastWasEmpty = false;
+
   while (i < lines.length) {
     const line = lines[i];
 
     if (line.startsWith("```")) {
+      lastWasEmpty = false;
       if (inCodeBlock) {
         const code = codeLines.join("\n");
         elements.push(
-          <div key={`code-${i}`} className="group relative my-4 rounded-lg bg-foreground text-primary-foreground">
+          <div key={`code-${i}`} className="group relative my-3 rounded-lg bg-foreground text-primary-foreground">
             <CopyButton text={code} />
             <pre className="overflow-x-auto p-4 font-mono text-sm leading-relaxed"><code>{code}</code></pre>
           </div>
@@ -83,6 +86,7 @@ function renderContent(content: string) {
 
     // Callouts
     if (line.startsWith(":::")) {
+      lastWasEmpty = false;
       const type = line.replace(":::", "").trim();
       const calloutLines: string[] = [];
       i++;
@@ -93,7 +97,7 @@ function renderContent(content: string) {
       i++; // skip closing :::
       const isWarning = type === "warning";
       elements.push(
-        <div key={`callout-${i}`} className={`my-4 flex gap-3 rounded-lg border p-4 ${isWarning ? "border-warning/30 bg-warning/5" : "border-info/30 bg-info/5"}`}>
+        <div key={`callout-${i}`} className={`my-3 flex gap-3 rounded-lg border p-4 ${isWarning ? "border-warning/30 bg-warning/5" : "border-info/30 bg-info/5"}`}>
           {isWarning ? <AlertTriangle className="h-5 w-5 shrink-0 text-warning" /> : <Info className="h-5 w-5 shrink-0 text-info" />}
           <div className="text-sm" dangerouslySetInnerHTML={{ __html: inlineFormat(calloutLines.join("\n")) }} />
         </div>
@@ -103,6 +107,7 @@ function renderContent(content: string) {
 
     // Table
     if (line.includes("|") && line.trim().startsWith("|")) {
+      lastWasEmpty = false;
       const cells = line.split("|").filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
       if (!inTable) inTable = true;
       tableRows.push(cells);
@@ -112,30 +117,42 @@ function renderContent(content: string) {
       flushTable();
     }
 
+    // Skip blank lines (collapse all whitespace gaps — spacing is handled by element margins)
+    if (line.trim() === "") {
+      i++;
+      lastWasEmpty = true;
+      continue;
+    }
+
+    // --- horizontal rule
+    if (line.startsWith("---")) {
+      lastWasEmpty = false;
+      // Skip — we use heading margins instead of explicit rules
+      i++;
+      continue;
+    }
+
+    lastWasEmpty = false;
+
     // Headers
     if (line.startsWith("# ")) {
-      elements.push(<h1 key={`h1-${i}`} className="mb-4 text-3xl font-bold tracking-tight">{line.slice(2)}</h1>);
+      elements.push(<h1 key={`h1-${i}`} className="mb-3 text-3xl font-bold tracking-tight">{line.slice(2)}</h1>);
     } else if (line.startsWith("## ")) {
-      elements.push(<h2 key={`h2-${i}`} id={line.slice(3).toLowerCase().replace(/\s+/g, "-")} className="mb-3 mt-10 scroll-mt-20 text-xl font-bold">{line.slice(3)}</h2>);
+      elements.push(<h2 key={`h2-${i}`} id={line.slice(3).toLowerCase().replace(/\s+/g, "-")} className="mb-2 mt-8 scroll-mt-20 text-xl font-bold">{line.slice(3)}</h2>);
     } else if (line.startsWith("### ")) {
-      elements.push(<h3 key={`h3-${i}`} id={line.slice(4).toLowerCase().replace(/\s+/g, "-")} className="mb-2 mt-6 scroll-mt-20 text-lg font-semibold">{line.slice(4)}</h3>);
-    } else if (line.startsWith("---")) {
-      elements.push(<hr key={`hr-${i}`} className="my-8" />);
+      elements.push(<h3 key={`h3-${i}`} id={line.slice(4).toLowerCase().replace(/\s+/g, "-")} className="mb-1.5 mt-5 scroll-mt-20 text-lg font-semibold">{line.slice(4)}</h3>);
     } else if (line.match(/^\d+\.\s/)) {
-      // Ordered list item
       const text = line.replace(/^\d+\.\s/, "");
       elements.push(
-        <li key={`li-${i}`} className="ml-6 list-decimal text-muted-foreground" dangerouslySetInnerHTML={{ __html: inlineFormat(text) }} />
+        <li key={`li-${i}`} className="ml-6 list-decimal text-muted-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: inlineFormat(text) }} />
       );
     } else if (line.startsWith("- ")) {
       elements.push(
-        <li key={`li-${i}`} className="ml-6 list-disc text-muted-foreground" dangerouslySetInnerHTML={{ __html: inlineFormat(line.slice(2)) }} />
+        <li key={`li-${i}`} className="ml-6 list-disc text-muted-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: inlineFormat(line.slice(2)) }} />
       );
-    } else if (line.trim() === "") {
-      elements.push(<div key={`br-${i}`} className="h-3" />);
     } else {
       elements.push(
-        <p key={`p-${i}`} className="text-muted-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />
+        <p key={`p-${i}`} className="text-muted-foreground leading-relaxed mb-1" dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />
       );
     }
     i++;
