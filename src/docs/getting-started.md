@@ -6,7 +6,7 @@ BugPilot is a CLI tool that helps you debug production incidents. You install it
 
 ## Step 1: Register
 
-Go to [bugpilot.io](https://bugpilot.io) and create an account. After registration, copy your **license key** and **API secret** from the credentials page.
+Go to [bugpilot.io](https://bugpilot.io) and create an account. After registration, copy your **license key** from the credentials page.
 
 ---
 
@@ -53,7 +53,7 @@ bugpilot --version
 Activation links the CLI to your account. The first time you run this command, BugPilot displays its Terms of Service — you must accept them to proceed.
 
 ```bash
-bugpilot auth activate --key YOUR_LICENSE_KEY --secret YOUR_API_SECRET
+bugpilot auth activate --key YOUR_LICENSE_KEY
 ```
 
 You will be prompted to accept the Terms of Service and enter your email:

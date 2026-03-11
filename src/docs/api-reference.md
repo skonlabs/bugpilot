@@ -27,8 +27,8 @@ Exchange a license key for access and refresh tokens.
 {
   "license_key": "bp_T7zK9mNvXq...",
   "email": "alice@acme.com",
-  "display_name": "Alice Smith",
-  "device_fingerprint": "sha256_of_hardware_uuid_and_system"
+  "device_fp": "sha256_of_mac_address_os_arch",
+  "display_name": "Alice Smith"
 }
 ```
 
@@ -38,8 +38,10 @@ Exchange a license key for access and refresh tokens.
   "access_token": "eyJ...",
   "refresh_token": "eyJ...",
   "token_type": "bearer",
+  "expires_in": 3600,
   "org_id": "org_acme",
-  "user_id": "usr_a3f8c2"
+  "user_id": "usr_a3f8c2",
+  "role": "investigator"
 }
 ```
 
@@ -209,7 +211,7 @@ Create a hypothesis manually.
   "description": "Stripe SDK v4 changed preferences API contract",
   "confidence_score": 0.72,
   "reasoning": "Deployment at 14:23 correlates with error onset at 14:31",
-  "evidence_ids": ["ev_9c1d3e", "ev_a2b4f1"]
+  "supporting_evidence": ["ev_9c1d3e", "ev_a2b4f1"]
 }
 ```
 

@@ -25,7 +25,7 @@ bugpilot [OPTIONS] COMMAND [ARGS]...
 - **`json`** — machine-readable JSON on stdout. Use in scripts and CI.
 - **`verbose`** — all fields with syntax highlighting. Use for debugging.
 
-Setting `BUGPILOT_INVESTIGATION` (or passing `--investigation`) lets you omit `-i`/`--investigation-id` from every subsequent command for the duration of a shell session.
+**Investigation context** — The most convenient way to set the active investigation is `bugpilot incident open <id>`, which saves the ID to `~/.config/bugpilot/context.json` and persists across shell sessions. Alternatively, export `BUGPILOT_INVESTIGATION=<id>` for the current session, or pass `--investigation/-i` per command. Priority: explicit flag > env var > saved context file.
 
 ---
 
@@ -36,18 +36,17 @@ Setting `BUGPILOT_INVESTIGATION` (or passing `--investigation`) lets you omit `-
 Link the CLI to your BugPilot account. Displays Terms of Service on first run. Run once per machine.
 
 ```
-bugpilot auth activate [--key KEY] [--secret SECRET] [--email EMAIL] [--name NAME]
+bugpilot auth activate [--key KEY] [--email EMAIL] [--name NAME]
 ```
 
 | Option | Short | Env var | Description |
 |--------|-------|---------|-------------|
 | `--key` | `-k` | `BUGPILOT_LICENSE_KEY` | License key. Prompted if omitted. |
-| `--secret` | `-s` | `BUGPILOT_API_SECRET` | API secret. Prompted if omitted. |
 | `--email` | `-e` | — | Your email address. Prompted if omitted. |
 | `--name` | — | — | Optional display name. |
 
 ```
-$ bugpilot auth activate --key YOUR_LICENSE_KEY --secret YOUR_API_SECRET
+$ bugpilot auth activate --key YOUR_LICENSE_KEY
 
 [Terms of Service displayed — accept/decline]
 
@@ -66,6 +65,16 @@ End the session and clear stored credentials.
 
 ```
 bugpilot auth logout
+```
+
+---
+
+### `auth status`
+
+Show the current session status — authentication state, role, and org.
+
+```
+bugpilot auth status
 ```
 
 ---
@@ -90,10 +99,12 @@ User ID:      usr_a3f8c2
 
 ## `bugpilot license`
 
-Show license information and seat usage.
+### `license status`
+
+Show license tier, device count, expiry, and entitlements.
 
 ```
-bugpilot license
+bugpilot license status
 ```
 
 ---
@@ -273,13 +284,13 @@ bugpilot investigate update INVESTIGATION_ID
 
 ### `investigate close`
 
-Mark an investigation as closed.
+Mark an investigation as `closed`.
 
 ```
 bugpilot investigate close INVESTIGATION_ID
 ```
 
-Also available as the top-level alias `bugpilot resolve`.
+Sets status to `closed`. Use `bugpilot resolve` if you want to mark the investigation as `resolved` (with an optional outcome note) and clear the stored investigation context.
 
 ---
 
@@ -317,9 +328,10 @@ bugpilot incident open INVESTIGATION_ID
 
 ```
 $ bugpilot incident open inv_7f3a2b
-✓ Active investigation set to inv_7f3a2b
-  (stored in BUGPILOT_INVESTIGATION for this session)
+✓ Current investigation set to: inv_7f3a2b
 ```
+
+The investigation ID is persisted to `~/.config/bugpilot/context.json` so it survives across shell sessions. It takes precedence over the `BUGPILOT_INVESTIGATION` environment variable.
 
 ---
 
@@ -362,7 +374,7 @@ bugpilot investigation export [-i INVESTIGATION_ID] [-f FORMAT] [-o FILE]
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--investigation-id` | `-i` | `$BUGPILOT_INVESTIGATION` | Investigation ID |
+| `--investigation` | `-i` | stored context | Investigation ID |
 | `--format` | `-f` | `json` | `json` \| `markdown` |
 | `--output` | `-o` | stdout | Write to file instead of stdout |
 
@@ -454,11 +466,15 @@ bugpilot evidence show EVIDENCE_ID
 
 ### `evidence refresh`
 
-Re-fetch an evidence item from its source connector.
+Re-fetch and re-normalize all evidence for an investigation from its source connectors.
 
 ```
-bugpilot evidence refresh EVIDENCE_ID
+bugpilot evidence refresh --investigation-id ID
 ```
+
+| Option | Short | Required | Description |
+|--------|-------|----------|-------------|
+| `--investigation-id` | `-i` | Yes (or `BUGPILOT_INVESTIGATION`) | Investigation ID |
 
 ---
 
@@ -636,6 +652,16 @@ Execute this action? [y/N]: y
 
 ---
 
+### `fix dry-run`
+
+Simulate an action without executing it. Shows predicted changes without applying them.
+
+```
+bugpilot fix dry-run ACTION_ID
+```
+
+---
+
 ### `fix cancel`
 
 Cancel a pending or approved action.
@@ -682,7 +708,7 @@ bugpilot summary [-i INVESTIGATION_ID]
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--investigation-id` | `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+| `--investigation` | `-i` | Investigation ID (or stored context) |
 
 ---
 
@@ -697,7 +723,7 @@ bugpilot ask QUESTION [-i INVESTIGATION_ID]
 | Argument/Option | Description |
 |-----------------|-------------|
 | `QUESTION` | Your question (positional) |
-| `--investigation-id` / `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+| `--investigation` / `-i` | Investigation ID (or stored context) |
 
 ```
 $ bugpilot ask "What changed in the 10 minutes before the errors started?" -i inv_7f3a2b
@@ -722,7 +748,7 @@ bugpilot compare [--last-healthy | --last-stable-post-deploy | --user-pinned] [-
 | `--last-healthy` | Compare against the last healthy state (default) |
 | `--last-stable-post-deploy` | Compare against the last stable state after a deploy |
 | `--user-pinned` | Compare against a user-pinned baseline |
-| `--investigation-id` / `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+| `--investigation` / `-i` | Investigation ID (or stored context) |
 
 ---
 
@@ -736,7 +762,7 @@ bugpilot timeline [-i INVESTIGATION_ID]
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--investigation-id` | `-i` | Investigation ID (or `BUGPILOT_INVESTIGATION`) |
+| `--investigation` | `-i` | Investigation ID (or stored context) |
 
 ```
 $ bugpilot timeline -i inv_7f3a2b
@@ -754,27 +780,33 @@ $ bugpilot timeline -i inv_7f3a2b
 
 ## `bugpilot resolve`
 
-Top-level alias for `bugpilot investigate close`. Marks an investigation as resolved.
+Mark an investigation as `resolved`. Unlike `bugpilot investigate close` (which sets status to `closed`), this sets status to `resolved` and optionally records a resolution outcome. Also clears the stored investigation context when the resolved investigation matches the current context.
 
 ```
-bugpilot resolve INVESTIGATION_ID
+bugpilot resolve [-i INVESTIGATION_ID] [--outcome TEXT]
 ```
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--investigation` | `-i` | Investigation ID (or stored context) |
+| `--outcome` | `-o` | Brief description of the resolution (stored as an outcome record) |
 
 ---
 
 ## `bugpilot history`
 
-Show the history of investigations for the current org, including resolved and closed ones.
+List past resolved and closed investigations for the current org.
 
 ```
-bugpilot history [-i INVESTIGATION_ID] [--page N] [--page-size N]
+bugpilot history [--page N] [--page-size N] [--severity LEVEL] [--service NAME]
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--investigation-id` / `-i` | Show history for a specific investigation |
-| `--page` | Page number (default: 1) |
+| `--page` / `-p` | Page number (default: 1) |
 | `--page-size` | Results per page (default: 20) |
+| `--severity` | Filter by severity: `critical` \| `high` \| `medium` \| `low` |
+| `--service` | Filter by affected service name |
 
 ---
 
@@ -783,10 +815,9 @@ bugpilot history [-i INVESTIGATION_ID] [--page N] [--page-size N]
 | Variable | Description |
 |----------|-------------|
 | `BUGPILOT_API_URL` | Override the API endpoint (default: `https://api.bugpilot.io`) |
-| `BUGPILOT_ANALYSIS_URL` | Analysis engine URL (required for `summary`, `ask`, `compare`) |
-| `BUGPILOT_INVESTIGATION` | Default investigation ID — set via `incident open` or manually |
+| `BUGPILOT_ANALYSIS_URL` | Analysis engine URL (defaults to `BUGPILOT_API_URL`; required for `summary`, `ask`, `compare`) |
+| `BUGPILOT_INVESTIGATION` | Default investigation ID — overridden by `incident open` (persisted to `~/.config/bugpilot/context.json`) |
 | `BUGPILOT_LICENSE_KEY` | License key, read by `auth activate --key` |
-| `BUGPILOT_API_SECRET` | API secret, read by `auth activate --secret` |
 | `BUGPILOT_OUTPUT` | Default output format: `human` \| `json` \| `verbose` |
 | `NO_COLOR` | Set to any non-empty value to disable colour |
 
@@ -798,7 +829,6 @@ bugpilot history [-i INVESTIGATION_ID] [--page N] [--page-size N]
 # Activate non-interactively
 bugpilot auth activate \
   --key "$BUGPILOT_LICENSE_KEY" \
-  --secret "$BUGPILOT_API_SECRET" \
   --email "$BUGPILOT_EMAIL"
 
 # Machine-readable output
