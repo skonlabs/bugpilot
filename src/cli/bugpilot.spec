@@ -12,10 +12,11 @@ import sys
 from pathlib import Path
 
 # Locate the CLI package root so imports resolve correctly.
-cli_root = str(Path(SPECPATH).parent)  # noqa: F821 — SPECPATH is injected by PyInstaller
+# SPECPATH is the directory containing this .spec file (i.e. src/cli/).
+cli_root = str(Path(SPECPATH))  # noqa: F821 — SPECPATH is injected by PyInstaller
 
 a = Analysis(
-    [str(Path(SPECPATH).parent / "bugpilot" / "main.py")],  # noqa: F821
+    [str(Path(SPECPATH) / "bugpilot" / "main.py")],  # noqa: F821
     pathex=[cli_root],
     binaries=[],
     datas=[],

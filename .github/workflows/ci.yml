@@ -50,10 +50,15 @@ jobs:
       - name: Parse spec (no build)
         run: |
           python -c "
-          import PyInstaller.config
-          PyInstaller.config.CONF['workpath'] = '/tmp/pyibuild'
-          PyInstaller.config.CONF['distpath'] = '/tmp/pydist'
-          from PyInstaller.building.build_main import Analysis
+          import sys
+          from pathlib import Path
+          spec = Path('src/cli/bugpilot.spec').read_text()
+          # Verify the entry point path resolves correctly
+          entry = Path('src/cli/bugpilot/main.py')
+          assert entry.exists(), f'Entry point not found: {entry}'
+          print(f'Entry point OK: {entry}')
+          # Ensure spec file is syntactically valid Python
+          compile(spec, 'bugpilot.spec', 'exec')
           print('Spec parsed OK')
           "
 
