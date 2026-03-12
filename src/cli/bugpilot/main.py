@@ -4,7 +4,6 @@ Registers all sub-command groups and sets up shared context.
 """
 from __future__ import annotations
 
-import os
 from typing import Optional
 
 import typer
@@ -37,6 +36,7 @@ app = typer.Typer(
     name="bugpilot",
     help="BugPilot - CLI-first debugging and investigation platform",
     no_args_is_help=True,
+    invoke_without_command=True,
     rich_markup_mode="rich",
 )
 

@@ -11,8 +11,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_success
-from bugpilot.output.json_out import print_json
+from bugpilot.output.human import print_error, print_success
 from bugpilot.session import APIError
 from bugpilot.commands.export_helpers import collect_investigation_bundle, render_markdown
 

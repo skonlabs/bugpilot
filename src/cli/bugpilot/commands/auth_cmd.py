@@ -202,7 +202,7 @@ def cmd_status(ctx: typer.Context) -> None:
             if app_ctx.output_format == "json":
                 print_json({"authenticated": True, **data})
             else:
-                console.print(f"[green]✓[/green] Authenticated")
+                console.print("[green]✓[/green] Authenticated")
                 console.print(f"[bold]User:[/bold] {data.get('email')}")
                 console.print(f"[bold]Role:[/bold] {data.get('role')}")
                 console.print(f"[bold]Org:[/bold] {data.get('org_id')}")
