@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
+  "version": "0.1.0",
+  "description": "CLI-first developer tool for debugging production incidents",
+  "homepage": "https://bugpilot.io",
+  "license": "Proprietary",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/skonlabs/bugpilot/releases/download/v0.1.0/bugpilot-windows-x86_64.exe",
+      "hash": "REPLACE_WITH_SHA256"
+    }
+  },
+  "bin": [["bugpilot-windows-x86_64.exe", "bugpilot"]],
+  "checkver": {
+    "github": "https://github.com/skonlabs/bugpilot"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/skonlabs/bugpilot/releases/download/v$version/bugpilot-windows-x86_64.exe"
+      }
+    }
+  }
+}

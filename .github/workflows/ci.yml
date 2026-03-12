@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    name: Test / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install CLI with dev dependencies
+        run: pip install "./src/cli[dev]"
+
+      - name: Run tests
+        run: |
+          cd src/cli
+          pytest
+
+  # Verify the PyInstaller spec parses without errors on Linux.
+  # Full binary builds only run in the release workflow (matrix across OSes).
+  spec-check:
+    name: PyInstaller spec check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          pip install "./src/cli"
+          pip install "pyinstaller>=6.0"
+
+      - name: Parse spec (no build)
+        run: |
+          python -c "
+          import PyInstaller.config
+          PyInstaller.config.CONF['workpath'] = '/tmp/pyibuild'
+          PyInstaller.config.CONF['distpath'] = '/tmp/pydist'
+          from PyInstaller.building.build_main import Analysis
+          print('Spec parsed OK')
+          "
+
+  # Quick lint — no heavy linter setup, just import hygiene.
+  lint:
+    name: Lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check src/cli/bugpilot/
