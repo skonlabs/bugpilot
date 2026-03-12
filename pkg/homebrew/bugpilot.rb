@@ -15,23 +15,18 @@
 class Bugpilot < Formula
   desc     "CLI-first developer tool for debugging production incidents"
   homepage "https://bugpilot.io"
-  version  "0.1.0"
+  version  "0.3.0"
   license  "Proprietary"
 
-  # Pre-built binaries (no Python required on the user's machine).
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-arm64"
-      sha256 "REPLACE_WITH_ARM64_SHA256"
-    else
-      url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-x86_64"
-      sha256 "REPLACE_WITH_X86_64_SHA256"
-    end
+  # Pre-built binary (Apple Silicon only — no Python required on the user's machine).
+  # Note: only arm64 is provided; Intel Mac users should use pip install bugpilot.
+  on_arm do
+    url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-arm64"
+    sha256 "REPLACE_WITH_ARM64_SHA256_AFTER_RELEASE"
   end
 
   def install
-    binary = Hardware::CPU.arm? ? "bugpilot-macos-arm64" : "bugpilot-macos-x86_64"
-    bin.install binary => "bugpilot"
+    bin.install "bugpilot-macos-arm64" => "bugpilot"
   end
 
   # Shell completion (generated from the CLI at install time).
