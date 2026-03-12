@@ -59,7 +59,7 @@ def cmd_open(
         print_json({"current_investigation_id": investigation_id})
     else:
         print_success(f"Current investigation set to: {investigation_id}")
-        console.print(f"[dim]You can now run commands without --investigation-id.[/dim]")
+        console.print("[dim]You can now run commands without --investigation-id.[/dim]")
 
 
 def _get_ctx(typer_ctx: typer.Context) -> AppContext:
@@ -115,7 +115,7 @@ def cmd_triage(
             else:
                 print_success(f"Incident triage started! Investigation: {investigation_id}")
                 print_investigation(inv)
-                console.print(f"\n[dim]Next steps:[/dim]")
+                console.print("\n[dim]Next steps:[/dim]")
                 console.print(f"  bugpilot evidence collect --investigation-id {investigation_id} ...")
                 console.print(f"  bugpilot hypotheses list --investigation-id {investigation_id}")
         except APIError as e:

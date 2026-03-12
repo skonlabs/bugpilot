@@ -10,7 +10,6 @@ import typer
 
 from bugpilot.context import AppContext
 from bugpilot.output.human import (
-    console,
     print_error,
     print_investigation,
     print_investigation_list,

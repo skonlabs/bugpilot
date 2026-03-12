@@ -11,7 +11,7 @@ import typer
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_action_list, print_error, print_success
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError, api_get, api_patch, api_post
+from bugpilot.session import APIError, api_get, api_post
 
 app = typer.Typer(help="Remediation action commands")
 
@@ -174,7 +174,7 @@ def cmd_dry_run(
                 print_json(data)
             else:
                 console.print(f"[bold]Dry-run result for:[/bold] {action_id}")
-                console.print(f"[dim]Predicted changes:[/dim]")
+                console.print("[dim]Predicted changes:[/dim]")
                 changes = data.get("predicted_changes") or data.get("dry_run_output") or str(data)
                 console.print(changes)
         except APIError as e:
