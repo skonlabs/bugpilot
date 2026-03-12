@@ -18,10 +18,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-13          # Intel x86_64
-            target: bugpilot-macos-x86_64
-            asset_name: bugpilot-macos-x86_64
-
           - os: macos-14          # Apple Silicon arm64
             target: bugpilot-macos-arm64
             asset_name: bugpilot-macos-arm64
@@ -38,6 +34,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
 
       - uses: actions/setup-python@v5
         with:
@@ -93,6 +91,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ github.token }}
 
       - uses: actions/setup-python@v5
         with:
@@ -120,6 +120,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          token: ${{ github.token }}
           fetch-depth: 0   # needed for release notes generation
 
       - name: Download all artifacts
@@ -144,7 +145,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/bugpilot-macos-x86_64
             dist/bugpilot-macos-arm64
             dist/bugpilot-linux-x86_64
             dist/bugpilot-windows-x86_64.exe
