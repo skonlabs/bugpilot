@@ -18,7 +18,7 @@ from bugpilot.config_loader import (
     ConnectorEntry,
 )
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_info, print_success
+from bugpilot.output.human import console, debug_exc, print_error, print_info, print_success
 from bugpilot.output.json_out import print_json
 
 app = typer.Typer(help="Manage data source connectors")
@@ -220,7 +220,8 @@ def cmd_test(
         async with app_ctx.make_analysis_client() as client:
             for name, entry in to_test.items():
                 label = name if name == entry.kind else f"{name} ({entry.kind})"
-                console.print(f"  Testing [bold]{label}[/bold]...", end=" ")
+                if app_ctx.output_format != "json":
+                    console.print(f"  Testing [bold]{label}[/bold]...", end=" ")
                 try:
                     r = await client.post(
                         "/api/v1/admin/connectors/test",
@@ -229,14 +230,18 @@ def cmd_test(
                     if r.status_code == 200:
                         latency = r.json().get("latency_ms")
                         suffix = f" [dim]{latency:.0f}ms[/dim]" if latency else ""
-                        console.print(f"[green]✓ OK[/green]{suffix}")
+                        if app_ctx.output_format != "json":
+                            console.print(f"[green]✓ OK[/green]{suffix}")
                         results[name] = {"status": "ok"}
                     else:
                         detail = r.json().get("detail", r.text)
-                        console.print(f"[red]✗ FAILED[/red] — {detail}")
+                        if app_ctx.output_format != "json":
+                            console.print(f"[red]✗ FAILED[/red] — {detail}")
                         results[name] = {"status": "failed", "detail": detail}
                 except Exception as exc:
-                    console.print(f"[red]✗ ERROR[/red] — {exc}")
+                    if app_ctx.output_format != "json":
+                        console.print(f"[red]✗ ERROR[/red] — {exc}")
+                    debug_exc(app_ctx.debug)
                     results[name] = {"status": "error", "detail": str(exc)}
 
         if app_ctx.output_format == "json":

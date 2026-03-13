@@ -9,7 +9,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_success
+from bugpilot.output.human import console, debug_exc, print_error, print_success
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, api_patch
 
@@ -62,6 +62,7 @@ def cmd_resolve(
                 console.print("[dim]Investigation context cleared.[/dim]")
         except APIError as e:
             print_error(f"Resolve failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

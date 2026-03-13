@@ -9,7 +9,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error
+from bugpilot.output.human import console, debug_exc, print_error
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, api_get
 
@@ -56,6 +56,7 @@ def cmd_history(
                 console.print(f"[dim]Page {page} — showing {len(items)} of {total}[/dim]")
         except APIError as e:
             print_error(f"Failed to fetch history: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

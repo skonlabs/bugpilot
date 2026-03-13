@@ -12,6 +12,11 @@ from rich.console import Console
 from bugpilot.context import AppContext
 
 console = Console()
+error_console = Console(stderr=True)
+
+# Mirrors app_ctx.debug so that main_entry()'s last-resort handler can show
+# full tracebacks even if the exception escaped before app_ctx was set.
+_debug_mode: bool = False
 
 app = typer.Typer(
     name="bugpilot",
@@ -102,6 +107,13 @@ def main(
         envvar="NO_COLOR",
         help="Disable coloured output",
     ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        "-D",
+        envvar="BUGPILOT_DEBUG",
+        help="Show full error tracebacks for debugging",
+    ),
     investigation: Optional[str] = typer.Option(
         None,
         "--investigation",
@@ -118,6 +130,9 @@ def main(
     ),
 ) -> None:
     """BugPilot: symptom → evidence → timeline → hypotheses → safest next action."""
+    global _debug_mode
+    _debug_mode = debug
+
     if version:
         from bugpilot import __version__
         console.print(f"bugpilot {__version__}")
@@ -126,6 +141,7 @@ def main(
     app_ctx = AppContext(
         output_format=output_format,
         no_color=no_color,
+        debug=debug,
     )
     if api_url:
         app_ctx.api_url = api_url
@@ -145,8 +161,14 @@ def main_entry() -> None:
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted.[/yellow]")
         raise SystemExit(130)
+    except SystemExit:
+        raise
     except Exception as exc:
-        console.print(f"[bold red]Error:[/bold red] {exc}")
+        if _debug_mode:
+            error_console.print_exception(show_locals=False)
+        else:
+            error_console.print(f"[bold red]Error:[/bold red] {exc}")
+            error_console.print("[dim]Run with --debug for full traceback.[/dim]")
         raise SystemExit(1)
 
 

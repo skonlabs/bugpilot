@@ -9,7 +9,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_evidence_list, print_success
+from bugpilot.output.human import console, debug_exc, print_error, print_evidence_list, print_success
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, api_delete, api_get, api_post, api_post_analysis
 
@@ -48,6 +48,7 @@ def cmd_list(
                 print_evidence_list(data["items"], data["total"])
         except APIError as e:
             print_error(f"Failed to list evidence: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -91,6 +92,7 @@ def cmd_collect(
                     console.print(f"[dim]Expires:[/dim] {data['expires_at']}")
         except APIError as e:
             print_error(f"Failed to collect evidence: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -114,6 +116,7 @@ def cmd_get(
                 print_json_data(data)
         except APIError as e:
             print_error(f"Evidence not found: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -137,6 +140,7 @@ def cmd_show(
                 print_json_data(data)
         except APIError as e:
             print_error(f"Evidence not found: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -164,6 +168,7 @@ def cmd_refresh(
                     console.print(f"[dim]Refreshed:[/dim] {data['refreshed']} items")
         except APIError as e:
             print_error(f"Evidence refresh failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -186,6 +191,7 @@ def cmd_delete(
             print_success(f"Evidence {evidence_id} deleted.")
         except APIError as e:
             print_error(f"Delete failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

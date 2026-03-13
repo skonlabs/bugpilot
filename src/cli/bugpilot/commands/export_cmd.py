@@ -11,7 +11,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import print_error, print_success
+from bugpilot.output.human import debug_exc, print_error, print_success
 from bugpilot.session import APIError
 from bugpilot.commands.export_helpers import collect_investigation_bundle, render_markdown
 
@@ -46,6 +46,7 @@ def cmd_json(
                 print(serialized)
         except APIError as e:
             print_error(f"Export failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -71,6 +72,7 @@ def cmd_markdown(
                 print(md)
         except APIError as e:
             print_error(f"Export failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

@@ -9,7 +9,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_action_list, print_error, print_success
+from bugpilot.output.human import console, debug_exc, print_action_list, print_error, print_success
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, api_get, api_post
 
@@ -47,6 +47,7 @@ def cmd_list(
                 print_action_list(data["items"], data["total"])
         except APIError as e:
             print_error(f"Failed to list actions: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -92,6 +93,7 @@ def cmd_suggest(
                 console.print(f"\n[dim]To approve:[/dim] bugpilot fix approve {data['id']}")
         except APIError as e:
             print_error(f"Failed to suggest action: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -115,6 +117,7 @@ def cmd_approve(
                 console.print(f"[dim]To execute:[/dim] bugpilot fix run {action_id}")
         except APIError as e:
             print_error(f"Approve failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -141,6 +144,7 @@ def cmd_run(
             typer.confirm("Execute this action?", abort=True)
         except APIError as e:
             print_error(f"Failed to fetch action: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     async def _run():
@@ -154,6 +158,7 @@ def cmd_run(
                     console.print(f"[dim]Result:[/dim] {data['result']}")
         except APIError as e:
             print_error(f"Execution failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -179,6 +184,7 @@ def cmd_dry_run(
                 console.print(changes)
         except APIError as e:
             print_error(f"Dry-run failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -201,6 +207,7 @@ def cmd_cancel(
                 print_success(f"Action cancelled: {action_id}")
         except APIError as e:
             print_error(f"Cancel failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

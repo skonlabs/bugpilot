@@ -9,11 +9,19 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_investigation, print_success
+from bugpilot.output.human import console, debug_exc, print_error, print_investigation, print_success
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, api_get, api_post
 
 app = typer.Typer(help="Incident triage commands")
+
+
+def _get_ctx(typer_ctx: typer.Context) -> AppContext:
+    ctx: AppContext = typer_ctx.obj
+    if not ctx.load_credentials():
+        print_error("Not authenticated. Run: bugpilot auth activate")
+        raise typer.Exit(1)
+    return ctx
 
 
 @app.command("list")
@@ -42,6 +50,7 @@ def cmd_list(
                 print_investigation_list(data["items"], data["total"])
         except APIError as e:
             print_error(f"Failed to list incidents: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -60,14 +69,6 @@ def cmd_open(
     else:
         print_success(f"Current investigation set to: {investigation_id}")
         console.print("[dim]You can now run commands without --investigation-id.[/dim]")
-
-
-def _get_ctx(typer_ctx: typer.Context) -> AppContext:
-    ctx: AppContext = typer_ctx.obj
-    if not ctx.load_credentials():
-        print_error("Not authenticated. Run: bugpilot auth activate")
-        raise typer.Exit(1)
-    return ctx
 
 
 @app.command("triage")
@@ -120,6 +121,7 @@ def cmd_triage(
                 console.print(f"  bugpilot hypotheses list --investigation-id {investigation_id}")
         except APIError as e:
             print_error(f"Triage failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -160,6 +162,7 @@ def cmd_status(
                 console.print(f"[bold]Actions:[/bold] {act_data.get('total', 0)} items")
         except APIError as e:
             print_error(f"Failed to get status: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

@@ -7,7 +7,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error
+from bugpilot.output.human import console, debug_exc, print_error
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, api_get
 
@@ -45,6 +45,7 @@ def cmd_status(ctx: typer.Context) -> None:
                     console.print(f"[bold]Entitlements:[/bold] {', '.join(entitlements)}")
         except APIError as e:
             print_error(f"Failed to get license status: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

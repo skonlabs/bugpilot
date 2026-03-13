@@ -13,7 +13,7 @@ from rich.prompt import Confirm, Prompt
 from bugpilot.auth.client import activate, logout, whoami
 from bugpilot.config_loader import TOS_FILE, CONFIG_DIR
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_info, print_success
+from bugpilot.output.human import console, debug_exc, print_error, print_info, print_success
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, BackendUnavailableError
 
@@ -79,14 +79,33 @@ def _get_ctx(typer_ctx: typer.Context) -> AppContext:
     return typer_ctx.obj
 
 
-def _ensure_tos_accepted() -> None:
-    """Display T&C and require acceptance. Exits if declined."""
+def _ensure_tos_accepted(accept_tos: bool = False) -> None:
+    """Display T&C and require acceptance before activation.
+
+    If accept_tos is True (--accept-tos flag), the prompt is bypassed —
+    useful for CI/scripted installs where stdin is not a TTY.
+    """
     if TOS_FILE.exists():
-        return  # Already accepted
+        return  # Already accepted in a previous run
 
     console.print(Panel(_TOS_TEXT, title="Terms of Service", border_style="yellow"))
 
-    accepted = Confirm.ask("\nDo you accept the Terms of Service?", default=False)
+    if accept_tos:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        TOS_FILE.write_text("accepted\n")
+        TOS_FILE.chmod(0o600)
+        print_success("Terms of Service accepted (--accept-tos).")
+        console.print()
+        return
+
+    try:
+        accepted = Confirm.ask("\nDo you accept the Terms of Service?", default=False)
+    except (EOFError, KeyboardInterrupt):
+        console.print()
+        console.print("[red]Terms of Service: no input received (non-interactive terminal).[/red]")
+        console.print("[dim]Use --accept-tos to accept in non-interactive environments.[/dim]")
+        raise typer.Exit(1)
+
     if not accepted:
         console.print("[red]Terms of Service declined. BugPilot will not be activated.[/red]")
         raise typer.Exit(1)
@@ -106,17 +125,45 @@ def cmd_activate(
     ),
     email: Optional[str] = typer.Option(None, "--email", "-e", help="Your email address"),
     display_name: Optional[str] = typer.Option(None, "--name", help="Your display name"),
+    accept_tos: bool = typer.Option(
+        False,
+        "--accept-tos",
+        help="Accept Terms of Service non-interactively (for scripted/CI use)",
+        envvar="BUGPILOT_ACCEPT_TOS",
+    ),
 ) -> None:
     """Activate a BugPilot license and store credentials."""
     app_ctx = _get_ctx(ctx)
 
     # Terms of Service must be accepted before activation
-    _ensure_tos_accepted()
+    _ensure_tos_accepted(accept_tos=accept_tos)
 
     if not license_key:
-        license_key = Prompt.ask("[bold]Enter your license key[/bold]", password=True)
+        console.print("[dim]Your license key will be hidden while typing.[/dim]")
+        try:
+            license_key = Prompt.ask("[bold]Enter your license key[/bold]", password=True)
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            print_error("No license key entered.")
+            raise typer.Exit(1)
+
+    license_key = (license_key or "").strip()
+    if not license_key:
+        print_error("License key cannot be empty.")
+        raise typer.Exit(1)
+
     if not email:
-        email = Prompt.ask("[bold]Enter your email address[/bold]")
+        try:
+            email = Prompt.ask("[bold]Enter your email address[/bold]")
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            print_error("No email entered.")
+            raise typer.Exit(1)
+
+    email = (email or "").strip()
+    if not email:
+        print_error("Email address cannot be empty.")
+        raise typer.Exit(1)
 
     async def _run():
         try:
@@ -139,12 +186,14 @@ def cmd_activate(
                 console.print(Panel(_NEXT_STEPS, border_style="green"))
         except BackendUnavailableError:
             print_error(
-                "Cannot reach BugPilot API. Check your network connection and API URL.\n"
-                "  API URL: " + app_ctx.api_url
+                "Cannot reach BugPilot API. Check your network connection.\n"
+                f"  API URL: {app_ctx.api_url}"
             )
+            debug_exc(app_ctx.debug)
             raise typer.Exit(2)
         except APIError as e:
             print_error(f"Activation failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -186,9 +235,11 @@ def cmd_whoami(ctx: typer.Context) -> None:
                 console.print(f"[bold]User ID:[/bold] {data.get('user_id')}")
         except BackendUnavailableError:
             print_error("Cannot reach BugPilot API. Check your network connection.")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(2)
         except APIError as e:
             print_error(f"Failed to get user info: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -217,9 +268,11 @@ def cmd_status(ctx: typer.Context) -> None:
                 console.print(f"[bold]Org:[/bold] {data.get('org_id')}")
         except BackendUnavailableError:
             print_error("Cannot reach BugPilot API. Check your network connection.")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(2)
         except APIError as e:
             print_error(f"Session check failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

@@ -35,6 +35,7 @@ class AppContext:
     analysis_api_url: str = field(default_factory=_default_analysis_url)
     output_format: str = "human"  # "human" | "json" | "verbose"
     no_color: bool = False
+    debug: bool = False
     current_investigation_id: Optional[str] = field(default=None)
     _access_token: Optional[str] = field(default=None, repr=False)
     _refresh_token: Optional[str] = field(default=None, repr=False)
