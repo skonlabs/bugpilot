@@ -4,17 +4,14 @@ Config commands - manage ~/.config/bugpilot/config.yaml
 from __future__ import annotations
 
 import typer
-from rich.panel import Panel
-from rich import box
 
 from bugpilot.config_loader import (
     CONFIG_DIR,
     CONFIG_YAML,
-    CONNECTOR_FIELDS,
     BugPilotConfig,
 )
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_info, print_success, print_warning
+from bugpilot.output.human import console, print_info, print_success, print_warning
 from bugpilot.output.json_out import print_json
 
 app = typer.Typer(help="Manage BugPilot configuration")

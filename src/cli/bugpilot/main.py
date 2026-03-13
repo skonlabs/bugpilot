@@ -4,7 +4,6 @@ Registers all sub-command groups and sets up shared context.
 """
 from __future__ import annotations
 
-import os
 from typing import Optional
 
 import typer

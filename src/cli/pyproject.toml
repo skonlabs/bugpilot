@@ -6,7 +6,6 @@ build-backend = "hatchling.build"
 name = "bugpilot"
 version = "0.3.0"
 description = "CLI-first developer tool for debugging production incidents"
-readme = "README.md"
 license = { text = "Proprietary" }
 requires-python = ">=3.11"
 authors = [

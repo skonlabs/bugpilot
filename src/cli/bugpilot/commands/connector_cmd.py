@@ -20,7 +20,6 @@ from bugpilot.config_loader import (
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_error, print_info, print_success
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError
 
 app = typer.Typer(help="Manage data source connectors")
 

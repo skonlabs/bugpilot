@@ -11,7 +11,7 @@ from typing import Optional
 import httpx
 
 from bugpilot.context import AppContext
-from bugpilot.session import APIError, _raise_for_status
+from bugpilot.session import _raise_for_status
 
 
 def _generate_device_fingerprint() -> str:
