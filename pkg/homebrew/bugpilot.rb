@@ -15,7 +15,7 @@
 class Bugpilot < Formula
   desc     "CLI-first developer tool for debugging production incidents"
   homepage "https://bugpilot.io"
-  version  "0.1.0"
+  version  "0.3.0"
   license  "Proprietary"
 
   # Pre-built binaries (no Python required on the user's machine).
