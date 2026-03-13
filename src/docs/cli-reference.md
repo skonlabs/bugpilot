@@ -57,6 +57,17 @@ Enter your email address: alice@acme.com
 
 Session is stored at `~/.config/bugpilot/credentials.json` (permissions `600`).
 
+**JSON output (`-o json`):**
+
+```json
+{
+  "status": "activated",
+  "org_id": "org_acme",
+  "user_id": "usr_a3f8c2",
+  "role": "investigator"
+}
+```
+
 ---
 
 ### `auth logout`
@@ -67,6 +78,12 @@ End the session and clear stored credentials.
 bugpilot auth logout
 ```
 
+**JSON output (`-o json`):**
+
+```json
+{ "status": "logged_out" }
+```
+
 ---
 
 ### `auth status`
@@ -75,6 +92,19 @@ Show the current session status — authentication state, role, and org.
 
 ```
 bugpilot auth status
+```
+
+**JSON output (`-o json`):**
+
+```json
+{
+  "authenticated": true,
+  "email": "alice@acme.com",
+  "display_name": "Alice Smith",
+  "role": "investigator",
+  "org_id": "org_acme",
+  "user_id": "usr_a3f8c2"
+}
 ```
 
 ---
@@ -93,6 +123,18 @@ Display name: Alice Smith
 Role:         investigator
 Org ID:       org_acme
 User ID:      usr_a3f8c2
+```
+
+**JSON output (`-o json`):**
+
+```json
+{
+  "email": "alice@acme.com",
+  "display_name": "Alice Smith",
+  "role": "investigator",
+  "org_id": "org_acme",
+  "user_id": "usr_a3f8c2"
+}
 ```
 
 ---
@@ -128,13 +170,14 @@ bugpilot connector list
 Add or update a connector interactively.
 
 ```
-bugpilot connector add TYPE [--overwrite]
+bugpilot connector add TYPE [--name NAME] [--overwrite]
 ```
 
-| Argument/Option | Description |
-|-----------------|-------------|
-| `TYPE` | Connector type: `datadog` \| `grafana` \| `cloudwatch` \| `github` \| `kubernetes` \| `pagerduty` |
-| `--overwrite` | Overwrite existing connector without prompting |
+| Argument/Option | Short | Description |
+|-----------------|-------|-------------|
+| `TYPE` | — | Connector type: `datadog` \| `grafana` \| `cloudwatch` \| `github` \| `kubernetes` \| `pagerduty` |
+| `--name` | `-n` | Custom name for this connector instance (default: same as TYPE). Use a distinct name to configure multiple instances of the same type, e.g. `--name grafana-prod` and `--name grafana-staging`. |
+| `--overwrite` | — | Overwrite existing connector without prompting |
 
 ```
 $ bugpilot connector add datadog
@@ -146,6 +189,10 @@ Configure datadog connector
   Site (e.g. datadoghq.com) [datadoghq.com]:
 
 ✓ Connector 'datadog' saved to ~/.config/bugpilot/config.yaml
+
+# Multiple instances of the same type:
+$ bugpilot connector add grafana --name grafana-prod
+$ bugpilot connector add grafana --name grafana-staging
 ```
 
 ---
@@ -155,8 +202,10 @@ Configure datadog connector
 Remove a connector from config.
 
 ```
-bugpilot connector remove TYPE [--yes]
+bugpilot connector remove CONNECTOR_NAME [--yes]
 ```
+
+`CONNECTOR_NAME` is the name shown in `bugpilot connector list`. For connectors added without `--name`, this is the connector type (e.g. `datadog`). For named instances it is the custom name (e.g. `grafana-prod`).
 
 `--yes` / `-y` — skip confirmation.
 
@@ -164,10 +213,10 @@ bugpilot connector remove TYPE [--yes]
 
 ### `connector test`
 
-Test connector connectivity. Omit `TYPE` to test all.
+Test connector connectivity. Omit `CONNECTOR_NAME` to test all.
 
 ```
-bugpilot connector test [TYPE]
+bugpilot connector test [CONNECTOR_NAME]
 ```
 
 ```
@@ -175,6 +224,16 @@ $ bugpilot connector test
 
   Testing datadog...  ✓ OK
   Testing grafana...  ✓ OK
+```
+
+**JSON output (`-o json`):**
+
+```json
+{
+  "datadog":  { "status": "ok", "latency_ms": 84 },
+  "grafana":  { "status": "ok", "latency_ms": 112 },
+  "cloudwatch": { "status": "failed", "detail": "InvalidClientTokenId: The security token is invalid." }
+}
 ```
 
 ---
@@ -313,8 +372,15 @@ bugpilot investigate delete INVESTIGATION_ID [--yes]
 List recent incidents.
 
 ```
-bugpilot incident list [--status STATUS] [--page N] [--page-size N]
+bugpilot incident list [--status STATUS] [--severity LEVEL] [--page N] [--page-size N]
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--status, -s` | Filter: `open` \| `in_progress` \| `resolved` \| `closed` (default: `open`) |
+| `--severity` | Filter: `critical` \| `high` \| `medium` \| `low` |
+| `--page, -p` | Page number (default: 1) |
+| `--page-size` | Results per page (default: 20) |
 
 ---
 
@@ -358,6 +424,17 @@ Show a full summary of an active investigation — evidence count, hypotheses, a
 
 ```
 bugpilot incident status INVESTIGATION_ID
+```
+
+**JSON output (`-o json`):**
+
+```json
+{
+  "investigation": { "id": "inv_7f3a2b", "title": "High error rate on payment-service", "status": "open", "severity": "high" },
+  "evidence":      { "total": 4 },
+  "hypotheses":    { "total": 3, "confirmed": 0, "rejected": 1 },
+  "actions":       { "total": 1, "pending": 1, "completed": 0 }
+}
 ```
 
 ---
@@ -442,6 +519,20 @@ bugpilot evidence collect \
   --summary "Commit a3f8c2d: Update Stripe SDK v4, deployed at 14:23 UTC"
 ```
 
+**JSON output (`-o json`):**
+
+```json
+{
+  "id": "evi_b3c4d5",
+  "label": "payment-service error logs",
+  "kind": "log_snapshot",
+  "source": "datadog://logs?service=payment-service&env=prod",
+  "summary": "47 NullPointerException at UserService.java:142 starting 14:31 UTC",
+  "connector_id": null,
+  "expires_at": null
+}
+```
+
 ---
 
 ### `evidence get`
@@ -509,6 +600,24 @@ $ bugpilot hypotheses list --investigation-id inv_7f3a2b
    1    Bad deployment introduced regression   72%         active
    2    Memory exhaustion                      41%         active
    3    Upstream dependency degradation        28%         active
+```
+
+**JSON output (`-o json`):**
+
+```json
+{
+  "items": [
+    {
+      "id": "hyp_a1b2c3",
+      "title": "Bad deployment introduced regression",
+      "confidence": 0.72,
+      "status": "active",
+      "reasoning": "Deployment correlates with error onset within 8 minutes.",
+      "evidence_ids": ["evi_x1", "evi_x2"]
+    }
+  ],
+  "total": 3
+}
 ```
 
 ---
@@ -610,6 +719,18 @@ bugpilot fix suggest
 | `--description` | `-d` | No | — | What the action does |
 | `--hypothesis-id` | — | No | — | Hypothesis this action targets |
 | `--rollback-plan` | — | No | — | How to undo this action |
+
+**JSON output (`-o json`):**
+
+```json
+{
+  "id": "act_d2f4e1",
+  "title": "Rollback deployment a3f8c2d",
+  "type": "rollback",
+  "risk_level": "low",
+  "status": "pending"
+}
+```
 
 **Approval rules:**
 
