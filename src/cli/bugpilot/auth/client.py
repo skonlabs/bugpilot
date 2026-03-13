@@ -11,7 +11,7 @@ from typing import Optional
 import httpx
 
 from bugpilot.context import AppContext
-from bugpilot.session import _raise_for_status
+from bugpilot.session import BackendUnavailableError, _raise_for_status
 
 
 def _generate_device_fingerprint() -> str:
@@ -35,18 +35,21 @@ async def activate(
     """
     device_fp = _generate_device_fingerprint()
 
-    async with httpx.AsyncClient(base_url=ctx.api_url, timeout=30.0) as client:
-        r = await client.post(
-            "/api/v1/auth/activate",
-            json={
-                "license_key": license_key,
-                "email": email,
-                "device_fp": device_fp,
-                "display_name": display_name,
-            },
-        )
-        _raise_for_status(r)
-        resp = r.json()
+    try:
+        async with httpx.AsyncClient(base_url=ctx.api_url, timeout=30.0) as client:
+            r = await client.post(
+                "/api/v1/auth/activate",
+                json={
+                    "license_key": license_key,
+                    "email": email,
+                    "device_fp": device_fp,
+                    "display_name": display_name,
+                },
+            )
+            _raise_for_status(r)
+            resp = r.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        raise BackendUnavailableError(str(exc)) from exc
 
     ctx.save_credentials(
         access_token=resp["access_token"],
@@ -78,7 +81,10 @@ async def logout(ctx: AppContext) -> None:
 
 async def whoami(ctx: AppContext) -> dict:
     """Return current user information from the API."""
-    async with ctx.make_client() as client:
-        r = await client.get("/api/v1/auth/whoami")
-        _raise_for_status(r)
-        return r.json()
+    try:
+        async with ctx.make_client() as client:
+            r = await client.get("/api/v1/auth/whoami")
+            _raise_for_status(r)
+            return r.json()
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+        raise BackendUnavailableError(str(exc)) from exc

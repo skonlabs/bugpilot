@@ -145,6 +145,9 @@ def main_entry() -> None:
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted.[/yellow]")
         raise SystemExit(130)
+    except Exception as exc:
+        console.print(f"[bold red]Error:[/bold red] {exc}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
