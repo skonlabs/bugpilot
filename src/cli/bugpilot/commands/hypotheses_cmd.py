@@ -9,7 +9,7 @@ import anyio
 import typer
 
 from bugpilot.context import AppContext
-from bugpilot.output.human import console, print_error, print_hypothesis_list, print_success
+from bugpilot.output.human import console, debug_exc, print_error, print_hypothesis_list, print_success
 from bugpilot.output.json_out import print_json
 from bugpilot.session import APIError, api_get, api_patch, api_post, api_post_analysis
 
@@ -44,6 +44,7 @@ def cmd_list(
                 console.print("[dim]Hypothesis regeneration triggered...[/dim]")
             except APIError as e:
                 print_error(f"Failed to trigger refresh: {e.detail}")
+                debug_exc(app_ctx.debug)
                 raise typer.Exit(1)
 
         params: dict = {"investigation_id": investigation_id}
@@ -57,6 +58,7 @@ def cmd_list(
                 print_hypothesis_list(data["items"], data["total"])
         except APIError as e:
             print_error(f"Failed to list hypotheses: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -102,6 +104,7 @@ def cmd_create(
                     console.print(f"[dim]Confidence:[/dim] {conf:.0%}")
         except APIError as e:
             print_error(f"Failed to create hypothesis: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -124,6 +127,7 @@ def cmd_confirm(
                 print_success(f"Hypothesis confirmed: {hypothesis_id}")
         except APIError as e:
             print_error(f"Confirm failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -146,6 +150,7 @@ def cmd_reject(
                 print_success(f"Hypothesis rejected: {hypothesis_id}")
         except APIError as e:
             print_error(f"Reject failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -182,6 +187,7 @@ def cmd_update(
                 print_success("Hypothesis updated.")
         except APIError as e:
             print_error(f"Update failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)

@@ -32,11 +32,15 @@ def _raise_for_status(response: httpx.Response) -> None:
         raise APIError(status_code=response.status_code, detail=str(detail))
 
 
-def _handle_connect_error(exc: Exception) -> None:
-    """Print backend unavailable message and exit with code 2."""
+def _handle_connect_error(exc: Exception, debug: bool = False) -> None:
+    """Print a friendly backend-unavailable message and exit with code 2."""
     from bugpilot.output.human import error_console
-    error_console.print("[bold red][BugPilot] Backend unavailable.[/bold red] "
-                        "Check your network connection and API URL.")
+    error_console.print(
+        "[bold red][BugPilot] Backend unavailable.[/bold red] "
+        "Check your network connection and API URL."
+    )
+    if debug:
+        error_console.print_exception(show_locals=False)
     raise typer.Exit(2)
 
 
@@ -47,7 +51,7 @@ async def api_get(ctx: AppContext, path: str, params: Optional[Dict[str, Any]] =
             _raise_for_status(r)
             return r.json()
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-        _handle_connect_error(exc)
+        _handle_connect_error(exc, debug=ctx.debug)
 
 
 async def api_post(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] = None) -> Any:
@@ -57,7 +61,7 @@ async def api_post(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] = 
             _raise_for_status(r)
             return r.json()
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-        _handle_connect_error(exc)
+        _handle_connect_error(exc, debug=ctx.debug)
 
 
 async def api_patch(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] = None) -> Any:
@@ -67,7 +71,7 @@ async def api_patch(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] =
             _raise_for_status(r)
             return r.json()
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-        _handle_connect_error(exc)
+        _handle_connect_error(exc, debug=ctx.debug)
 
 
 async def api_delete(ctx: AppContext, path: str) -> None:
@@ -76,7 +80,7 @@ async def api_delete(ctx: AppContext, path: str) -> None:
             r = await client.delete(path)
             _raise_for_status(r)
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-        _handle_connect_error(exc)
+        _handle_connect_error(exc, debug=ctx.debug)
 
 
 async def api_get_analysis(ctx: AppContext, path: str, params: Optional[Dict[str, Any]] = None) -> Any:
@@ -87,7 +91,7 @@ async def api_get_analysis(ctx: AppContext, path: str, params: Optional[Dict[str
             _raise_for_status(r)
             return r.json()
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-        _handle_connect_error(exc)
+        _handle_connect_error(exc, debug=ctx.debug)
 
 
 async def api_post_analysis(ctx: AppContext, path: str, body: Optional[Dict[str, Any]] = None) -> Any:
@@ -98,7 +102,7 @@ async def api_post_analysis(ctx: AppContext, path: str, body: Optional[Dict[str,
             _raise_for_status(r)
             return r.json()
     except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-        _handle_connect_error(exc)
+        _handle_connect_error(exc, debug=ctx.debug)
 
 
 async def refresh_token_if_needed(ctx: AppContext) -> bool:

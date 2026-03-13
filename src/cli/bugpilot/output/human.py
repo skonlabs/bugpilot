@@ -207,3 +207,12 @@ def print_json_data(data: Any) -> None:
     """Pretty-print any data structure."""
     from rich.pretty import pprint
     pprint(data)
+
+
+def debug_exc(debug: bool) -> None:
+    """Print the current exception traceback when debug mode is on.
+
+    Call this inside an except block to conditionally show full details.
+    """
+    if debug:
+        error_console.print_exception(show_locals=False)

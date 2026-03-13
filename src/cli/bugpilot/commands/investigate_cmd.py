@@ -10,6 +10,7 @@ import typer
 
 from bugpilot.context import AppContext
 from bugpilot.output.human import (
+    debug_exc,
     print_error,
     print_investigation,
     print_investigation_list,
@@ -54,6 +55,7 @@ def cmd_list(
                 print_investigation_list(data["items"], data["total"])
         except APIError as e:
             print_error(f"Failed to list investigations: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -88,6 +90,7 @@ def cmd_create(
                 print_investigation(data)
         except APIError as e:
             print_error(f"Failed to create investigation: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -110,6 +113,7 @@ def cmd_get(
                 print_investigation(data)
         except APIError as e:
             print_error(f"Investigation not found: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -149,6 +153,7 @@ def cmd_update(
                 print_investigation(data)
         except APIError as e:
             print_error(f"Update failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -171,6 +176,7 @@ def cmd_close(
                 print_success(f"Investigation {investigation_id} closed.")
         except APIError as e:
             print_error(f"Close failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
@@ -194,6 +200,7 @@ def cmd_delete(
             print_success(f"Investigation {investigation_id} deleted.")
         except APIError as e:
             print_error(f"Delete failed: {e.detail}")
+            debug_exc(app_ctx.debug)
             raise typer.Exit(1)
 
     anyio.run(_run)
