@@ -15,7 +15,7 @@ from bugpilot.config_loader import TOS_FILE, CONFIG_DIR
 from bugpilot.context import AppContext
 from bugpilot.output.human import console, print_error, print_info, print_success
 from bugpilot.output.json_out import print_json
-from bugpilot.session import APIError
+from bugpilot.session import APIError, BackendUnavailableError
 
 app = typer.Typer(help="Authentication commands")
 
@@ -137,6 +137,12 @@ def cmd_activate(
                 )
             else:
                 console.print(Panel(_NEXT_STEPS, border_style="green"))
+        except BackendUnavailableError:
+            print_error(
+                "Cannot reach BugPilot API. Check your network connection and API URL.\n"
+                "  API URL: " + app_ctx.api_url
+            )
+            raise typer.Exit(2)
         except APIError as e:
             print_error(f"Activation failed: {e.detail}")
             raise typer.Exit(1)
@@ -178,6 +184,9 @@ def cmd_whoami(ctx: typer.Context) -> None:
                 console.print(f"[bold]Role:[/bold] {data.get('role')}")
                 console.print(f"[bold]Org ID:[/bold] {data.get('org_id')}")
                 console.print(f"[bold]User ID:[/bold] {data.get('user_id')}")
+        except BackendUnavailableError:
+            print_error("Cannot reach BugPilot API. Check your network connection.")
+            raise typer.Exit(2)
         except APIError as e:
             print_error(f"Failed to get user info: {e.detail}")
             raise typer.Exit(1)
@@ -206,6 +215,9 @@ def cmd_status(ctx: typer.Context) -> None:
                 console.print(f"[bold]User:[/bold] {data.get('email')}")
                 console.print(f"[bold]Role:[/bold] {data.get('role')}")
                 console.print(f"[bold]Org:[/bold] {data.get('org_id')}")
+        except BackendUnavailableError:
+            print_error("Cannot reach BugPilot API. Check your network connection.")
+            raise typer.Exit(2)
         except APIError as e:
             print_error(f"Session check failed: {e.detail}")
             raise typer.Exit(1)
