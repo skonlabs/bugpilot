@@ -22,6 +22,11 @@ jobs:
             target: bugpilot-macos-arm64
             asset_name: bugpilot-macos-arm64
 
+          - os: macos-14          # Intel x86_64 via Rosetta 2 (no Intel runner available)
+            target: bugpilot-macos-x86_64
+            asset_name: bugpilot-macos-x86_64
+            arch: x86_64
+
           - os: ubuntu-22.04      # Linux x86_64 (glibc 2.35 — compatible with most distros)
             target: bugpilot-linux-x86_64
             asset_name: bugpilot-linux-x86_64
@@ -42,13 +47,13 @@ jobs:
 
       - name: Install CLI and PyInstaller
         run: |
-          pip install ./src/cli
-          pip install "pyinstaller>=6.0"
+          ${{ matrix.arch && format('arch -{0}', matrix.arch) || '' }} pip install ./src/cli
+          ${{ matrix.arch && format('arch -{0}', matrix.arch) || '' }} pip install "pyinstaller>=6.0"
 
       - name: Build binary (Unix)
         if: runner.os != 'Windows'
         run: |
-          pyinstaller src/cli/bugpilot.spec \
+          ${{ matrix.arch && format('arch -{0}', matrix.arch) || '' }} pyinstaller src/cli/bugpilot.spec \
             --distpath dist \
             --workpath build
           mv dist/bugpilot dist/${{ matrix.asset_name }}
@@ -61,7 +66,7 @@ jobs:
           Move-Item dist\bugpilot.exe dist\${{ matrix.asset_name }}
 
       - name: Smoke test (Unix)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && !matrix.arch
         run: dist/${{ matrix.asset_name }} --version
 
       - name: Smoke test (Windows)
@@ -121,6 +126,7 @@ jobs:
             --generate-notes \
             $PRERELEASE \
             dist/bugpilot-macos-arm64 \
+            dist/bugpilot-macos-x86_64 \
             dist/bugpilot-linux-x86_64 \
             dist/bugpilot-windows-x86_64.exe \
             dist/checksums.txt
@@ -153,6 +159,7 @@ jobs:
           VERSION="${VERSION#v}"  # strip leading 'v'
 
           ARM64_SHA=$(grep "bugpilot-macos-arm64" checksums.txt | awk '{print $1}')
+          INTEL_SHA=$(grep "bugpilot-macos-x86_64" checksums.txt | awk '{print $1}')
 
           # Fetch current file + its SHA (needed for GitHub Contents API update)
           RESPONSE=$(curl -s -H "Authorization: token $TAP_TOKEN" \
@@ -172,10 +179,18 @@ jobs:
                 url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-arm64"
                 sha256 "$ARM64_SHA"
               end
+              on_intel do
+                url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-x86_64"
+                sha256 "$INTEL_SHA"
+              end
             end
 
             def install
-              bin.install "bugpilot-macos-arm64" => "bugpilot"
+              if Hardware::CPU.intel?
+                bin.install "bugpilot-macos-x86_64" => "bugpilot"
+              else
+                bin.install "bugpilot-macos-arm64" => "bugpilot"
+              end
             end
 
             def caveats
