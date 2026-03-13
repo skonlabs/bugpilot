@@ -10,25 +10,6 @@ import typer
 from rich.console import Console
 
 from bugpilot.context import AppContext
-from bugpilot.commands import (
-    ask_cmd,
-    auth_cmd,
-    compare_cmd,
-    config_cmd,
-    connector_cmd,
-    evidence_cmd,
-    export_cmd,
-    fix_cmd,
-    history_cmd,
-    hypotheses_cmd,
-    incident_cmd,
-    investigate_cmd,
-    investigation_cmd,
-    license_cmd,
-    resolve_cmd,
-    summary_cmd,
-    timeline_cmd,
-)
 
 console = Console()
 
@@ -40,28 +21,53 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 
-# ---------------------------------------------------------------------------
-# Register command groups
-# ---------------------------------------------------------------------------
-app.add_typer(auth_cmd.app, name="auth")
-app.add_typer(license_cmd.app, name="license")
-app.add_typer(connector_cmd.app, name="connector")
-app.add_typer(config_cmd.app, name="config")
-app.add_typer(investigate_cmd.app, name="investigate")
-app.add_typer(investigation_cmd.app, name="investigation")
-app.add_typer(incident_cmd.app, name="incident")
-app.add_typer(evidence_cmd.app, name="evidence")
-app.add_typer(hypotheses_cmd.app, name="hypotheses")
-app.add_typer(fix_cmd.app, name="fix")
-app.add_typer(export_cmd.app, name="export")
 
-# Top-level single-action commands (no subcommand name needed)
-app.add_typer(summary_cmd.app, name="summary")
-app.add_typer(timeline_cmd.app, name="timeline")
-app.add_typer(ask_cmd.app, name="ask")
-app.add_typer(compare_cmd.app, name="compare")
-app.add_typer(resolve_cmd.app, name="resolve")
-app.add_typer(history_cmd.app, name="history")
+def _register_commands() -> None:
+    """Lazily import and register all sub-command groups.
+
+    Keeping imports here (rather than at module level) means that a
+    KeyboardInterrupt during the slow PyInstaller startup import phase is
+    caught by main_entry() instead of producing a raw traceback.
+    """
+    from bugpilot.commands import (
+        ask_cmd,
+        auth_cmd,
+        compare_cmd,
+        config_cmd,
+        connector_cmd,
+        evidence_cmd,
+        export_cmd,
+        fix_cmd,
+        history_cmd,
+        hypotheses_cmd,
+        incident_cmd,
+        investigate_cmd,
+        investigation_cmd,
+        license_cmd,
+        resolve_cmd,
+        summary_cmd,
+        timeline_cmd,
+    )
+
+    app.add_typer(auth_cmd.app, name="auth")
+    app.add_typer(license_cmd.app, name="license")
+    app.add_typer(connector_cmd.app, name="connector")
+    app.add_typer(config_cmd.app, name="config")
+    app.add_typer(investigate_cmd.app, name="investigate")
+    app.add_typer(investigation_cmd.app, name="investigation")
+    app.add_typer(incident_cmd.app, name="incident")
+    app.add_typer(evidence_cmd.app, name="evidence")
+    app.add_typer(hypotheses_cmd.app, name="hypotheses")
+    app.add_typer(fix_cmd.app, name="fix")
+    app.add_typer(export_cmd.app, name="export")
+
+    # Top-level single-action commands (no subcommand name needed)
+    app.add_typer(summary_cmd.app, name="summary")
+    app.add_typer(timeline_cmd.app, name="timeline")
+    app.add_typer(ask_cmd.app, name="ask")
+    app.add_typer(compare_cmd.app, name="compare")
+    app.add_typer(resolve_cmd.app, name="resolve")
+    app.add_typer(history_cmd.app, name="history")
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +139,12 @@ def main(
 
 
 def main_entry() -> None:
-    app()
+    try:
+        _register_commands()
+        app()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted.[/yellow]")
+        raise SystemExit(130)
 
 
 if __name__ == "__main__":
