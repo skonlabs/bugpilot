@@ -22,10 +22,6 @@ jobs:
             target: bugpilot-macos-arm64
             asset_name: bugpilot-macos-arm64
 
-          - os: macos-13          # Intel x86_64 (last available Intel runner)
-            target: bugpilot-macos-x86_64
-            asset_name: bugpilot-macos-x86_64
-
           - os: ubuntu-22.04      # Linux x86_64 (glibc 2.35 — compatible with most distros)
             target: bugpilot-linux-x86_64
             asset_name: bugpilot-linux-x86_64
@@ -125,7 +121,6 @@ jobs:
             --generate-notes \
             $PRERELEASE \
             dist/bugpilot-macos-arm64 \
-            dist/bugpilot-macos-x86_64 \
             dist/bugpilot-linux-x86_64 \
             dist/bugpilot-windows-x86_64.exe \
             dist/checksums.txt
@@ -158,7 +153,6 @@ jobs:
           VERSION="${VERSION#v}"  # strip leading 'v'
 
           ARM64_SHA=$(grep "bugpilot-macos-arm64" checksums.txt | awk '{print $1}')
-          INTEL_SHA=$(grep "bugpilot-macos-x86_64" checksums.txt | awk '{print $1}')
 
           # Fetch current file + its SHA (needed for GitHub Contents API update)
           RESPONSE=$(curl -s -H "Authorization: token $TAP_TOKEN" \
@@ -178,18 +172,10 @@ jobs:
                 url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-arm64"
                 sha256 "$ARM64_SHA"
               end
-              on_intel do
-                url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-x86_64"
-                sha256 "$INTEL_SHA"
-              end
             end
 
             def install
-              if Hardware::CPU.intel?
-                bin.install "bugpilot-macos-x86_64" => "bugpilot"
-              else
-                bin.install "bugpilot-macos-arm64" => "bugpilot"
-              end
+              bin.install "bugpilot-macos-arm64" => "bugpilot"
             end
 
             def caveats
