@@ -1,0 +1,9 @@
+{
+  "name": "bugpilot",
+  "private": true,
+  "scripts": {
+    "dev": "cd frontend && bun install && bunx --bun vite",
+    "build": "cd frontend && bun install && bunx --bun vite build",
+    "preview": "cd frontend && bunx --bun vite preview"
+  }
+}
