@@ -23,7 +23,7 @@ import os
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from backend.app.database import get_conn, release_conn
@@ -55,15 +55,10 @@ def _upsert_trigger(
     return str(row[0]) if row else "duplicate"
 
 
-def _lookup_org_by_webhook_secret(conn, source: str, secret: str) -> Optional[str]:
-    """Find org_id matching webhook secret stored in connector config."""
-    # Webhook secrets are stored in connector rows' health_details or config
-    # For now we look up the connector by source type and match secret from env
-    # In production this would validate against the connector's stored secret.
-    # Simple approach: secret must match env var WEBHOOK_SECRET_{SOURCE.upper()}
+def _lookup_org_by_webhook_secret(source: str, secret: str) -> Optional[str]:
+    """Validate webhook secret against env var and return the configured org_id."""
     expected = os.environ.get(f"WEBHOOK_SECRET_{source.upper()}", "")
     if expected and hmac.compare_digest(secret, expected):
-        # Return a known org_id from env for single-tenant dev; real impl queries DB
         return os.environ.get("WEBHOOK_ORG_ID")
     return None
 
@@ -75,7 +70,10 @@ async def jira_webhook(request: Request):
     secret = request.query_params.get("secret", "")
     body = await request.json()
 
-    event = body.get("webhookEvent", "")
+    org_id = _lookup_org_by_webhook_secret("jira", secret)
+    if not org_id:
+        return JSONResponse({"error": "invalid_secret"}, status_code=401)
+
     issue = body.get("issue", {})
     issue_key = issue.get("key", str(uuid.uuid4()))
     summary = issue.get("fields", {}).get("summary", "Jira issue")
@@ -86,10 +84,6 @@ async def jira_webhook(request: Request):
 
     conn = get_conn()
     try:
-        org_id = _lookup_org_by_webhook_secret(conn, "jira", secret)
-        if not org_id:
-            return JSONResponse({"error": "invalid_secret"}, status_code=401)
-
         trigger_id = _upsert_trigger(
             conn, org_id, "jira", issue_key, body, summary, service_name
         )
@@ -110,6 +104,10 @@ async def freshdesk_webhook(request: Request):
     secret = request.query_params.get("secret", "")
     body = await request.json()
 
+    org_id = _lookup_org_by_webhook_secret("freshdesk", secret)
+    if not org_id:
+        return JSONResponse({"error": "invalid_secret"}, status_code=401)
+
     ticket = body.get("ticket", {})
     ticket_id = str(ticket.get("id", uuid.uuid4()))
     subject = ticket.get("subject", "Freshdesk ticket")
@@ -118,10 +116,6 @@ async def freshdesk_webhook(request: Request):
 
     conn = get_conn()
     try:
-        org_id = _lookup_org_by_webhook_secret(conn, "freshdesk", secret)
-        if not org_id:
-            return JSONResponse({"error": "invalid_secret"}, status_code=401)
-
         trigger_id = _upsert_trigger(
             conn, org_id, "freshdesk", ticket_id, body, subject, service_name
         )
@@ -143,6 +137,10 @@ async def sentry_webhook(request: Request):
     auth = request.headers.get("Authorization", "")
     secret = auth.removeprefix("Bearer ").strip()
 
+    org_id = _lookup_org_by_webhook_secret("sentry", secret)
+    if not org_id:
+        return JSONResponse({"error": "invalid_secret"}, status_code=401)
+
     body = await request.json()
     event = body.get("data", {}).get("event", {})
     event_id = event.get("event_id", str(uuid.uuid4()))
@@ -151,10 +149,6 @@ async def sentry_webhook(request: Request):
 
     conn = get_conn()
     try:
-        org_id = _lookup_org_by_webhook_secret(conn, "sentry", secret)
-        if not org_id:
-            return JSONResponse({"error": "invalid_secret"}, status_code=401)
-
         trigger_id = _upsert_trigger(
             conn, org_id, "sentry", event_id, body, title, project
         )
@@ -200,19 +194,19 @@ async def slack_webhook(request: Request):
     event_id = body.get("event_id", str(uuid.uuid4()))
     text = event.get("text", "")
 
-    # Only process messages that mention the bot with a bug keyword
+    # Only process messages that mention bug-related keywords
     if "bug" not in text.lower() and "error" not in text.lower():
         return {"status": "ignored"}
 
+    # Look up org by Slack team_id stored in connector service_map
+    team_id = body.get("team_id", "")
     conn = get_conn()
     try:
-        # For Slack, org lookup is by team_id
-        team_id = body.get("team_id", "")
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT org_id FROM connectors WHERE type = 'slack' AND "
-                "config->'team_id' = %s::jsonb LIMIT 1",
-                (json.dumps(team_id),),
+                "service_map->>'team_id' = %s LIMIT 1",
+                (team_id,),
             )
             row = cur.fetchone()
 

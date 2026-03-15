@@ -140,8 +140,11 @@ def generate_narrative(
 
 
 def _call_anthropic(user_prompt: str) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
     import anthropic
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=512,
@@ -152,8 +155,11 @@ def _call_anthropic(user_prompt: str) -> str:
 
 
 def _call_openai(user_prompt: str) -> str:
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set")
     from openai import OpenAI
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
         model="gpt-4o",
         max_tokens=512,

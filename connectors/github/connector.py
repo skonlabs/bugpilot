@@ -271,6 +271,12 @@ class GitHubConnector(ConnectorBase):
                     installation_id = inst["id"]
                     break
 
+            if not installation_id:
+                raise RuntimeError(
+                    f"GitHub App not installed for org '{org}'. "
+                    "Install the App or set 'installation_id' in the connector config."
+                )
+
         resp = httpx.post(
             f"{GITHUB_API}/app/installations/{installation_id}/access_tokens",
             headers={

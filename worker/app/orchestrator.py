@@ -52,11 +52,13 @@ def _record_step(conn, investigation_id: str, step: str, status: str, duration_m
                     (investigation_id, step),
                 )
             else:
+                # Normalise caller-supplied 'done' to the DB constraint value 'complete'
+                db_status = "complete" if status == "done" else status
                 cur.execute(
                     """UPDATE investigation_progress
                        SET status = %s, duration_ms = %s
                        WHERE investigation_id = %s AND step = %s""",
-                    (status, duration_ms, investigation_id, step),
+                    (db_status, duration_ms, investigation_id, step),
                 )
         conn.commit()
     except Exception as e:
@@ -270,7 +272,7 @@ def run_investigation(message: dict) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE investigations SET
-                   status = 'completed',
+                   status = 'complete',
                    failure_class = %s,
                    duration_ms = %s,
                    llm_narrative = %s,

@@ -93,7 +93,8 @@ def _build_slack_blocks(investigation: dict, hypotheses: list[dict]) -> list[dic
         })
 
     blocks.append({"type": "divider"})
-    base_url = os.environ.get("BUGPILOT_BASE_URL", "https://app.ekonomical.com")
+    from backend.app.config import settings
+    base_url = settings.BUGPILOT_BASE_URL
     blocks.append({
         "type": "actions",
         "elements": [

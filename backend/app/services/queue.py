@@ -30,11 +30,16 @@ def _get_sqs():
 
 
 def _queue_url(priority: str) -> str:
-    if priority == "p1":
-        return os.environ["SQS_P1_URL"]
-    if priority == "retro":
-        return os.environ["SQS_RETRO_URL"]
-    return os.environ["SQS_P2_URL"]
+    env_map = {
+        "p1":    "SQS_P1_URL",
+        "retro": "SQS_RETRO_URL",
+        "p2":    "SQS_P2_URL",
+    }
+    key = env_map.get(priority, "SQS_P2_URL")
+    url = os.environ.get(key, "")
+    if not url:
+        raise RuntimeError(f"SQS queue URL not configured: {key} is not set")
+    return url
 
 
 def _determine_priority(trigger_source: str, layer: str) -> str:

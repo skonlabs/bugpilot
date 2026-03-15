@@ -9,9 +9,12 @@ Connector management endpoints:
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
 from typing import Any, Optional
 
+import boto3
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
@@ -24,7 +27,7 @@ router = APIRouter()
 VALID_CONNECTOR_TYPES = {
     "github", "jira", "freshdesk", "email_imap", "linear",
     "github_issues", "sentry", "database", "log_files",
-    "datadog", "pagerduty", "langsmith",
+    "datadog", "pagerduty", "langsmith", "confluence", "slack",
 }
 
 
@@ -88,21 +91,21 @@ async def upsert_connector(
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO connectors (org_id, type, name, service_map, role, status)
-                   VALUES (%s, %s, %s, %s::jsonb, %s, 'pending_health')
+                   VALUES (%s, %s, %s, %s::jsonb, %s, 'pending')
                    ON CONFLICT (org_id, type, name)
                    DO UPDATE SET
                      service_map = EXCLUDED.service_map,
                      role = COALESCE(EXCLUDED.role, connectors.role),
-                     status = 'pending_health',
+                     status = 'pending',
                      updated_at = NOW()
                    RETURNING id""",
                 (org_id, connector_type, req.name,
-                 __import__("json").dumps(req.service_map),
+                 json.dumps(req.service_map),
                  req.role),
             )
             connector_id = cur.fetchone()[0]
         conn.commit()
-        return {"connector_id": str(connector_id), "status": "pending_health"}
+        return {"connector_id": str(connector_id), "status": "pending"}
     except Exception:
         conn.rollback()
         raise
@@ -164,10 +167,10 @@ async def trigger_github_index(request: Request):
     if not connectors:
         raise HTTPException(status_code=404, detail="No GitHub connectors configured")
 
-    # Enqueue index jobs via SQS
-    import json
-    import os
-    import boto3
+    sqs_p2_url = os.environ.get("SQS_P2_URL", "")
+    if not sqs_p2_url:
+        raise HTTPException(status_code=503, detail="SQS queue not configured")
+
     sqs = boto3.client("sqs", region_name=os.environ.get("AWS_REGION", "us-east-1"))
     queued = []
     for cid, cname in connectors:
@@ -178,7 +181,7 @@ async def trigger_github_index(request: Request):
             "connector_name": cname,
         }
         sqs.send_message(
-            QueueUrl=os.environ["SQS_P2_URL"],
+            QueueUrl=sqs_p2_url,
             MessageBody=json.dumps(msg),
             MessageGroupId=org_id,
             MessageDeduplicationId=f"idx-{cid}",
@@ -190,28 +193,56 @@ async def trigger_github_index(request: Request):
 
 @router.get("/connectors/{connector_type}/{name}/health")
 async def connector_health(connector_type: str, name: str, request: Request):
-    """Run a health check against a connector."""
+    """Run a live health check against a connector and update its status."""
     org_id = request.state.org_id
 
+    # Load credentials
+    from backend.app.services.secrets import get_secret
+    try:
+        config = get_secret(org_id, connector_type, name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Connector credentials not found")
+
+    # Run live health check
+    from connectors.registry import get_connector
+    try:
+        instance = get_connector(connector_type, config, org_id, name)
+        health = instance.health_check()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.error(f"Health check error for {connector_type}/{name}: {e}")
+        health = type("H", (), {"status": "error", "message": str(e), "details": {}})()
+
+    # Persist result to DB
+    db_status = "healthy" if health.status == "ok" else "error"
     conn = get_conn()
     try:
         set_org_context(conn, org_id)
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, status, health_details FROM connectors "
-                "WHERE org_id = %s AND type = %s AND name = %s",
-                (org_id, connector_type, name),
+                """UPDATE connectors
+                   SET status = %s,
+                       last_health_check = NOW(),
+                       health_details = %s::jsonb
+                   WHERE org_id = %s AND type = %s AND name = %s""",
+                (
+                    db_status,
+                    json.dumps({"message": health.message, "details": getattr(health, "details", {})}),
+                    org_id, connector_type, name,
+                ),
             )
-            row = cur.fetchone()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        log.warning(f"Failed to persist health check result: {e}")
     finally:
         release_conn(conn)
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Connector not found")
 
     return {
         "connector_type": connector_type,
         "name": name,
-        "status": row[1],
-        "health_details": row[2] or {},
+        "status": db_status,
+        "message": health.message,
+        "details": getattr(health, "details", {}),
     }
