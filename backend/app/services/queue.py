@@ -76,8 +76,8 @@ def enqueue_investigation(
             cur.execute(
                 """INSERT INTO investigations
                    (org_id, trigger_type, trigger_ref, trigger_source,
-                    service_name, window_minutes, status)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'queued')
+                    service_name, window_minutes, layer, status)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'queued')
                    RETURNING id""",
                 (
                     org_id,
@@ -86,6 +86,7 @@ def enqueue_investigation(
                     trigger_source,
                     service_name,
                     window_minutes,
+                    layer,
                 ),
             )
             inv_id = cur.fetchone()[0]

@@ -26,7 +26,7 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from backend.app.database import get_conn, release_conn
+from backend.app.database import get_conn, release_conn, set_org_context, supabase
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -84,6 +84,7 @@ async def jira_webhook(request: Request):
 
     conn = get_conn()
     try:
+        set_org_context(conn, org_id)
         trigger_id = _upsert_trigger(
             conn, org_id, "jira", issue_key, body, summary, service_name
         )
@@ -116,6 +117,7 @@ async def freshdesk_webhook(request: Request):
 
     conn = get_conn()
     try:
+        set_org_context(conn, org_id)
         trigger_id = _upsert_trigger(
             conn, org_id, "freshdesk", ticket_id, body, subject, service_name
         )
@@ -149,6 +151,7 @@ async def sentry_webhook(request: Request):
 
     conn = get_conn()
     try:
+        set_org_context(conn, org_id)
         trigger_id = _upsert_trigger(
             conn, org_id, "sentry", event_id, body, title, project
         )
@@ -198,22 +201,27 @@ async def slack_webhook(request: Request):
     if "bug" not in text.lower() and "error" not in text.lower():
         return {"status": "ignored"}
 
-    # Look up org by Slack team_id stored in connector service_map
+    # Look up org by Slack team_id stored in connector service_map.
+    # Use the Supabase service-role client to bypass RLS for this cross-org lookup.
     team_id = body.get("team_id", "")
+    try:
+        resp = supabase.table("connectors").select("org_id").eq("type", "slack").execute()
+        org_id = None
+        for row in (resp.data or []):
+            smap = row.get("service_map") or {}
+            if smap.get("team_id") == team_id:
+                org_id = str(row["org_id"])
+                break
+    except Exception as e:
+        log.warning(f"Slack org lookup error: {e}")
+        org_id = None
+
+    if not org_id:
+        return {"status": "ignored"}
+
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT org_id FROM connectors WHERE type = 'slack' AND "
-                "service_map->>'team_id' = %s LIMIT 1",
-                (team_id,),
-            )
-            row = cur.fetchone()
-
-        if not row:
-            return {"status": "ignored"}
-
-        org_id = str(row[0])
+        set_org_context(conn, org_id)
         trigger_id = _upsert_trigger(
             conn, org_id, "slack", event_id, body, text[:200], None
         )

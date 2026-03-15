@@ -289,7 +289,8 @@ def run_investigation(message: dict) -> None:
                    window_end = %s,
                    connectors_used = %s::jsonb,
                    connectors_missing = %s::jsonb
-                   WHERE id = %s""",
+                   WHERE id = %s
+                   """,
                 (
                     failure_class,
                     duration_ms,

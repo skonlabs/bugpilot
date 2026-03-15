@@ -21,8 +21,8 @@ from connectors._base.circuit_breaker import CircuitBreaker
 
 log = logging.getLogger(__name__)
 
-_ANTHROPIC_CB = CircuitBreaker(threshold=3, timeout=300)
-_OPENAI_CB = CircuitBreaker(threshold=3, timeout=300)
+_ANTHROPIC_CB = CircuitBreaker(name="anthropic", threshold=3, timeout=300)
+_OPENAI_CB = CircuitBreaker(name="openai", threshold=3, timeout=300)
 
 SYSTEM_PROMPT = """You are BugPilot, an expert software debugging assistant.
 Your job is to analyze a bug report and a list of code changes (PRs) to produce

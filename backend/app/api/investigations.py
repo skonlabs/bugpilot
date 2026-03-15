@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 import uuid
 from typing import Optional
 
@@ -272,7 +273,70 @@ async def submit_feedback(
             if cur.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Investigation not found")
 
+        # Fetch the top hypothesis feature_scores to save as training data
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT h.feature_scores, h.pr_id, h.rank
+                   FROM investigation_hypotheses h
+                   WHERE h.investigation_id = %s AND h.rank = %s""",
+                (investigation_id, req.hypothesis_rank),
+            )
+            hyp_row = cur.fetchone()
+
+        if hyp_row:
+            feature_scores, top_pr_id, hyp_rank = hyp_row
+            label = 1 if req.feedback == "confirmed" else 0
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO training_data
+                       (org_id, investigation_id, feature_vector, label, hypothesis_rank)
+                       VALUES (%s, %s, %s::jsonb, %s, %s)
+                       ON CONFLICT DO NOTHING""",
+                    (
+                        org_id,
+                        investigation_id,
+                        json.dumps(feature_scores or {}),
+                        label,
+                        hyp_rank,
+                    ),
+                )
+
+            # Update AGE graph: mark PR as confirmed/refuted for author risk scoring
+            if top_pr_id:
+                try:
+                    from worker.app.graph_builder import set_pr_confirmed
+                    set_pr_confirmed(
+                        conn, org_id, top_pr_id,
+                        confirmed=(req.feedback == "confirmed"),
+                    )
+                except Exception as e:
+                    log.warning(f"AGE graph update error on feedback: {e}")
+
         conn.commit()
+
+        # Trigger async model retraining (best-effort, non-blocking)
+        if hyp_row:
+            def _retrain(org: str) -> None:
+                import os
+                import redis as redis_lib
+                from worker.app.hypothesis_ranker import train_model
+                train_conn = get_conn()
+                try:
+                    redis_client = redis_lib.Redis.from_url(
+                        os.environ["REDIS_URL"], decode_responses=True
+                    )
+                    train_model(org, train_conn, redis_client)
+                except Exception as exc:
+                    log.warning(f"Background model retrain error: {exc}")
+                finally:
+                    release_conn(train_conn)
+
+            try:
+                t = threading.Thread(target=_retrain, args=(org_id,), daemon=True)
+                t.start()
+            except Exception as e:
+                log.warning(f"Model retrain trigger error: {e}")
+
         return {"status": "recorded", "investigation_id": investigation_id}
     except HTTPException:
         conn.rollback()

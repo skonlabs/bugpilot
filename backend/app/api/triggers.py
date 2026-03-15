@@ -34,10 +34,10 @@ async def list_pending_triggers(request: Request, limit: int = 50):
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT id, source, external_id, summary, service_name,
-                          status, created_at
+                          status, received_at
                    FROM triggers
                    WHERE org_id = %s AND status = 'pending'
-                   ORDER BY created_at DESC
+                   ORDER BY received_at DESC
                    LIMIT %s""",
                 (org_id, min(limit, 200)),
             )
@@ -50,7 +50,7 @@ async def list_pending_triggers(request: Request, limit: int = 50):
                 "summary": r[3],
                 "service_name": r[4],
                 "status": r[5],
-                "created_at": r[6].isoformat() if r[6] else None,
+                "received_at": r[6].isoformat() if r[6] else None,
             }
             for r in rows
         ]
@@ -69,7 +69,7 @@ async def ack_trigger(trigger_id: str, request: Request):
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE triggers
-                   SET status = 'processing', updated_at = NOW()
+                   SET status = 'processing'
                    WHERE id = %s AND org_id = %s AND status = 'pending'
                    RETURNING source, external_id, summary, service_name, payload""",
                 (trigger_id, org_id),
@@ -85,11 +85,22 @@ async def ack_trigger(trigger_id: str, request: Request):
         source, external_id, summary, service_name, payload = row
         conn.commit()
 
+        # Map webhook source → trigger_type CHECK constraint value
+        _source_to_type = {
+            "jira": "jira_webhook",
+            "freshdesk": "freshdesk_webhook",
+            "sentry": "sentry_webhook",
+            "slack": "slack_slash_cmd",
+            "email": "email_inbound",
+            "email_imap": "email_inbound",
+        }
+        trigger_type = _source_to_type.get(source, "api")
+
         # Enqueue investigation
         from backend.app.services.queue import enqueue_investigation
         inv_id = enqueue_investigation(
             org_id=org_id,
-            trigger_type="webhook",
+            trigger_type=trigger_type,
             trigger_ref=external_id,
             trigger_source=source,
             service_name=service_name,
@@ -135,7 +146,7 @@ async def skip_trigger(trigger_id: str, req: SkipRequest, request: Request):
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE triggers
-                   SET status = 'skipped', skip_reason = %s, updated_at = NOW()
+                   SET status = 'skipped', skip_reason = %s
                    WHERE id = %s AND org_id = %s AND status = 'pending'""",
                 (req.reason, trigger_id, org_id),
             )

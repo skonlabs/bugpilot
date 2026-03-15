@@ -215,7 +215,7 @@ async def connector_health(connector_type: str, name: str, request: Request):
         health = type("H", (), {"status": "error", "message": str(e), "details": {}})()
 
     # Persist result to DB
-    db_status = "healthy" if health.status == "ok" else "error"
+    db_status = health.status if health.status in ("healthy", "degraded") else "error"
     conn = get_conn()
     try:
         set_org_context(conn, org_id)
