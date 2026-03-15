@@ -249,17 +249,17 @@ jobs:
 
           python3 - <<EOF
           import json, pathlib
-          m = json.loads(pathlib.Path("pkg/scoop/bugpilot.json").read_text())
+          m = json.loads(pathlib.Path("cli/pkg/scoop/bugpilot.json").read_text())
           m["version"] = "$VERSION"
           m["architecture"]["64bit"]["url"] = f"https://github.com/skonlabs/bugpilot/releases/download/v$VERSION/bugpilot-windows-amd64.exe"
           m["architecture"]["64bit"]["hash"] = "$WIN_SHA"
-          pathlib.Path("pkg/scoop/bugpilot.json").write_text(json.dumps(m, indent=2) + "\n")
+          pathlib.Path("cli/pkg/scoop/bugpilot.json").write_text(json.dumps(m, indent=2) + "\n")
           EOF
 
       - name: Commit updated Scoop manifest
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pkg/scoop/bugpilot.json
+          git add cli/pkg/scoop/bugpilot.json
           git diff --staged --quiet || git commit -m "chore: bump scoop manifest to ${{ github.ref_name }}"
           git push origin HEAD:main

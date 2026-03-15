@@ -1,5 +1,5 @@
 """Tests for PII scrubber."""
-from connectors._base.pii_scrubber import scrub
+from backend.connectors._base.pii_scrubber import scrub
 
 
 def test_email_scrubbed():

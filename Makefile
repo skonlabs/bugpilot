@@ -48,9 +48,9 @@ test-backend:
 
 test-connectors:
 	@echo "Running connector tests..."
-	@for dir in connectors/sentry connectors/jira connectors/freshdesk \
-	             connectors/email_imap connectors/github connectors/database \
-	             connectors/log_files; do \
+	@for dir in backend/connectors/sentry backend/connectors/jira backend/connectors/freshdesk \
+	             backend/connectors/email_imap backend/connectors/github backend/connectors/database \
+	             backend/connectors/log_files; do \
 	  if [ -d "$$dir/tests" ]; then \
 	    echo "  Testing $$dir..."; \
 	    PYTHONPATH=$(PYTHONPATH) python -m pytest $$dir/tests/ -v --tb=short -q; \
@@ -64,54 +64,58 @@ test-cli:
 test-all: test test-cli
 
 coverage:
-	PYTHONPATH=$(PYTHONPATH) python -m pytest backend/tests/ connectors/*/tests/ \
-	  --cov=backend --cov=connectors --cov-report=term-missing \
+	PYTHONPATH=$(PYTHONPATH) python -m pytest backend/tests/ backend/connectors/*/tests/ \
+	  --cov=backend --cov-report=term-missing \
 	  --cov-report=html:htmlcov --cov-fail-under=80
 
 # ── Lint ──────────────────────────────────────────────────────────────────────
 lint:
 	@echo "Linting Python..."
-	PYTHONPATH=$(PYTHONPATH) python -m ruff check backend/ connectors/ worker/ || true
+	PYTHONPATH=$(PYTHONPATH) python -m ruff check backend/ || true
 	@echo "Linting Go..."
 	cd $(CLI_DIR) && go vet ./... || true
 
 # ── Dev servers ───────────────────────────────────────────────────────────────
 dev-backend:
 	@echo "Starting backend dev server on :8000..."
-	PYTHONPATH=$(PYTHONPATH) uvicorn backend.app.main:app \
+	PYTHONPATH=$(PYTHONPATH) uvicorn backend.main:app \
 	  --reload --host 0.0.0.0 --port 8000 --log-level debug
 
 dev-worker:
 	@echo "Starting worker..."
-	PYTHONPATH=$(PYTHONPATH) python worker/main.py
+	PYTHONPATH=$(PYTHONPATH) python backend/worker/main.py
+
+dev-frontend:
+	@echo "Starting frontend dev server..."
+	cd frontend && bun run dev
 
 dev:
 	@echo "Starting Supabase, Redis, backend, and worker..."
-	supabase start
+	cd backend && supabase start
 
 # ── Migrations ────────────────────────────────────────────────────────────────
 migrate:
 	@echo "Applying Supabase migrations..."
-	supabase db push
+	cd backend && supabase db push
 
 migrate-reset:
 	@echo "Resetting database and re-applying migrations..."
-	supabase db reset
+	cd backend && supabase db reset
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 install-deps:
 	pip install -r backend/requirements.txt
-	pip install -r worker/requirements.txt
-	pip install -r connectors/_base/requirements.txt
-	@for dir in connectors/sentry connectors/jira connectors/freshdesk \
-	             connectors/email_imap connectors/github connectors/database \
-	             connectors/log_files; do \
+	pip install -r backend/connectors/_base/requirements.txt
+	@for dir in backend/connectors/sentry backend/connectors/jira backend/connectors/freshdesk \
+	             backend/connectors/email_imap backend/connectors/github backend/connectors/database \
+	             backend/connectors/log_files; do \
 	  if [ -f "$$dir/requirements.txt" ]; then \
 	    pip install -r $$dir/requirements.txt; \
 	  fi; \
 	done
 	pip install pytest pytest-cov ruff mypy
 	cd $(CLI_DIR) && go mod download
+	cd frontend && bun install
 
 # ── Clean ─────────────────────────────────────────────────────────────────────
 clean:
@@ -122,15 +126,16 @@ clean:
 
 help:
 	@echo "BugPilot Makefile targets:"
-	@echo "  build        Build CLI binary"
-	@echo "  build-all    Build for all 5 platforms (UPX on linux+windows)"
-	@echo "  test         Run Python tests"
-	@echo "  test-cli     Run Go CLI tests"
-	@echo "  test-all     Run all tests"
-	@echo "  coverage     Run tests with ≥80% coverage check"
-	@echo "  lint         Lint Python + Go"
-	@echo "  dev-backend  Start FastAPI dev server"
-	@echo "  dev-worker   Start SQS worker"
-	@echo "  migrate      Apply Supabase migrations"
-	@echo "  install-deps Install all dependencies"
-	@echo "  clean        Remove build artifacts"
+	@echo "  build         Build CLI binary"
+	@echo "  build-all     Build for all 5 platforms (UPX on linux+windows)"
+	@echo "  test          Run Python tests"
+	@echo "  test-cli      Run Go CLI tests"
+	@echo "  test-all      Run all tests"
+	@echo "  coverage      Run tests with ≥80% coverage check"
+	@echo "  lint          Lint Python + Go"
+	@echo "  dev-backend   Start FastAPI dev server"
+	@echo "  dev-worker    Start SQS worker"
+	@echo "  dev-frontend  Start React dev server"
+	@echo "  migrate       Apply Supabase migrations"
+	@echo "  install-deps  Install all dependencies"
+	@echo "  clean         Remove build artifacts"
