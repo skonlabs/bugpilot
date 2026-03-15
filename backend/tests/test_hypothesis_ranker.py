@@ -1,7 +1,7 @@
 """Tests for hypothesis ranker feature computation."""
 from datetime import datetime, timezone, timedelta
 
-from worker.app.hypothesis_ranker import (
+from backend.worker.hypothesis_ranker import (
     _recency_score,
     _line_overlap_jaccard,
     _ci_failure_signal,

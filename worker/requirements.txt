@@ -1,9 +1,0 @@
-boto3>=1.34
-psycopg2-binary>=2.9
-redis>=5.0
-anthropic>=0.25
-openai>=1.30
-scikit-learn>=1.4
-numpy>=1.26
-structlog>=24.0
-httpx>=0.27

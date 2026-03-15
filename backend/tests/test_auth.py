@@ -11,7 +11,7 @@ def test_check_rate_limit_within_limit():
         r.expire.return_value = True
         mock_redis.return_value = r
 
-        from backend.app.auth import check_rate_limit
+        from backend.auth import check_rate_limit
         # Should not raise
         check_rate_limit("test-org", "investigations")
         r.incr.assert_called_once()
@@ -26,7 +26,7 @@ def test_check_rate_limit_exceeded():
         mock_redis.return_value = r
 
         from fastapi import HTTPException
-        from backend.app.auth import check_rate_limit
+        from backend.auth import check_rate_limit
         with pytest.raises(HTTPException) as exc_info:
             check_rate_limit("test-org", "investigations")
         assert exc_info.value.status_code == 429

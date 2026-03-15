@@ -1,5 +1,5 @@
 """Tests for NLP classification service."""
-from backend.app.services.nlp import classify_freeform_text
+from backend.services.nlp import classify_freeform_text
 
 
 def test_extract_ticket_ref():
