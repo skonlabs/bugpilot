@@ -89,19 +89,14 @@ def _resolve_window(
     return now - timedelta(minutes=window_minutes), now
 
 
-def _fetch_connector_safe(connector, window_start, window_end, trigger_ref, service_name):
+def _fetch_connector_safe(connector, service_name, window_start, window_end, trigger_ref):
     """Fetch with timeout via ConnectorBase.fetch_with_timeout()."""
-    try:
-        data = connector.fetch_with_timeout(
-            service_name=service_name,
-            window_start=window_start,
-            window_end=window_end,
-            trigger_ref=trigger_ref,
-        )
-        return data
-    except Exception as e:
-        log.error(f"Connector {connector.connector_type}/{connector._connector_name} failed: {e}")
-        return None
+    return connector.fetch_with_timeout(
+        service_name=service_name,
+        window_start=window_start,
+        window_end=window_end,
+        trigger_ref=trigger_ref,
+    )
 
 
 def run_investigation(message: dict) -> None:
@@ -171,13 +166,17 @@ def run_investigation(message: dict) -> None:
             futures = {
                 executor.submit(
                     _fetch_connector_safe, c,
-                    window_start, window_end, trigger_ref, service_name
+                    service_name, window_start, window_end, trigger_ref
                 ): c
                 for c in connectors
             }
             for future in as_completed(futures):
                 connector = futures[future]
-                data = future.result()
+                try:
+                    data = future.result()
+                except Exception as e:
+                    log.error(f"Connector {connector.connector_type} future failed: {e}")
+                    continue
                 if data and data.normalised_events:
                     key = connector.connector_type
                     all_events.setdefault(key, []).extend(data.normalised_events)
@@ -256,7 +255,7 @@ def run_investigation(message: dict) -> None:
         blast_records = [e for e in db_events if e.get("event_type") == "blast_radius_record"]
         if blast_records:
             blast_count = len(blast_records)
-            blast_status = "estimated"
+            blast_status = "unknown"
             blast_cohort = service_name or "all_users"
 
         # Step 8: Persist results

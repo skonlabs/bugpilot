@@ -43,7 +43,7 @@ class ConnectorBase(ABC):
     """
 
     def __init__(self, config: dict, org_id: str):
-        self.config = config
+        self._config = config
         self.org_id = org_id
         self._cb = _CircuitBreaker(name=self.connector_type)
         # Set by registry.get_connectors_for_service():
@@ -76,15 +76,20 @@ class ConnectorBase(ABC):
     @abstractmethod
     def fetch(
         self,
-        investigation_context: dict,
+        service_name: Optional[str],
         window_start: datetime,
         window_end: datetime,
+        trigger_ref: Optional[str] = None,
+        **kwargs,
     ) -> ConnectorData:
         """
         Fetch and return normalised data for this investigation.
 
-        investigation_context keys:
-            investigation_id, ticket_id, service_name, trigger_source, org_id
+        Args:
+            service_name: logical service to scope the query (may be None)
+            window_start: beginning of investigation time window (UTC)
+            window_end: end of investigation time window (UTC)
+            trigger_ref: optional external ticket/alert ref (e.g. "ENG-123")
 
         MUST NOT raise — catch all exceptions, include as warnings, return partial data.
         MUST complete within 30 seconds (enforced externally by fetch_with_timeout).
@@ -92,9 +97,10 @@ class ConnectorBase(ABC):
 
     def fetch_with_timeout(
         self,
-        investigation_context: dict,
+        service_name: Optional[str],
         window_start: datetime,
         window_end: datetime,
+        trigger_ref: Optional[str] = None,
         timeout_seconds: int = 30,
     ) -> ConnectorData:
         """
@@ -114,7 +120,9 @@ class ConnectorBase(ABC):
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
                 future = ex.submit(
-                    self.fetch, investigation_context, window_start, window_end
+                    self.fetch,
+                    service_name, window_start, window_end,
+                    trigger_ref=trigger_ref,
                 )
                 result = future.result(timeout=timeout_seconds)
             self._cb.record_success()
