@@ -78,7 +78,7 @@ func Load() (*Config, error) {
 		Plan:    viper.GetString("plan"),
 	}
 	if cfg.BaseURL == "" {
-		cfg.BaseURL = "https://api.ekonomical.com"
+		cfg.BaseURL = "https://api.bugpilot.io"
 	}
 	return cfg, nil
 }

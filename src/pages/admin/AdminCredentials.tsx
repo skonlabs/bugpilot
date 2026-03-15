@@ -14,6 +14,13 @@ function generateKey(prefix: string) {
   return result;
 }
 
+async function hashSecret(secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(secret);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export default function AdminCredentials() {
   const { user } = useAuth();
   const [creds, setCreds] = useState<any[]>([]);
@@ -42,11 +49,11 @@ export default function AdminCredentials() {
     if (!selectedUser || !user) return;
     const apiKey = generateKey("bp_");
     const secret = generateKey("bps_");
-    // In production, hash the secret server-side. For demo, store a simple hash indicator.
+    const secretHash = await hashSecret(secret);
     const { error } = await supabase.from("bugpilot_credentials").insert({
       user_id: selectedUser,
       api_key: apiKey,
-      secret_hash: btoa(secret), // Simplified for demo
+      secret_hash: secretHash,
       status: "active",
       created_by: user.id,
     });
@@ -77,7 +84,8 @@ export default function AdminCredentials() {
 
   const rotateCredential = async (credId: string, targetUserId: string) => {
     const newSecret = generateKey("bps_");
-    await supabase.from("bugpilot_credentials").update({ secret_hash: btoa(newSecret), rotated_at: new Date().toISOString() }).eq("id", credId);
+    const newSecretHash = await hashSecret(newSecret);
+    await supabase.from("bugpilot_credentials").update({ secret_hash: newSecretHash, rotated_at: new Date().toISOString() }).eq("id", credId);
     await supabase.from("audit_logs").insert({
       actor_user_id: user!.id,
       target_user_id: targetUserId,
