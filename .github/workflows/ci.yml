@@ -10,8 +10,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  test:
-    name: Test / Python ${{ matrix.python-version }}
+  # ── Python: backend + connectors + worker ─────────────────────────────────
+  python-tests:
+    name: Python tests / ${{ matrix.python-version }}
     runs-on: ubuntu-22.04
     strategy:
       matrix:
@@ -25,49 +26,17 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install CLI with dev dependencies
-        run: pip install "./src/cli[dev]"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt pytest pytest-asyncio httpx
 
-      - name: Run tests
-        run: |
-          cd src/cli
-          pytest
+      - name: Run backend tests
+        env:
+          PYTHONPATH: .
+        run: pytest backend/tests/ -v
 
-  # Verify the PyInstaller spec parses without errors on Linux.
-  # Full binary builds only run in the release workflow (matrix across OSes).
-  spec-check:
-    name: PyInstaller spec check
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4.2.2
-
-      - uses: actions/setup-python@v5.5.0
-        with:
-          python-version: "3.11"
-
-      - name: Install
-        run: |
-          pip install "./src/cli"
-          pip install "pyinstaller>=6.0"
-
-      - name: Parse spec (no build)
-        run: |
-          python -c "
-          import sys
-          from pathlib import Path
-          spec = Path('src/cli/bugpilot.spec').read_text()
-          # Verify the entry point path resolves correctly
-          entry = Path('src/cli/bugpilot/main.py')
-          assert entry.exists(), f'Entry point not found: {entry}'
-          print(f'Entry point OK: {entry}')
-          # Ensure spec file is syntactically valid Python
-          compile(spec, 'bugpilot.spec', 'exec')
-          print('Spec parsed OK')
-          "
-
-  # Quick lint — no heavy linter setup, just import hygiene.
-  lint:
-    name: Lint
+  # ── Python lint ────────────────────────────────────────────────────────────
+  python-lint:
+    name: Python lint
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4.2.2
@@ -80,4 +49,50 @@ jobs:
         run: pip install ruff
 
       - name: Ruff check
-        run: ruff check src/cli/bugpilot/
+        run: ruff check backend/ connectors/ worker/
+
+  # ── Go CLI ─────────────────────────────────────────────────────────────────
+  go-build:
+    name: Go CLI build & test
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Build
+        working-directory: cli
+        run: go build -o bugpilot ./...
+
+      - name: Test
+        working-directory: cli
+        run: go test ./...
+
+      - name: Vet
+        working-directory: cli
+        run: go vet ./...
+
+  # ── React web dashboard ────────────────────────────────────────────────────
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Type-check
+        run: bun run tsc --noEmit
+
+      - name: Build
+        run: bun run build
