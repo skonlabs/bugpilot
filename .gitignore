@@ -1,13 +1,28 @@
+# BugPilot config (contains encrypted secrets — never commit)
+.bugpilot/
+config.yaml
+
 # Python
 __pycache__/
 *.py[cod]
 *.pyo
 .pytest_cache/
 *.egg-info/
-dist/
 build/
 .venv/
 venv/
+
+# Go
+cli/bugpilot
+dist/
+
+# Environment
+.env
+*.env.local
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
 
 # Logs
 logs

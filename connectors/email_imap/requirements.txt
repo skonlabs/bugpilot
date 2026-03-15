@@ -1,0 +1,2 @@
+# stdlib imaplib only; no extra deps
+tenacity>=8.2
