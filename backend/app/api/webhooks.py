@@ -20,6 +20,7 @@ import hmac
 import json
 import logging
 import os
+import time
 import uuid
 from typing import Optional
 
@@ -170,6 +171,12 @@ async def sentry_webhook(request: Request):
 def _verify_slack_signature(body_bytes: bytes, timestamp: str, signature: str) -> bool:
     signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
     if not signing_secret:
+        return False
+    # Reject requests older than 5 minutes to prevent replay attacks
+    try:
+        if abs(time.time() - float(timestamp)) > 300:
+            return False
+    except (ValueError, TypeError):
         return False
     base = f"v0:{timestamp}:{body_bytes.decode()}"
     expected = "v0=" + hmac.new(

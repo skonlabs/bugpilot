@@ -66,7 +66,8 @@ def utcnow_iso() -> str:
 class NormaliserBase(ABC):
     """Base class for all connector normalisers."""
 
-    def __init__(self, org_id: str):
+    def __init__(self, config: dict, org_id: str):
+        self._config = config
         self.org_id = org_id
 
     @abstractmethod
