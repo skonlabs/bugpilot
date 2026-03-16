@@ -84,6 +84,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	client := api.New(baseURL, apiKey)
+	client.UserAgent = "bugpilot-cli/" + Version
 
 	// ── Step 2: Terms of Service ───────────────────────────────────────────────
 	fmt.Println()

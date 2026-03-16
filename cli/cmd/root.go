@@ -6,6 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/skonlabs/bugpilot/internal/api"
+	"github.com/skonlabs/bugpilot/internal/config"
 )
 
 var (
@@ -23,6 +26,14 @@ Get started:
   bugpilot history                  # View past investigations`,
 	}
 )
+
+// newClient creates an API client with the versioned User-Agent header.
+// All commands should use this instead of api.New directly.
+func newClient(cfg *config.Config, apiKey string) *api.Client {
+	c := api.New(cfg.BaseURL, apiKey)
+	c.UserAgent = "bugpilot-cli/" + Version
+	return c
+}
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {

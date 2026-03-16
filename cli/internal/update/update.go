@@ -26,10 +26,9 @@ type Asset struct {
 
 // Download downloads the latest release binary and replaces the current executable atomically.
 // Steps:
-//  1. Download to tempfile
-//  2. Make executable
-//  3. Test run (--version) to verify it works
-//  4. os.Rename to current executable path (atomic on same filesystem)
+//  1. Download to a random temp file in the same directory as the binary
+//  2. Set executable permissions
+//  3. os.Rename to current executable path (atomic on same filesystem)
 func Download(latestURL string) error {
 	// Find current executable
 	exe, err := os.Executable()
@@ -41,8 +40,6 @@ func Download(latestURL string) error {
 		return fmt.Errorf("resolve symlinks: %w", err)
 	}
 
-	// Download to temp file
-	tmpFile := exe + ".tmp"
 	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Get(latestURL)
 	if err != nil {
@@ -54,17 +51,25 @@ func Download(latestURL string) error {
 		return fmt.Errorf("download status %d", resp.StatusCode)
 	}
 
-	f, err := os.OpenFile(tmpFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	// Write to a randomly-named temp file in the same directory to allow atomic rename
+	tmpF, err := os.CreateTemp(filepath.Dir(exe), "bugpilot-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
+	tmpFile := tmpF.Name()
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		f.Close()
+	if _, err := io.Copy(tmpF, resp.Body); err != nil {
+		tmpF.Close()
 		os.Remove(tmpFile)
 		return fmt.Errorf("write temp file: %w", err)
 	}
-	f.Close()
+	tmpF.Close()
+
+	// Set executable permissions before the rename so the binary is ready on swap
+	if err := os.Chmod(tmpFile, 0755); err != nil {
+		os.Remove(tmpFile)
+		return fmt.Errorf("set permissions: %w", err)
+	}
 
 	// Atomic replace
 	if err := os.Rename(tmpFile, exe); err != nil {
@@ -80,31 +85,23 @@ func AssetURLForPlatform(assets []Asset) (string, error) {
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
 
-	// Normalize arch names
-	archMap := map[string]string{
-		"amd64": "x86_64",
-		"arm64": "arm64",
-		"386":   "i386",
-	}
-	archName := archMap[goarch]
-	if archName == "" {
-		archName = goarch
-	}
-
-	// OS names in release filenames
+	// OS names as used in release asset filenames
 	osMap := map[string]string{
 		"linux":   "linux",
-		"darwin":  "darwin",
+		"darwin":  "macos", // release assets are named "macos", not "darwin"
 		"windows": "windows",
 	}
-	osName := osMap[goos]
-	if osName == "" {
+	osName, ok := osMap[goos]
+	if !ok {
 		return "", fmt.Errorf("unsupported OS: %s", goos)
 	}
 
+	// Arch names match Go's GOARCH values in release asset filenames (amd64, arm64)
+	archName := goarch
+
 	for _, asset := range assets {
 		name := strings.ToLower(asset.Name)
-		if strings.Contains(name, osName) && strings.Contains(name, strings.ToLower(archName)) {
+		if strings.Contains(name, osName) && strings.Contains(name, archName) {
 			if goos == "windows" && !strings.HasSuffix(name, ".exe") {
 				continue
 			}
