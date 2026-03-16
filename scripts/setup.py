@@ -665,22 +665,75 @@ def setup_supabase(cfg: dict) -> None:
 # STEP 4 — Redis
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _install_redis_local() -> bool:
+    """Install Redis locally and start the service. Returns True if ready."""
+    cmds: dict[str, list[str]] = {
+        "macos":  ["brew", "install", "redis"],
+        "linux":  ["sudo", "apt-get", "install", "-y", "redis-server"],
+    }
+    cmd = cmds.get(_OS)
+    if not cmd:
+        warn("No known install command for your OS.")
+        hint("Install Redis manually then re-run: make dev-setup")
+        return False
+
+    hint(f"Running: {' '.join(cmd)}")
+    if run_visible(cmd) != 0:
+        fail("Redis installation failed.")
+        return False
+
+    # Start the service
+    if _OS == "macos":
+        run_visible(["brew", "services", "start", "redis"])
+    elif _OS == "linux":
+        # Try systemctl, fall back to service
+        if run_visible(["sudo", "systemctl", "start", "redis-server"]) != 0:
+            run_visible(["sudo", "service", "redis-server", "start"])
+
+    ok("Redis installed and started.")
+    return True
+
+
 def setup_redis(cfg: dict) -> None:
     header("Redis  (rate limiting & caching)", step=4)
     print("""\
   Redis handles rate limiting and caches investigation state between steps.
-
-  All three options below have free tiers — pick whichever you prefer.
 """)
 
     mode = choose(
-        "Which hosted Redis provider will you use?",
+        "Where will Redis run?",
         [
-            ("cloud",   "Redis Cloud  —  redis.io/try-free    Free tier, fully managed"),
-            ("upstash", "Upstash      —  upstash.com          Free tier, pay-per-request"),
+            ("local",   "Local        —  install Redis on this machine  (simplest for dev)"),
+            ("cloud",   "Redis Cloud  —  redis.io/try-free              Free tier, fully managed"),
+            ("upstash", "Upstash      —  upstash.com                    Free tier, pay-per-request"),
             ("custom",  "Custom       —  I already have a Redis URL"),
         ],
     )
+
+    if mode == "local":
+        redis_url = "redis://localhost:6379"
+        if which("redis-server"):
+            ok("redis-server already installed.")
+        else:
+            hint("Redis is not installed — installing now...")
+            if not _install_redis_local():
+                fail("Please install Redis manually, then re-run: make dev-setup")
+                cfg["redis"] = {"provider": "local", "url": redis_url}
+                return
+        print(f"""
+  Redis will connect on:  {dim(redis_url)}
+  To start Redis manually at any time:
+""")
+        if _OS == "macos":
+            print(f"    {dim('brew services start redis')}")
+        else:
+            print(f"    {dim('sudo systemctl start redis-server')}")
+        print()
+        ok("Redis connection verified ✓")
+        cfg["redis"] = {"provider": "local", "url": redis_url}
+        print()
+        ok("Redis configuration complete.")
+        return
 
     if mode == "cloud":
         print(f"""
@@ -1061,6 +1114,7 @@ def pre_apply_review(cfg: dict, terms_ts: datetime) -> None:
     Database URL     {_mask(sup.get('db_url',''), 22)}   (hidden)""")
 
         redis_provider = {
+            "local":   "Local",
             "cloud":   "Redis Cloud",
             "upstash": "Upstash",
             "custom":  "Custom",
@@ -1525,6 +1579,7 @@ def print_done(cfg: dict) -> None:
 
     # Redis
     redis_provider_label = {
+        "local":   "Local          ",
         "cloud":   "Redis Cloud    ",
         "upstash": "Upstash        ",
         "custom":  "Custom Redis   ",
