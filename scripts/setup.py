@@ -199,38 +199,18 @@ def _validate_supabase_url(url: str) -> tuple[bool, str]:
         )
 
 def _validate_supabase_secret_key(val: str) -> tuple[bool, str]:
-    """Accept new-style sb_secret_... keys and legacy service_role JWTs."""
-    if val.startswith("sb_secret_"):
-        if len(val) < 20:
-            return False, "Key looks too short — make sure you copied the full value"
-        return True, ""
-    # Legacy JWT format (still valid during the transition period)
-    if val.startswith("eyJ"):
-        if len(val.split(".")) != 3:
-            return False, "JWT key must have exactly 3 dot-separated sections — copy the full value"
-        return True, ""
-    return (
-        False,
-        "Expected a key starting with sb_secret_  (current format)  "
-        "or eyJ  (legacy JWT) — check you copied the correct key",
-    )
+    if not val.startswith("sb_secret_"):
+        return False, "Secret key must start with sb_secret_  — copy it from Settings → Data API → API Keys"
+    if len(val) < 20:
+        return False, "Key looks too short — make sure you copied the full value"
+    return True, ""
 
 def _validate_supabase_publishable_key(val: str) -> tuple[bool, str]:
-    """Accept new-style sb_publishable_... keys and legacy anon JWTs."""
-    if val.startswith("sb_publishable_"):
-        if len(val) < 20:
-            return False, "Key looks too short — make sure you copied the full value"
-        return True, ""
-    # Legacy JWT format (still valid during the transition period)
-    if val.startswith("eyJ"):
-        if len(val.split(".")) != 3:
-            return False, "JWT key must have exactly 3 dot-separated sections — copy the full value"
-        return True, ""
-    return (
-        False,
-        "Expected a key starting with sb_publishable_  (current format)  "
-        "or eyJ  (legacy JWT) — check you copied the correct key",
-    )
+    if not val.startswith("sb_publishable_"):
+        return False, "Publishable key must start with sb_publishable_  — copy it from Settings → Data API → API Keys"
+    if len(val) < 20:
+        return False, "Key looks too short — make sure you copied the full value"
+    return True, ""
 
 def _validate_db_url(url: str) -> tuple[bool, str]:
     if not (url.startswith("postgresql://") or url.startswith("postgres://")):
