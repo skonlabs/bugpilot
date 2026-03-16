@@ -232,32 +232,20 @@ def _make_validate_supabase_secret_key(supabase_url: str):
 
 
 def _make_validate_supabase_publishable_key(supabase_url: str):
-    """Return a validator that checks format then makes a live API call."""
+    """Format-only validator.
+
+    A live API call against /rest/v1/ will legitimately 401 for the anon key
+    when RLS blocks all tables — which is the correct, secure default for new
+    projects.  The project URL was already confirmed reachable in step 1, and
+    the secret-key check in step 2 already validated the credentials work.
+    """
+    del supabase_url  # not used; kept for a consistent factory signature
     def _v(val: str) -> tuple[bool, str]:
         if not val.startswith("sb_publishable_"):
             return False, "Publishable key must start with sb_publishable_  — copy it from Settings → Data API → API Keys"
         if len(val) < 20:
             return False, "Key looks too short — make sure you copied the full value"
-        print(f"     {dim('Verifying key against project...')} ", end="", flush=True)
-        try:
-            req = urllib.request.Request(
-                f"{supabase_url}/rest/v1/",
-                headers={"apikey": val, "Authorization": f"Bearer {val}"},
-            )
-            with urllib.request.urlopen(req, timeout=10) as r:
-                r.read()
-            print(green("ok"))
-            return True, ""
-        except urllib.error.HTTPError as e:
-            print()
-            if e.code == 401:
-                return False, "Supabase rejected this key (401) — make sure you copied the publishable key, not the secret key"
-            print(green("ok"))
-            return True, ""
-        except Exception as e:
-            print(yellow("(could not reach project to verify — accepted anyway)"))
-            hint(f"Live check skipped: {e}")
-            return True, ""
+        return True, ""
     return _v
 
 
