@@ -501,7 +501,12 @@ def check_prerequisites() -> bool:
         hint("Install from https://python.org/downloads  or use pyenv")
         all_ok = False
 
-    # Go
+    # Go — the official installer puts Go in /usr/local/go/bin which is often
+    # not in PATH until the user opens a new shell; check that path explicitly
+    # so we don't re-install on every setup re-run.
+    _go_default = "/usr/local/go/bin"
+    if not which("go") and Path(_go_default).joinpath("go").exists():
+        os.environ["PATH"] = os.environ["PATH"] + f":{_go_default}"
     if which("go"):
         r = run(["go", "version"], check=False)
         ok(r.stdout.strip() if r.returncode == 0 else "go  (installed)")
