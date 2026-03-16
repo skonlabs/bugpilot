@@ -1,13 +1,13 @@
 {
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "CLI-first developer tool for debugging production incidents",
   "homepage": "https://bugpilot.io",
   "license": "Proprietary",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/skonlabs/bugpilot/releases/download/v0.4.0/bugpilot-windows-amd64.exe",
-      "hash": "c32525474c90c84ff39f314c961544115d0e2e8ac04f19d1aafded96d3e6b99f"
+      "url": "https://github.com/skonlabs/bugpilot/releases/download/v0.5.0/bugpilot-windows-amd64.exe",
+      "hash": "22f3c293d0ebbe960ccd738cfd46ff123cfa5d7d37f5f0aa2c0c4211fe7ee6e2"
     }
   },
   "bin": [
