@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/skonlabs/bugpilot/internal/api"
 	"github.com/skonlabs/bugpilot/internal/config"
 )
 
@@ -40,7 +39,7 @@ func runHistory(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg, _ := config.Load()
-	client := api.New(cfg.BaseURL, apiKey)
+	client := newClient(cfg, apiKey)
 	jsonMode := viper.GetBool("json_output")
 
 	// Show specific investigation

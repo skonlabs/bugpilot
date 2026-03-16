@@ -9,7 +9,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
-	"github.com/skonlabs/bugpilot/internal/api"
 	"github.com/skonlabs/bugpilot/internal/config"
 )
 
@@ -41,13 +40,12 @@ func runReport(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("not configured: run 'bugpilot init' first")
 	}
 	cfg, _ := config.Load()
-	client := api.New(cfg.BaseURL, apiKey)
+	client := newClient(cfg, apiKey)
 
 	outputFile, _ := cmd.Flags().GetString("output")
 	pushConfluence, _ := cmd.Flags().GetBool("confluence")
 	spaceKey, _ := cmd.Flags().GetString("space")
 	parentID, _ := cmd.Flags().GetString("parent")
-	_ = parentID
 
 	green := color.New(color.FgGreen)
 	yellow := color.New(color.FgYellow)

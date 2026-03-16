@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -37,7 +38,7 @@ func init() {
 	investigateCmd.Flags().String("source", "", "Ticket source (jira|freshdesk|sentry|slack|cli)")
 	investigateCmd.Flags().Bool("no-slack", false, "Suppress Slack notification")
 	investigateCmd.Flags().Bool("dry-run", false, "Show what would be investigated without running")
-	investigateCmd.Flags().Bool("watch", false, "Watch progress in real-time (default: true)")
+	investigateCmd.Flags().Bool("watch", true, "Watch progress in real-time")
 }
 
 func runInvestigate(cmd *cobra.Command, args []string) error {
@@ -47,7 +48,7 @@ func runInvestigate(cmd *cobra.Command, args []string) error {
 	}
 
 	cfg, _ := config.Load()
-	client := api.New(cfg.BaseURL, apiKey)
+	client := newClient(cfg, apiKey)
 
 	// Build request
 	req := api.CreateInvestigationRequest{
@@ -122,15 +123,19 @@ func runInvestigate(cmd *cobra.Command, args []string) error {
 	bold.Printf("🔍 Investigation started: %s\n", resp.InvestigationID)
 	fmt.Printf("   Estimated time: ~%ds\n\n", resp.EstimatedSeconds)
 
-	// Poll for completion
 	watchEnabled, _ := cmd.Flags().GetBool("watch")
-	_ = watchEnabled // always watch in interactive mode
 
-	pollInterval := 2 * time.Second
+	// Timeout: at least 10 minutes, or 60s beyond the API's estimate
 	maxWait := 10 * time.Minute
+	if estimated := time.Duration(resp.EstimatedSeconds+60) * time.Second; estimated > maxWait {
+		maxWait = estimated
+	}
 	deadline := time.Now().Add(maxWait)
 
-	lastStep := ""
+	pollInterval := 2 * time.Second
+	// printedSteps tracks which (step, status) pairs have already been printed
+	printedSteps := map[string]bool{}
+
 	for time.Now().Before(deadline) {
 		status, err := client.GetInvestigationStatus(resp.InvestigationID)
 		if err != nil {
@@ -139,10 +144,16 @@ func runInvestigate(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		// Print new steps
-		for _, step := range status.Progress {
-			key := step.Step + step.Status
-			if key != lastStep && step.Status != "" {
+		if watchEnabled {
+			for _, step := range status.Progress {
+				if step.Status == "" {
+					continue
+				}
+				key := step.Step + "|" + step.Status
+				if printedSteps[key] {
+					continue
+				}
+				printedSteps[key] = true
 				icon := "⏳"
 				if step.Status == "done" {
 					icon = "✓"
@@ -152,7 +163,6 @@ func runInvestigate(cmd *cobra.Command, args []string) error {
 					dur = fmt.Sprintf(" (%dms)", *step.DurationMs)
 				}
 				fmt.Printf("  %s %-25s%s\n", icon, stepLabel(step.Step), dur)
-				lastStep = key
 			}
 		}
 
@@ -245,33 +255,38 @@ func printInvestigationResult(inv *api.Investigation) {
 	if !isTerminal() {
 		return
 	}
+
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Print("  Is this correct? [y]es / [n]o / [s]kip: ")
-	var ans string
-	_, _ = fmt.Scanln(&ans)
+	ans, _ := reader.ReadString('\n')
 	ans = strings.ToLower(strings.TrimSpace(ans))
+
+	apiKey, _ := config.LoadAPIKey()
+	cfg, _ := config.Load()
+	client := newClient(cfg, apiKey)
+
 	if ans == "y" || ans == "yes" {
-		fmt.Println("  Feedback recorded: confirmed")
-		// Submit feedback
-		apiKey, _ := config.LoadAPIKey()
-		cfg, _ := config.Load()
-		client := api.New(cfg.BaseURL, apiKey)
-		_ = client.SubmitFeedback(inv.InvestigationID, api.FeedbackRequest{
-			Feedback:    "confirmed",
+		if err := client.SubmitFeedback(inv.InvestigationID, api.FeedbackRequest{
+			Feedback:       "confirmed",
 			HypothesisRank: 1,
-		})
+		}); err != nil {
+			color.Yellow("  ⚠ Feedback not saved: %v\n", err)
+		} else {
+			fmt.Println("  Feedback recorded: confirmed")
+		}
 	} else if ans == "n" || ans == "no" {
 		fmt.Print("  What was the actual cause? (optional): ")
-		var cause string
-		_, _ = fmt.Scanln(&cause)
-		apiKey, _ := config.LoadAPIKey()
-		cfg, _ := config.Load()
-		client := api.New(cfg.BaseURL, apiKey)
-		_ = client.SubmitFeedback(inv.InvestigationID, api.FeedbackRequest{
-			Feedback:    "refuted",
+		cause, _ := reader.ReadString('\n')
+		cause = strings.TrimSpace(cause)
+		if err := client.SubmitFeedback(inv.InvestigationID, api.FeedbackRequest{
+			Feedback:       "refuted",
 			HypothesisRank: 1,
-			Cause:       cause,
-		})
-		fmt.Println("  Feedback recorded: refuted")
+			Cause:          cause,
+		}); err != nil {
+			color.Yellow("  ⚠ Feedback not saved: %v\n", err)
+		} else {
+			fmt.Println("  Feedback recorded: refuted")
+		}
 	}
 }
 
@@ -302,13 +317,13 @@ func guessSource(ticketID string) string {
 
 func stepLabel(step string) string {
 	labels := map[string]string{
-		"resolve_window":      "Resolving time window",
-		"load_connectors":     "Loading connectors",
-		"fetch_events":        "Fetching events",
-		"build_graph":         "Building code graph",
-		"rank_hypotheses":     "Ranking hypotheses",
-		"generate_narrative":  "Generating analysis",
-		"persist_results":     "Saving results",
+		"resolve_window":     "Resolving time window",
+		"load_connectors":    "Loading connectors",
+		"fetch_events":       "Fetching events",
+		"build_graph":        "Building code graph",
+		"rank_hypotheses":    "Ranking hypotheses",
+		"generate_narrative": "Generating analysis",
+		"persist_results":    "Saving results",
 	}
 	if l, ok := labels[step]; ok {
 		return l

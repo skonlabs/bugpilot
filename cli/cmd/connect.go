@@ -67,7 +67,7 @@ func runConnectList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("not configured: run 'bugpilot init' first")
 	}
 	cfg, _ := config.Load()
-	client := api.New(cfg.BaseURL, apiKey)
+	client := newClient(cfg, apiKey)
 
 	connectors, err := client.ListConnectors()
 	if err != nil {
@@ -109,7 +109,7 @@ func runConnect(cmd *cobra.Command, connectorType string, args []string) error {
 	}
 
 	cfg, _ := config.Load()
-	client := api.New(cfg.BaseURL, apiKey)
+	client := newClient(cfg, apiKey)
 
 	name, _ := cmd.Flags().GetString("name")
 	service, _ := cmd.Flags().GetString("service")
@@ -315,7 +315,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("not configured: run 'bugpilot init' first")
 	}
 	cfg, _ := config.Load()
-	client := api.New(cfg.BaseURL, apiKey)
+	client := newClient(cfg, apiKey)
 
 	bold := color.New(color.Bold)
 	green := color.New(color.FgGreen)

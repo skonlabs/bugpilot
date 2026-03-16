@@ -16,14 +16,16 @@ const defaultTimeout = 30 * time.Second
 type Client struct {
 	BaseURL    string
 	APIKey     string
+	UserAgent  string
 	HTTPClient *http.Client
 }
 
 // New creates a new API client.
 func New(baseURL, apiKey string) *Client {
 	return &Client{
-		BaseURL: baseURL,
-		APIKey:  apiKey,
+		BaseURL:   baseURL,
+		APIKey:    apiKey,
+		UserAgent: "bugpilot-cli",
 		HTTPClient: &http.Client{
 			Timeout: defaultTimeout,
 		},
@@ -75,6 +77,7 @@ func (c *Client) do(method, path string, body interface{}, out interface{}) erro
 	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.UserAgent)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
