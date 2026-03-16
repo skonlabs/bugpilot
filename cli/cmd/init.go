@@ -23,13 +23,12 @@ const (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Set up BugPilot with your API key and accept the Terms of Service",
-	Long: `Initialize BugPilot (5 steps):
+	Long: `Initialize BugPilot (4 steps):
 
-  Step 1/5 — API key validation
-  Step 2/5 — Terms of Service acceptance
-  Step 3/5 — Default service name (optional)
-  Step 4/5 — Write configuration
-  Step 5/5 — Verify connection`,
+  Step 1/4 — API key validation
+  Step 2/4 — Terms of Service acceptance
+  Step 3/4 — Write configuration
+  Step 4/4 — Verify connection`,
 	RunE: runInit,
 }
 
@@ -50,8 +49,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	// ── Step 1: API Key ────────────────────────────────────────────────────────
-	bold.Println("Step 1/5 — API Key Validation")
-	fmt.Println("  Get your API key at: https://app.ekonomical.com/settings/api-keys")
+	bold.Println("Step 1/4 — API Key Validation")
+	fmt.Println("  Get your API key at: https://app.bugpilot.io/settings/api-keys")
 	fmt.Print("  Enter your API key (bp_live_... or bp_test_...): ")
 
 	var apiKey string
@@ -88,7 +87,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// ── Step 2: Terms of Service ───────────────────────────────────────────────
 	fmt.Println()
-	bold.Println("Step 2/5 — Terms of Service")
+	bold.Println("Step 2/4 — Terms of Service")
 	fmt.Printf("  Please read the Terms of Service at: %s\n", termsURL)
 	fmt.Print("  Do you accept the Terms of Service? [y/N]: ")
 
@@ -119,20 +118,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	green.Printf("✓ Connected as %s (%s plan)\n", validateResp.OrgName, validateResp.Plan)
 
-	// ── Step 3: Service name ───────────────────────────────────────────────────
+	// ── Step 3: Write configuration ────────────────────────────────────────────
 	fmt.Println()
-	bold.Println("Step 3/5 — Default Service (optional)")
-	fmt.Print("  Default service name to investigate (e.g. 'payments', press Enter to skip): ")
-
-	serviceLine, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("read service: %w", err)
-	}
-	_ = strings.TrimSpace(serviceLine) // stored in future connector config
-
-	// ── Step 4: Write configuration ────────────────────────────────────────────
-	fmt.Println()
-	bold.Println("Step 4/5 — Writing Configuration")
+	bold.Println("Step 3/4 — Writing Configuration")
 	yellow.Print("  Saving ~/.bugpilot/config.yaml... ")
 
 	newCfg := &config.Config{
@@ -149,9 +137,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	green.Println("✓")
 
-	// ── Step 5: Verify connection ──────────────────────────────────────────────
+	// ── Step 4: Verify connection ──────────────────────────────────────────────
 	fmt.Println()
-	bold.Println("Step 5/5 — Verify Connection")
+	bold.Println("Step 4/4 — Verify Connection")
 	yellow.Print("  Testing API connection... ")
 	_, err = client.ValidateKey(api.ValidateKeyRequest{})
 	if err != nil {

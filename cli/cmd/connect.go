@@ -44,6 +44,7 @@ var connectListCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(connectCmd)
+	rootCmd.AddCommand(doctorCmd)
 	connectCmd.AddCommand(connectListCmd)
 
 	for _, ct := range []string{"github", "sentry", "jira", "freshdesk", "email", "database", "log-files"} {
@@ -303,10 +304,6 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check all connector health",
 	RunE:  runDoctor,
-}
-
-func init() {
-	rootCmd.AddCommand(doctorCmd)
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
