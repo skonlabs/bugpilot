@@ -22,6 +22,7 @@ import re
 import secrets
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import urllib.error
@@ -198,19 +199,67 @@ def _validate_supabase_url(url: str) -> tuple[bool, str]:
             f"       Error: {e}"
         )
 
-def _validate_supabase_secret_key(val: str) -> tuple[bool, str]:
-    if not val.startswith("sb_secret_"):
-        return False, "Secret key must start with sb_secret_  — copy it from Settings → Data API → API Keys"
-    if len(val) < 20:
-        return False, "Key looks too short — make sure you copied the full value"
-    return True, ""
+def _make_validate_supabase_secret_key(supabase_url: str):
+    """Return a validator that checks format then makes a live API call."""
+    def _v(val: str) -> tuple[bool, str]:
+        if not val.startswith("sb_secret_"):
+            return False, "Secret key must start with sb_secret_  — copy it from Settings → Data API → API Keys"
+        if len(val) < 20:
+            return False, "Key looks too short — make sure you copied the full value"
+        # Live check: hit the REST root; 401 means wrong key, anything else is OK
+        print(f"     {dim('Verifying key against project...')} ", end="", flush=True)
+        try:
+            req = urllib.request.Request(
+                f"{supabase_url}/rest/v1/",
+                headers={"apikey": val, "Authorization": f"Bearer {val}"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                r.read()
+            print(green("ok"))
+            return True, ""
+        except urllib.error.HTTPError as e:
+            print()
+            if e.code == 401:
+                return False, "Supabase rejected this key (401) — make sure you copied the secret key, not the publishable key"
+            # Non-401 HTTP errors (e.g. 404) mean auth passed; schema may just be empty
+            print(green("ok"))
+            return True, ""
+        except Exception as e:
+            print(yellow("(could not reach project to verify — accepted anyway)"))
+            hint(f"Live check skipped: {e}")
+            return True, ""
+    return _v
 
-def _validate_supabase_publishable_key(val: str) -> tuple[bool, str]:
-    if not val.startswith("sb_publishable_"):
-        return False, "Publishable key must start with sb_publishable_  — copy it from Settings → Data API → API Keys"
-    if len(val) < 20:
-        return False, "Key looks too short — make sure you copied the full value"
-    return True, ""
+
+def _make_validate_supabase_publishable_key(supabase_url: str):
+    """Return a validator that checks format then makes a live API call."""
+    def _v(val: str) -> tuple[bool, str]:
+        if not val.startswith("sb_publishable_"):
+            return False, "Publishable key must start with sb_publishable_  — copy it from Settings → Data API → API Keys"
+        if len(val) < 20:
+            return False, "Key looks too short — make sure you copied the full value"
+        print(f"     {dim('Verifying key against project...')} ", end="", flush=True)
+        try:
+            req = urllib.request.Request(
+                f"{supabase_url}/rest/v1/",
+                headers={"apikey": val, "Authorization": f"Bearer {val}"},
+            )
+            with urllib.request.urlopen(req, timeout=10) as r:
+                r.read()
+            print(green("ok"))
+            return True, ""
+        except urllib.error.HTTPError as e:
+            print()
+            if e.code == 401:
+                return False, "Supabase rejected this key (401) — make sure you copied the publishable key, not the secret key"
+            print(green("ok"))
+            return True, ""
+        except Exception as e:
+            print(yellow("(could not reach project to verify — accepted anyway)"))
+            hint(f"Live check skipped: {e}")
+            return True, ""
+    return _v
+
 
 def _validate_db_url(url: str) -> tuple[bool, str]:
     if not (url.startswith("postgresql://") or url.startswith("postgres://")):
@@ -219,19 +268,58 @@ def _validate_db_url(url: str) -> tuple[bool, str]:
         return False, "Replace [YOUR-PASSWORD] with your actual database password"
     if "@" not in url:
         return False, "Missing credentials — format: postgresql://user:password@host:5432/db"
+    # TCP-level connectivity check (full auth requires psycopg2 which isn't
+    # installed yet at this point in setup)
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname or ""
+        port = parsed.port or 5432
+        print(f"     {dim('Checking connectivity...')} ", end="", flush=True)
+        s = socket.create_connection((host, port), timeout=8)
+        s.close()
+        print(green("reachable"))
+    except Exception as e:
+        print()
+        return False, (
+            f"Could not reach database host.\n"
+            f"       Error: {e}\n"
+            f"       Check the host/port in your URI and that the DB is accepting connections."
+        )
     return True, ""
+
 
 def _validate_redis_url(url: str) -> tuple[bool, str]:
     if not (url.startswith("redis://") or url.startswith("rediss://")):
         return False, "Must start with redis:// or rediss://"
+    use_tls = url.startswith("rediss://")
     try:
         norm = url.replace("rediss://", "https://").replace("redis://", "http://")
         parsed = urllib.parse.urlparse(norm)
-        host = parsed.hostname or "localhost"
-        port = parsed.port or 6379
+        host   = parsed.hostname or "localhost"
+        port   = parsed.port or 6379
+        password = parsed.password or ""
         print(f"     {dim('Connecting...')} ", end="", flush=True)
-        s = socket.create_connection((host, port), timeout=8)
-        s.close()
+        raw = socket.create_connection((host, port), timeout=8)
+        if use_tls:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            sock = ctx.wrap_socket(raw, server_hostname=host)
+        else:
+            sock = raw
+        try:
+            if password:
+                auth_cmd = f"*2\r\n$4\r\nAUTH\r\n${len(password)}\r\n{password}\r\n"
+                sock.sendall(auth_cmd.encode())
+                auth_resp = sock.recv(128).decode(errors="replace")
+                if not auth_resp.startswith("+OK"):
+                    return False, f"Redis AUTH failed — check your password. Server replied: {auth_resp.strip()}"
+            sock.sendall(b"*1\r\n$4\r\nPING\r\n")
+            pong = sock.recv(128).decode(errors="replace")
+            if not pong.startswith("+PONG"):
+                return False, f"Unexpected Redis response: {pong.strip()}"
+        finally:
+            sock.close()
         print(green("PING → PONG"))
         return True, ""
     except Exception as e:
@@ -612,8 +700,8 @@ def setup_supabase(cfg: dict) -> None:
 
   Current format:  {dim('sb_secret_...')}
 """)
-    service_key = ask_validated("Secret key", _validate_supabase_secret_key, secret=True)
-    ok("Secret key format ✓")
+    service_key = ask_validated("Secret key", _make_validate_supabase_secret_key(url), secret=True)
+    ok("Secret key verified ✓")
 
     field_header(3, 4, "Publishable key  (safe to use in the browser)")
     print(f"""\
@@ -624,8 +712,8 @@ def setup_supabase(cfg: dict) -> None:
 
   Current format:  {dim('sb_publishable_...')}
 """)
-    anon_key = ask_validated("Publishable key", _validate_supabase_publishable_key, secret=True)
-    ok("Publishable key format ✓")
+    anon_key = ask_validated("Publishable key", _make_validate_supabase_publishable_key(url), secret=True)
+    ok("Publishable key verified ✓")
 
     field_header(4, 4, "Database URI")
     print(f"""\
