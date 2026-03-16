@@ -22,7 +22,6 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
-	versionCmd.Flags().Bool("check", false, "Check for updates only (no output otherwise)")
 }
 
 func runVersion(cmd *cobra.Command, args []string) {
@@ -55,10 +54,6 @@ func runVersion(cmd *cobra.Command, args []string) {
 type githubRelease struct {
 	TagName string `json:"tag_name"`
 	HTMLURL string `json:"html_url"`
-	Assets  []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-	} `json:"assets"`
 }
 
 func fetchLatestVersion() (string, string, error) {

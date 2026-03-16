@@ -33,13 +33,11 @@ const (
 
 // Config represents the full CLI configuration.
 type Config struct {
-	APIKey      string            `yaml:"api_key"`
-	BaseURL     string            `yaml:"base_url"`
-	OrgID       string            `yaml:"org_id"`
-	OrgName     string            `yaml:"org_name"`
-	Plan        string            `yaml:"plan"`
-	Connectors  map[string]string `yaml:"connectors,omitempty"`
-	LastVersion string            `yaml:"last_version,omitempty"`
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
+	OrgID   string `yaml:"org_id"`
+	OrgName string `yaml:"org_name"`
+	Plan    string `yaml:"plan"`
 }
 
 func ConfigPath() (string, error) {
@@ -109,15 +107,11 @@ func Save(cfg *Config) error {
 	}
 
 	data := map[string]interface{}{
-		"api_key":      encryptedKey,
-		"base_url":     cfg.BaseURL,
-		"org_id":       cfg.OrgID,
-		"org_name":     cfg.OrgName,
-		"plan":         cfg.Plan,
-		"last_version": cfg.LastVersion,
-	}
-	if len(cfg.Connectors) > 0 {
-		data["connectors"] = cfg.Connectors
+		"api_key":  encryptedKey,
+		"base_url": cfg.BaseURL,
+		"org_id":   cfg.OrgID,
+		"org_name": cfg.OrgName,
+		"plan":     cfg.Plan,
 	}
 
 	b, err := yaml.Marshal(data)
