@@ -174,54 +174,84 @@ jobs:
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: |
+          set -euo pipefail
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
+
           ARM64_SHA=$(grep "bugpilot-macos-arm64" checksums.txt | awk '{print $1}')
           INTEL_SHA=$(grep "bugpilot-macos-amd64" checksums.txt | awk '{print $1}')
 
-          RESPONSE=$(curl -s -H "Authorization: token $TAP_TOKEN" \
-            "https://api.github.com/repos/skonlabs/homebrew-tap/contents/Formula/bugpilot.rb")
-          FILE_SHA=$(echo "$RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['sha'])")
+          [[ -n "$ARM64_SHA" ]] || { echo "ERROR: arm64 sha not found in checksums.txt"; exit 1; }
+          [[ -n "$INTEL_SHA" ]] || { echo "ERROR: amd64 sha not found in checksums.txt"; exit 1; }
+
+          echo "arm64 sha: $ARM64_SHA"
+          echo "amd64 sha: $INTEL_SHA"
+
+          # Fetch current file SHA required by the GitHub Contents API for updates
+          FILE_SHA=$(gh api repos/skonlabs/homebrew-tap/contents/Formula/bugpilot.rb \
+            --header "Authorization: token $TAP_TOKEN" \
+            --jq '.sha')
+          [[ -n "$FILE_SHA" ]] || { echo "ERROR: could not retrieve file SHA from tap repo"; exit 1; }
 
           NEW_CONTENT=$(cat <<FORMULA
-          class Bugpilot < Formula
-            desc     "CLI-first developer tool for debugging production incidents"
-            homepage "https://bugpilot.io"
-            version  "$VERSION"
-            license  "Proprietary"
+class Bugpilot < Formula
+  desc     "CLI-first developer tool for debugging production incidents"
+  homepage "https://bugpilot.io"
+  version  "$VERSION"
+  license  "Proprietary"
 
-            on_macos do
-              on_arm do
-                url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-arm64"
-                sha256 "$ARM64_SHA"
-              end
-              on_intel do
-                url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-amd64"
-                sha256 "$INTEL_SHA"
-              end
-            end
+  on_arm do
+    url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-arm64"
+    sha256 "$ARM64_SHA"
+  end
 
-            def install
-              if Hardware::CPU.intel?
-                bin.install "bugpilot-macos-amd64" => "bugpilot"
-              else
-                bin.install "bugpilot-macos-arm64" => "bugpilot"
-              end
-            end
+  on_intel do
+    url "https://github.com/skonlabs/bugpilot/releases/download/v#{version}/bugpilot-macos-amd64"
+    sha256 "$INTEL_SHA"
+  end
 
-            test do
-              system "#{bin}/bugpilot", "--version"
-            end
-          end
-          FORMULA
-          )
+  def install
+    if Hardware::CPU.arm?
+      bin.install "bugpilot-macos-arm64" => "bugpilot"
+    else
+      bin.install "bugpilot-macos-amd64" => "bugpilot"
+    end
+  end
 
-          ENCODED=$(echo "$NEW_CONTENT" | python3 -c "import sys,base64; print(base64.b64encode(sys.stdin.buffer.read()).decode())")
+  def caveats
+    <<~EOS
+      Shell completions are not installed automatically.
+      To enable them, add one of the following to your shell profile:
 
-          curl -s -X PUT -H "Authorization: token $TAP_TOKEN" -H "Content-Type: application/json" \
-            "https://api.github.com/repos/skonlabs/homebrew-tap/contents/Formula/bugpilot.rb" \
-            -d "{\"message\": \"chore: bump bugpilot to v$VERSION\", \"content\": \"$ENCODED\", \"sha\": \"$FILE_SHA\"}" \
-            | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('content',{}).get('name') or d.get('message','error'))"
+        # bash (~/.bash_profile or ~/.bashrc)
+        eval "\$(bugpilot --completion bash)"
+
+        # zsh (~/.zshrc)
+        eval "\$(bugpilot --completion zsh)"
+
+        # fish (~/.config/fish/config.fish)
+        bugpilot --completion fish | source
+    EOS
+  end
+
+  test do
+    system "#{bin}/bugpilot", "--version"
+  end
+end
+FORMULA
+)
+
+          # base64 -w0 produces a single unwrapped line — safe to embed in JSON
+          ENCODED=$(printf '%s' "$NEW_CONTENT" | base64 -w0)
+
+          gh api repos/skonlabs/homebrew-tap/contents/Formula/bugpilot.rb \
+            --method PUT \
+            --header "Authorization: token $TAP_TOKEN" \
+            -f message="chore: bump bugpilot to v$VERSION" \
+            -f content="$ENCODED" \
+            -f sha="$FILE_SHA" \
+            --jq '.content.name'
+          echo "Tap formula updated to v$VERSION"
 
   # ── Update Scoop manifest ──────────────────────────────────────────────────
   update-scoop:
