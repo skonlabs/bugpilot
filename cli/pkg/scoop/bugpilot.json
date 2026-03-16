@@ -6,18 +6,18 @@
   "license": "Proprietary",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/skonlabs/bugpilot/releases/download/v0.1.0/bugpilot-windows-x86_64.exe",
+      "url": "https://github.com/skonlabs/bugpilot/releases/download/v0.1.0/bugpilot-windows-amd64.exe",
       "hash": "REPLACE_WITH_SHA256"
     }
   },
-  "bin": [["bugpilot-windows-x86_64.exe", "bugpilot"]],
+  "bin": [["bugpilot-windows-amd64.exe", "bugpilot"]],
   "checkver": {
     "github": "https://github.com/skonlabs/bugpilot"
   },
   "autoupdate": {
     "architecture": {
       "64bit": {
-        "url": "https://github.com/skonlabs/bugpilot/releases/download/v$version/bugpilot-windows-x86_64.exe"
+        "url": "https://github.com/skonlabs/bugpilot/releases/download/v$version/bugpilot-windows-amd64.exe"
       }
     }
   }

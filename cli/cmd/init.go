@@ -17,8 +17,7 @@ import (
 
 const (
 	termsVersion = "1.0"
-	termsURL     = "https://ekonomical.com/terms"
-	cliVersion   = "v1.0.0"
+	termsURL     = "https://bugpilot.io/terms"
 )
 
 var initCmd = &cobra.Command{
@@ -110,7 +109,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		TermsAccepted:   true,
 		TermsVersion:    termsVersion,
 		TermsAcceptedAt: termsAcceptedAt,
-		CLIVersion:      cliVersion,
+		CLIVersion:      Version,
 		Platform:        runtime.GOOS + "/" + runtime.GOARCH,
 	})
 	if err != nil {
