@@ -12,9 +12,7 @@ AGE is loaded per-connection via LOAD 'age' + SET search_path.
 """
 from __future__ import annotations
 
-import json
 import logging
-from typing import Optional
 
 log = logging.getLogger(__name__)
 

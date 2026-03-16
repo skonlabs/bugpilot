@@ -106,7 +106,6 @@ def run_investigation(message: dict) -> None:
     investigation_id = message["investigation_id"]
     org_id = message["org_id"]
     trigger_ref = message.get("trigger_ref")
-    trigger_source = message.get("trigger_source", "cli")
     service_name = message.get("service_name")
     window_minutes = int(message.get("window_minutes", 30))
     since = message.get("since")

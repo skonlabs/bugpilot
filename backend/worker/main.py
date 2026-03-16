@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import signal
-import sys
 import time
 
 import boto3
@@ -151,7 +150,6 @@ def run():
 def _handle_github_index(message: dict) -> None:
     """Re-index a GitHub connector's PRs into AGE."""
     org_id = message["org_id"]
-    connector_id = message.get("connector_id")
     connector_name = message.get("connector_name", "default")
 
     from backend.database import get_conn, release_conn, set_org_context

@@ -49,7 +49,7 @@ class GitHubNormaliser(NormaliserBase):
             "changed_files": raw.get("changed_files", 0),
             "files": raw.get("_files", []),   # enriched by fetch()
             "repo": raw.get("_repo", ""),
-            "labels": [l["name"] for l in raw.get("labels", [])],
+            "labels": [label["name"] for label in raw.get("labels", [])],
         })
         return event
 
@@ -237,8 +237,6 @@ class GitHubConnector(ConnectorBase):
             return self._config["token"]
 
         # GitHub App: generate installation token
-        import base64
-        import json as _json
 
         try:
             import jwt as pyjwt

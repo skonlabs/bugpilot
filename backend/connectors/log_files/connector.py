@@ -17,7 +17,6 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 from backend.connectors._base.connector_base import ConnectorBase, ConnectorData, ConnectorHealth

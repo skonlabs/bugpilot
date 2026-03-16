@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import time
 
 import redis as redis_lib
 from fastapi import HTTPException, Request

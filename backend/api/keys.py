@@ -28,7 +28,6 @@ Response 422: validation error in body
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 
 from fastapi import APIRouter, HTTPException, Request

@@ -9,6 +9,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/skonlabs/bugpilot/internal/api"
 	"github.com/skonlabs/bugpilot/internal/config"
