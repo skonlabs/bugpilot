@@ -52,11 +52,13 @@ def _record_step(conn, investigation_id: str, step: str, status: str, duration_m
                     (investigation_id, step),
                 )
             else:
+                # Normalise caller-supplied 'done' to the DB constraint value 'complete'
+                db_status = "complete" if status == "done" else status
                 cur.execute(
                     """UPDATE investigation_progress
                        SET status = %s, duration_ms = %s
                        WHERE investigation_id = %s AND step = %s""",
-                    (status, duration_ms, investigation_id, step),
+                    (db_status, duration_ms, investigation_id, step),
                 )
         conn.commit()
     except Exception as e:
@@ -87,19 +89,14 @@ def _resolve_window(
     return now - timedelta(minutes=window_minutes), now
 
 
-def _fetch_connector_safe(connector, window_start, window_end, trigger_ref, service_name):
+def _fetch_connector_safe(connector, service_name, window_start, window_end, trigger_ref):
     """Fetch with timeout via ConnectorBase.fetch_with_timeout()."""
-    try:
-        data = connector.fetch_with_timeout(
-            service_name=service_name,
-            window_start=window_start,
-            window_end=window_end,
-            trigger_ref=trigger_ref,
-        )
-        return data
-    except Exception as e:
-        log.error(f"Connector {connector.connector_type}/{connector._connector_name} failed: {e}")
-        return None
+    return connector.fetch_with_timeout(
+        service_name=service_name,
+        window_start=window_start,
+        window_end=window_end,
+        trigger_ref=trigger_ref,
+    )
 
 
 def run_investigation(message: dict) -> None:
@@ -169,13 +166,17 @@ def run_investigation(message: dict) -> None:
             futures = {
                 executor.submit(
                     _fetch_connector_safe, c,
-                    window_start, window_end, trigger_ref, service_name
+                    service_name, window_start, window_end, trigger_ref
                 ): c
                 for c in connectors
             }
             for future in as_completed(futures):
                 connector = futures[future]
-                data = future.result()
+                try:
+                    data = future.result()
+                except Exception as e:
+                    log.error(f"Connector {connector.connector_type} future failed: {e}")
+                    continue
                 if data and data.normalised_events:
                     key = connector.connector_type
                     all_events.setdefault(key, []).extend(data.normalised_events)
@@ -254,7 +255,7 @@ def run_investigation(message: dict) -> None:
         blast_records = [e for e in db_events if e.get("event_type") == "blast_radius_record"]
         if blast_records:
             blast_count = len(blast_records)
-            blast_status = "estimated"
+            blast_status = "unknown"
             blast_cohort = service_name or "all_users"
 
         # Step 8: Persist results
@@ -270,7 +271,7 @@ def run_investigation(message: dict) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE investigations SET
-                   status = 'completed',
+                   status = 'complete',
                    failure_class = %s,
                    duration_ms = %s,
                    llm_narrative = %s,
@@ -288,7 +289,8 @@ def run_investigation(message: dict) -> None:
                    window_end = %s,
                    connectors_used = %s::jsonb,
                    connectors_missing = %s::jsonb
-                   WHERE id = %s""",
+                   WHERE id = %s
+                   """,
                 (
                     failure_class,
                     duration_ms,

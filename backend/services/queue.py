@@ -30,11 +30,16 @@ def _get_sqs():
 
 
 def _queue_url(priority: str) -> str:
-    if priority == "p1":
-        return os.environ["SQS_P1_URL"]
-    if priority == "retro":
-        return os.environ["SQS_RETRO_URL"]
-    return os.environ["SQS_P2_URL"]
+    env_map = {
+        "p1":    "SQS_P1_URL",
+        "retro": "SQS_RETRO_URL",
+        "p2":    "SQS_P2_URL",
+    }
+    key = env_map.get(priority, "SQS_P2_URL")
+    url = os.environ.get(key, "")
+    if not url:
+        raise RuntimeError(f"SQS queue URL not configured: {key} is not set")
+    return url
 
 
 def _determine_priority(trigger_source: str, layer: str) -> str:
@@ -71,8 +76,8 @@ def enqueue_investigation(
             cur.execute(
                 """INSERT INTO investigations
                    (org_id, trigger_type, trigger_ref, trigger_source,
-                    service_name, window_minutes, status)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'queued')
+                    service_name, window_minutes, layer, status)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'queued')
                    RETURNING id""",
                 (
                     org_id,
@@ -81,6 +86,7 @@ def enqueue_investigation(
                     trigger_source,
                     service_name,
                     window_minutes,
+                    layer,
                 ),
             )
             inv_id = cur.fetchone()[0]

@@ -86,7 +86,7 @@ def get_connectors_for_service(
         cur.execute(
             """SELECT type, name, config, service_map, role, status
                FROM connectors
-               WHERE org_id = %s AND status IN ('active', 'pending_health')
+               WHERE org_id = %s AND status IN ('pending', 'healthy')
                ORDER BY type, name""",
             (org_id,),
         )

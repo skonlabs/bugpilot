@@ -144,10 +144,11 @@ class LogFilesConnector(ConnectorBase):
         warnings = []
 
         json_fields = {**DEFAULT_JSON_FIELDS, **self._config.get("json_fields", {})}
-        text_pattern = re.compile(
-            self._config.get("text_pattern", DEFAULT_TEXT_PATTERN),
-            re.MULTILINE | re.IGNORECASE,
-        )
+        raw_pattern = self._config.get("text_pattern", DEFAULT_TEXT_PATTERN)
+        try:
+            text_pattern = re.compile(raw_pattern, re.MULTILINE | re.IGNORECASE)
+        except re.error as e:
+            raise ValueError(f"Invalid text_pattern regex in log_files config: {e}") from e
 
         with open(filepath, encoding=encoding, errors="replace") as f:
             for line_num, line in enumerate(f, 1):

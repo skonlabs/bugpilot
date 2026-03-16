@@ -147,7 +147,7 @@ async def auth_middleware(request: Request, call_next):
 
         # Check if terms version is outdated (current required: "1.0")
         from backend.config import settings
-        if terms_version and terms_version < settings.REQUIRED_TERMS_VERSION:
+        if terms_version is not None and terms_version < settings.REQUIRED_TERMS_VERSION:
             return JSONResponse(
                 status_code=451,
                 content={

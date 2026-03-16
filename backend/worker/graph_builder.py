@@ -153,6 +153,30 @@ def get_prs_touching_files(conn, org_id: str, file_paths: list[str]) -> list[dic
     return results
 
 
+def set_pr_confirmed(conn, org_id: str, pr_id: str, confirmed: bool) -> None:
+    """
+    Mark a PR node as confirmed (or refuted) root cause in the AGE graph.
+    Called by the feedback endpoint so get_author_risk_score() can use it.
+    """
+    try:
+        value = "true" if confirmed else "false"
+        with conn.cursor() as cur:
+            cur.execute("LOAD 'age'")
+            cur.execute("SET search_path = ag_catalog, public")
+            pr_id_esc = str(pr_id).replace("'", "\\'")
+            cur.execute(
+                f"""SELECT * FROM cypher('{GRAPH_NAME}', $$
+                    MATCH (pr:PR {{pr_id: '{pr_id_esc}', org_id: '{org_id}'}})
+                    SET pr.confirmed = {value}
+                    RETURN pr
+                $$) AS (pr agtype)"""
+            )
+        conn.commit()
+    except Exception as e:
+        log.warning(f"AGE set_pr_confirmed error for PR {pr_id}: {e}")
+        conn.rollback()
+
+
 def get_author_risk_score(conn, org_id: str, pr_author: str) -> float:
     """
     Compute a risk score for an author based on their past PR history

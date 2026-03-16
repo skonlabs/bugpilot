@@ -80,8 +80,11 @@ func runReport(cmd *cobra.Command, args []string) error {
 	if outputFile != "" {
 		yellow.Printf("Downloading report for %s... ", invID)
 		httpClient := &http.Client{}
-		req, _ := http.NewRequest("GET",
+		req, err := http.NewRequest("GET",
 			cfg.BaseURL+"/v1/reports/"+invID+"/download", nil)
+		if err != nil {
+			return fmt.Errorf("create request: %w", err)
+		}
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		resp, err := httpClient.Do(req)
 		if err != nil {
