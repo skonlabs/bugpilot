@@ -198,11 +198,18 @@ def _validate_supabase_url(url: str) -> tuple[bool, str]:
             f"       Error: {e}"
         )
 
-def _validate_jwt(val: str) -> tuple[bool, str]:
-    if not val.startswith("eyJ"):
-        return False, "Should start with eyJ — make sure you copied the full key"
-    if len(val.split(".")) != 3:
-        return False, "A JWT token has exactly 3 sections separated by dots — copy the full value"
+def _validate_supabase_secret_key(val: str) -> tuple[bool, str]:
+    if not val.startswith("sb_secret_"):
+        return False, "Secret key must start with sb_secret_  — copy it from Settings → Data API → API Keys"
+    if len(val) < 20:
+        return False, "Key looks too short — make sure you copied the full value"
+    return True, ""
+
+def _validate_supabase_publishable_key(val: str) -> tuple[bool, str]:
+    if not val.startswith("sb_publishable_"):
+        return False, "Publishable key must start with sb_publishable_  — copy it from Settings → Data API → API Keys"
+    if len(val) < 20:
+        return False, "Key looks too short — make sure you copied the full value"
     return True, ""
 
 def _validate_db_url(url: str) -> tuple[bool, str]:
@@ -591,42 +598,50 @@ def setup_supabase(cfg: dict) -> None:
     url = ask_validated("Project URL", _validate_supabase_url)
     ok("Supabase URL ✓")
 
-    field_header(2, 4, "Service role key  ⚠  keep this secret — it has full DB access")
+    field_header(2, 4, "Secret key  ⚠  keep this secret — it has full DB access")
     print(f"""\
   Where to find it:
     Settings  →  Data API
-    →  {bold('API Keys')}
-    →  {bold('service_role')}  →  click "Reveal"  →  Copy
+    →  {bold('API Keys')}  tab
+    →  {bold('secret')}  →  click "Reveal"  →  Copy
 
-  Format:  {dim('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')}
-  Length:  typically 200+ characters
+  Current format:  {dim('sb_secret_...')}
 """)
-    service_key = ask_validated("Service role key", _validate_jwt, secret=True)
-    ok("Service role key format ✓")
+    service_key = ask_validated("Secret key", _validate_supabase_secret_key, secret=True)
+    ok("Secret key format ✓")
 
-    field_header(3, 4, "Publishable (anon) key  (safe to use in the browser)")
+    field_header(3, 4, "Publishable key  (safe to use in the browser)")
     print(f"""\
   Where to find it:
     Settings  →  Data API
-    →  {bold('API Keys')}
-    →  {bold('publishable')}  (also labelled "anon" in some versions)  →  Copy
+    →  {bold('API Keys')}  tab
+    →  {bold('publishable')}  →  Copy
 
-  Format:  {dim('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')}
+  Current format:  {dim('sb_publishable_...')}
 """)
-    anon_key = ask_validated("Publishable (anon) key", _validate_jwt, secret=True)
+    anon_key = ask_validated("Publishable key", _validate_supabase_publishable_key, secret=True)
     ok("Publishable key format ✓")
 
-    field_header(4, 4, "Database connection string")
+    field_header(4, 4, "Database URI")
     print(f"""\
   Where to find it:
-    Click the  {bold('Connect')}  button at the top of your project dashboard
-    →  {bold('Direct connection')}  tab
-    →  copy the URI
+    Click the  {bold('Connect')}  button at the top of your project dashboard.
+    A modal opens with three connection types — pick one:
 
-  Alternatively:  Settings  →  Database  →  Connection string  →  URI
+    {bold('Transaction Pooler')}  {dim('(recommended — port 6543)')}
+      Best for serverless / short-lived connections.
+      URI looks like:
+      {dim('postgres://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres')}
+
+    {bold('Session Pooler')}  {dim('(port 5432 via pooler — use if on an IPv4-only network)')}
+      URI looks like:
+      {dim('postgres://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres')}
+
+    {bold('Direct Connection')}  {dim('(port 5432 — use only for long-lived VM/container deployments)')}
+      URI looks like:
+      {dim('postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres')}
+
   Replace  {yellow('[YOUR-PASSWORD]')}  with your actual database password.
-
-  Format:  {dim('postgresql://postgres:[password]@aws-0-[region].pooler.supabase.com:5432/postgres')}
 """)
     db_url = ask_validated("Database URL", _validate_db_url, secret=True)
     ok("Database URL format ✓")
@@ -1037,7 +1052,7 @@ def pre_apply_review(cfg: dict, terms_ts: datetime) -> None:
   {bold('DATABASE  (Supabase)')}
     Project URL      {sup.get('url', dim('not set'))}   {_status(sup.get('url',''))}
     Service key      {_mask(sup.get('service_key',''))}   (hidden)
-    Anon key         {_mask(sup.get('anon_key',''))}   (hidden)
+    Publishable key  {_mask(sup.get('anon_key',''))}   (hidden)
     Database URL     {_mask(sup.get('db_url',''), 22)}   (hidden)""")
 
         redis_provider = {
@@ -1151,7 +1166,7 @@ def write_env(cfg: dict) -> None:
         f"SUPABASE_ANON_KEY={sup['anon_key']}",
         f"DATABASE_URL={sup['db_url']}",
         "",
-        "# ── Frontend (Vite) — uses the anon key, NOT the service key ─",
+        "# ── Frontend (Vite) — uses the publishable key, NOT the secret key ─",
         f"VITE_SUPABASE_URL={sup['url']}",
         f"VITE_SUPABASE_PUBLISHABLE_KEY={sup['anon_key']}",
         "",
