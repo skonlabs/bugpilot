@@ -322,7 +322,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	red := color.New(color.FgRed)
 	yellow := color.New(color.FgYellow)
 
-	bold.Println("🔧 BugPilot Doctor\n")
+	bold.Println("🔧 BugPilot Doctor")
 
 	// Check API connection
 	yellow.Print("  API connection... ")
