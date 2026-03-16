@@ -324,6 +324,48 @@ _INSTALL_CMDS: dict[str, dict[str, str]] = {
     },
 }
 
+def _install_go_macos_official() -> bool:
+    """Install Go via the official pkg installer — works on all macOS versions."""
+    arch = "arm64" if platform.machine() == "arm64" else "amd64"
+    hint("Fetching latest stable Go version from go.dev...")
+    try:
+        req = urllib.request.Request(
+            "https://go.dev/dl/?mode=json",
+            headers={"User-Agent": "bugpilot-setup/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            releases = json.loads(resp.read())
+        version = next(r["version"] for r in releases if r.get("stable"))
+    except Exception:
+        version = "go1.22.3"  # known-good fallback
+
+    pkg_name = f"{version}.darwin-{arch}.pkg"
+    pkg_url  = f"https://go.dev/dl/{pkg_name}"
+    pkg_path = Path("/tmp") / pkg_name
+
+    hint(f"Downloading {pkg_url} ...")
+    try:
+        urllib.request.urlretrieve(pkg_url, pkg_path)
+    except Exception as exc:
+        fail(f"Download failed: {exc}")
+        hint("Install Go manually from https://go.dev/dl/, then re-run: make dev-setup")
+        return False
+
+    hint("Running installer (may prompt for your password)...")
+    rc = run_visible(["sudo", "installer", "-pkg", str(pkg_path), "-target", "/"])
+    pkg_path.unlink(missing_ok=True)
+    if rc != 0:
+        fail("Go installer failed.")
+        hint("Install Go manually from https://go.dev/dl/, then re-run: make dev-setup")
+        return False
+
+    # Official installer places Go in /usr/local/go/bin — add it for this session
+    go_bin = "/usr/local/go/bin"
+    if go_bin not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = os.environ["PATH"] + f":{go_bin}"
+    return True
+
+
 def _offer_install(tool: str, check_cmd: list[str]) -> bool:
     """Offer to auto-install a missing tool. Returns True if now available."""
     cmd_str = _INSTALL_CMDS.get(tool, {}).get(_OS)
@@ -341,6 +383,22 @@ def _offer_install(tool: str, check_cmd: list[str]) -> bool:
 
     rc = run_visible(cmd_str.split())
     if rc != 0:
+        # brew install go fails on macOS older than Monterey — fall back to
+        # the official pkg installer which supports all recent macOS versions.
+        if tool == "go" and _OS == "macos":
+            print()
+            warn("brew install go requires macOS Monterey or newer.")
+            hint("Offering official Go installer from go.dev instead...")
+            if confirm("Download and run the official Go installer?", default=True):
+                if not _install_go_macos_official():
+                    return False
+                r = subprocess.run(check_cmd, capture_output=True, text=True)
+                if r.returncode == 0:
+                    ok("go installed successfully.")
+                    return True
+            fail("Please install Go from https://go.dev/dl/, then re-run: make dev-setup")
+            return False
+
         fail(f"Install failed. Please install {tool} manually, then re-run: make dev-setup")
         return False
 
