@@ -582,8 +582,8 @@ def setup_supabase(cfg: dict) -> None:
     print(f"""\
   Where to find it:
     supabase.com  →  your project
-    →  Project Settings  (gear icon, left sidebar)
-    →  API
+    →  {bold('Settings')}  (left sidebar)
+    →  {bold('Data API')}
     →  "Project URL"
 
   Format:  {dim('https://xxxxxxxxxxxx.supabase.co')}
@@ -594,9 +594,9 @@ def setup_supabase(cfg: dict) -> None:
     field_header(2, 4, "Service role key  ⚠  keep this secret — it has full DB access")
     print(f"""\
   Where to find it:
-    Same page:  Project Settings  →  API
-    →  "Project API keys"
-    →  {bold('service_role')}  →  click Reveal  →  Copy
+    Settings  →  Data API
+    →  {bold('API Keys')}
+    →  {bold('service_role')}  →  click "Reveal"  →  Copy
 
   Format:  {dim('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')}
   Length:  typically 200+ characters
@@ -604,27 +604,29 @@ def setup_supabase(cfg: dict) -> None:
     service_key = ask_validated("Service role key", _validate_jwt, secret=True)
     ok("Service role key format ✓")
 
-    field_header(3, 4, "Anon / public key  (safe to use in the browser)")
+    field_header(3, 4, "Publishable (anon) key  (safe to use in the browser)")
     print(f"""\
   Where to find it:
-    Same page:  Project Settings  →  API
-    →  "Project API keys"
-    →  {bold('anon public')}  →  Copy
+    Settings  →  Data API
+    →  {bold('API Keys')}
+    →  {bold('publishable')}  (also labelled "anon" in some versions)  →  Copy
 
   Format:  {dim('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')}
 """)
-    anon_key = ask_validated("Anon public key", _validate_jwt, secret=True)
-    ok("Anon key format ✓")
+    anon_key = ask_validated("Publishable (anon) key", _validate_jwt, secret=True)
+    ok("Publishable key format ✓")
 
     field_header(4, 4, "Database connection string")
     print(f"""\
   Where to find it:
-    Project Settings  →  Database
-    →  "Connection string" tab
-    →  URI tab
-    Replace  {yellow('[YOUR-PASSWORD]')}  with your actual database password.
+    Click the  {bold('Connect')}  button at the top of your project dashboard
+    →  {bold('Direct connection')}  tab
+    →  copy the URI
 
-  Format:  {dim('postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres')}
+  Alternatively:  Settings  →  Database  →  Connection string  →  URI
+  Replace  {yellow('[YOUR-PASSWORD]')}  with your actual database password.
+
+  Format:  {dim('postgresql://postgres:[password]@aws-0-[region].pooler.supabase.com:5432/postgres')}
 """)
     db_url = ask_validated("Database URL", _validate_db_url, secret=True)
     ok("Database URL format ✓")
