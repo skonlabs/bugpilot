@@ -49,7 +49,7 @@ class Settings:
 
     # ── App ───────────────────────────────────────────────────
     BUGPILOT_ENV: str = _optional("BUGPILOT_ENV", "development")
-    BUGPILOT_BASE_URL: str = _optional("BUGPILOT_BASE_URL", "https://api.ekonomical.com")
+    BUGPILOT_BASE_URL: str = _optional("BUGPILOT_BASE_URL", "https://api.bugpilot.io")
     LOG_LEVEL: str = _optional("LOG_LEVEL", "info")
     LOG_FORMAT: str = _optional("LOG_FORMAT", "text")
 

@@ -93,7 +93,7 @@ def _build_slack_blocks(investigation: dict, hypotheses: list[dict]) -> list[dic
         })
 
     blocks.append({"type": "divider"})
-    from backend.app.config import settings
+    from backend.config import settings
     base_url = settings.BUGPILOT_BASE_URL
     blocks.append({
         "type": "actions",

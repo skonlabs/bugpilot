@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import time
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -172,7 +173,10 @@ def run_investigation(message: dict) -> None:
             for future in as_completed(futures):
                 connector = futures[future]
                 try:
-                    data = future.result()
+                    data = future.result(timeout=120)
+                except FutureTimeoutError:
+                    log.error(f"Connector {connector.connector_type} timed out after 120s")
+                    continue
                 except Exception as e:
                     log.error(f"Connector {connector.connector_type} future failed: {e}")
                     continue

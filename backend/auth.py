@@ -140,7 +140,7 @@ async def auth_middleware(request: Request, call_next):
                 content={
                     "error": "terms_not_accepted",
                     "message": "Please run 'bugpilot init' to accept the Terms of Service.",
-                    "terms_url": "https://ekonomical.com/terms",
+                    "terms_url": "https://bugpilot.io/terms",
                 },
             )
 
@@ -152,7 +152,7 @@ async def auth_middleware(request: Request, call_next):
                 content={
                     "error": "terms_update_required",
                     "new_version": settings.REQUIRED_TERMS_VERSION,
-                    "terms_url": "https://ekonomical.com/terms",
+                    "terms_url": "https://bugpilot.io/terms",
                     "message": "Terms of Service updated. Please re-accept.",
                 },
             )
