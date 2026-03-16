@@ -198,12 +198,39 @@ def _validate_supabase_url(url: str) -> tuple[bool, str]:
             f"       Error: {e}"
         )
 
-def _validate_jwt(val: str) -> tuple[bool, str]:
-    if not val.startswith("eyJ"):
-        return False, "Should start with eyJ — make sure you copied the full key"
-    if len(val.split(".")) != 3:
-        return False, "A JWT token has exactly 3 sections separated by dots — copy the full value"
-    return True, ""
+def _validate_supabase_secret_key(val: str) -> tuple[bool, str]:
+    """Accept new-style sb_secret_... keys and legacy service_role JWTs."""
+    if val.startswith("sb_secret_"):
+        if len(val) < 20:
+            return False, "Key looks too short — make sure you copied the full value"
+        return True, ""
+    # Legacy JWT format (still valid during the transition period)
+    if val.startswith("eyJ"):
+        if len(val.split(".")) != 3:
+            return False, "JWT key must have exactly 3 dot-separated sections — copy the full value"
+        return True, ""
+    return (
+        False,
+        "Expected a key starting with sb_secret_  (current format)  "
+        "or eyJ  (legacy JWT) — check you copied the correct key",
+    )
+
+def _validate_supabase_publishable_key(val: str) -> tuple[bool, str]:
+    """Accept new-style sb_publishable_... keys and legacy anon JWTs."""
+    if val.startswith("sb_publishable_"):
+        if len(val) < 20:
+            return False, "Key looks too short — make sure you copied the full value"
+        return True, ""
+    # Legacy JWT format (still valid during the transition period)
+    if val.startswith("eyJ"):
+        if len(val.split(".")) != 3:
+            return False, "JWT key must have exactly 3 dot-separated sections — copy the full value"
+        return True, ""
+    return (
+        False,
+        "Expected a key starting with sb_publishable_  (current format)  "
+        "or eyJ  (legacy JWT) — check you copied the correct key",
+    )
 
 def _validate_db_url(url: str) -> tuple[bool, str]:
     if not (url.startswith("postgresql://") or url.startswith("postgres://")):
@@ -591,29 +618,28 @@ def setup_supabase(cfg: dict) -> None:
     url = ask_validated("Project URL", _validate_supabase_url)
     ok("Supabase URL ✓")
 
-    field_header(2, 4, "Service role key  ⚠  keep this secret — it has full DB access")
+    field_header(2, 4, "Secret key  ⚠  keep this secret — it has full DB access")
     print(f"""\
   Where to find it:
     Settings  →  Data API
-    →  {bold('API Keys')}
-    →  {bold('service_role')}  →  click "Reveal"  →  Copy
+    →  {bold('API Keys')}  tab
+    →  {bold('secret')}  →  click "Reveal"  →  Copy
 
-  Format:  {dim('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')}
-  Length:  typically 200+ characters
+  Current format:  {dim('sb_secret_...')}
 """)
-    service_key = ask_validated("Service role key", _validate_jwt, secret=True)
-    ok("Service role key format ✓")
+    service_key = ask_validated("Secret key", _validate_supabase_secret_key, secret=True)
+    ok("Secret key format ✓")
 
-    field_header(3, 4, "Publishable (anon) key  (safe to use in the browser)")
+    field_header(3, 4, "Publishable key  (safe to use in the browser)")
     print(f"""\
   Where to find it:
     Settings  →  Data API
-    →  {bold('API Keys')}
-    →  {bold('publishable')}  (also labelled "anon" in some versions)  →  Copy
+    →  {bold('API Keys')}  tab
+    →  {bold('publishable')}  →  Copy
 
-  Format:  {dim('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...')}
+  Current format:  {dim('sb_publishable_...')}
 """)
-    anon_key = ask_validated("Publishable (anon) key", _validate_jwt, secret=True)
+    anon_key = ask_validated("Publishable key", _validate_supabase_publishable_key, secret=True)
     ok("Publishable key format ✓")
 
     field_header(4, 4, "Database connection string")
@@ -1037,7 +1063,7 @@ def pre_apply_review(cfg: dict, terms_ts: datetime) -> None:
   {bold('DATABASE  (Supabase)')}
     Project URL      {sup.get('url', dim('not set'))}   {_status(sup.get('url',''))}
     Service key      {_mask(sup.get('service_key',''))}   (hidden)
-    Anon key         {_mask(sup.get('anon_key',''))}   (hidden)
+    Publishable key  {_mask(sup.get('anon_key',''))}   (hidden)
     Database URL     {_mask(sup.get('db_url',''), 22)}   (hidden)""")
 
         redis_provider = {
@@ -1151,7 +1177,7 @@ def write_env(cfg: dict) -> None:
         f"SUPABASE_ANON_KEY={sup['anon_key']}",
         f"DATABASE_URL={sup['db_url']}",
         "",
-        "# ── Frontend (Vite) — uses the anon key, NOT the service key ─",
+        "# ── Frontend (Vite) — uses the publishable key, NOT the secret key ─",
         f"VITE_SUPABASE_URL={sup['url']}",
         f"VITE_SUPABASE_PUBLISHABLE_KEY={sup['anon_key']}",
         "",
