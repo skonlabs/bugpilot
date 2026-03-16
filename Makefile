@@ -13,7 +13,11 @@ CLI_DIR  := ./cli
 DIST_DIR := ./dist
 
 .PHONY: all build build-all test test-backend test-connectors test-cli \
-        lint dev-backend dev-worker migrate migrate-reset clean install-deps help
+        lint dev-backend dev-worker migrate migrate-reset clean install-deps dev-setup help
+
+# ── Setup ─────────────────────────────────────────────────────────────────────
+dev-setup:
+	@python3 scripts/setup.py
 
 # ── Default ───────────────────────────────────────────────────────────────────
 all: build test
@@ -126,6 +130,7 @@ clean:
 
 help:
 	@echo "BugPilot Makefile targets:"
+	@echo "  dev-setup     Interactive developer setup wizard (run this first)"
 	@echo "  build         Build CLI binary"
 	@echo "  build-all     Build for all 5 platforms (UPX on linux+windows)"
 	@echo "  test          Run Python tests"

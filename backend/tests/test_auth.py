@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 def test_check_rate_limit_within_limit():
     """Rate limit should not raise when under the limit."""
-    with patch("backend.app.auth._get_redis") as mock_redis:
+    with patch("backend.auth._get_redis") as mock_redis:
         r = MagicMock()
         r.incr.return_value = 1
         r.expire.return_value = True
@@ -19,7 +19,7 @@ def test_check_rate_limit_within_limit():
 
 def test_check_rate_limit_exceeded():
     """Rate limit should raise 429 when over the limit."""
-    with patch("backend.app.auth._get_redis") as mock_redis:
+    with patch("backend.auth._get_redis") as mock_redis:
         r = MagicMock()
         r.incr.return_value = 101  # over investigations limit of 100
         r.ttl.return_value = 3600

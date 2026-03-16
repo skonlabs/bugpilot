@@ -44,7 +44,7 @@ _PATTERNS: list[tuple[re.Pattern, str]] = [
     # GitHub tokens
     (
         re.compile(
-            r"\b(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{36,}\b"
+            r"\b(ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{20,}\b"
         ),
         "[GITHUB_TOKEN]",
     ),

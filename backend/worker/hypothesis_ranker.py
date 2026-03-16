@@ -76,7 +76,14 @@ def _line_overlap_jaccard(pr_files: list[dict], error_frames: list[str]) -> floa
     if not pr_files or not error_frames:
         return 0.0
 
-    pr_paths = {f.get("filename", "").lower() for f in pr_files if f.get("filename")}
+    pr_paths = set()
+    for f in pr_files:
+        fname = f.get("filename", "")
+        if fname:
+            parts = re.split(r"[\\/]", fname)
+            for p in parts:
+                if "." in p:
+                    pr_paths.add(p.lower())
     frame_paths = set()
     for frame in error_frames:
         # Normalise frame to filename portion
@@ -122,15 +129,15 @@ def _ci_failure_signal(pr_labels: list[str], pr_title: str) -> float:
     return 1.0 if any(s in combined for s in signals) else 0.0
 
 
-def _coverage_delta(pr_additions: int, pr_deletions: int) -> float:
+def _coverage_delta(additions: int, deletions: int) -> float:
     """
     Proxy coverage delta: large deletions relative to additions suggests
     test removal. Returns 0.0 (good) to 1.0 (suspicious).
     """
-    total = pr_additions + pr_deletions
+    total = additions + deletions
     if total == 0:
         return 0.0
-    deletion_ratio = pr_deletions / total
+    deletion_ratio = deletions / total
     return deletion_ratio
 
 
