@@ -324,10 +324,41 @@ _INSTALL_CMDS: dict[str, dict[str, str]] = {
     },
 }
 
+def _macos_ver() -> tuple[int, int]:
+    """Return (major, minor) of the running macOS, e.g. (11, 6) for Big Sur."""
+    raw = platform.mac_ver()[0]  # "10.15.7", "11.6.0", "12.3", …
+    try:
+        parts = [int(p) for p in raw.split(".")]
+        return (parts[0], parts[1] if len(parts) > 1 else 0)
+    except (ValueError, IndexError):
+        return (0, 0)
+
+
+def _max_go_minor_for_macos(mac_major: int, mac_minor: int) -> int:
+    """
+    Return the maximum Go 1.X minor version whose official installer
+    works on the given macOS.  Based on Go release-notes minimum-OS tables:
+      Go 1.25/1.26 → macOS 12 (Monterey)
+      Go 1.21–1.24 → macOS 11 (Big Sur)   [1.21 release notes: min 10.15]
+      Go 1.17–1.20 → macOS 10.13 (High Sierra)
+    We're conservative so the chosen version always installs cleanly.
+    """
+    if mac_major >= 12:
+        return 9999  # Monterey+ — any version is fine
+    if mac_major >= 11:
+        return 24    # Big Sur — Go 1.25 first required Monterey
+    if mac_major == 10 and mac_minor >= 15:
+        return 21    # Catalina — Go 1.21 is the last that ships a Catalina pkg
+    return 20        # High Sierra / Mojave — Go 1.20
+
+
 def _install_go_macos_official() -> bool:
     """Install Go via the official pkg installer — works on all macOS versions."""
     arch = "arm64" if platform.machine() == "arm64" else "amd64"
-    hint("Fetching latest stable Go version from go.dev...")
+    mac_major, mac_minor = _macos_ver()
+    max_minor = _max_go_minor_for_macos(mac_major, mac_minor)
+
+    hint("Fetching stable Go releases from go.dev...")
     try:
         req = urllib.request.Request(
             "https://go.dev/dl/?mode=json",
@@ -335,9 +366,34 @@ def _install_go_macos_official() -> bool:
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             releases = json.loads(resp.read())
-        version = next(r["version"] for r in releases if r.get("stable"))
+
+        def _go_minor(v: str) -> int:
+            try:
+                return int(v.lstrip("go").split(".")[1])
+            except (ValueError, IndexError):
+                return 9999
+
+        version = next(
+            r["version"] for r in releases
+            if r.get("stable") and _go_minor(r["version"]) <= max_minor
+        )
+    except StopIteration:
+        version = None
     except Exception:
-        version = "go1.22.3"  # known-good fallback
+        version = None
+
+    # Hardcoded fallbacks when the API is unreachable or no match found
+    if not version:
+        if mac_major >= 12:
+            version = "go1.22.3"
+        elif mac_major >= 11:
+            version = "go1.24.1"
+        elif mac_major == 10 and mac_minor >= 15:
+            version = "go1.21.13"
+        else:
+            version = "go1.20.14"
+
+    hint(f"Selected Go {version} for macOS {mac_major}.{mac_minor}")
 
     pkg_name = f"{version}.darwin-{arch}.pkg"
     pkg_url  = f"https://go.dev/dl/{pkg_name}"
