@@ -642,17 +642,26 @@ def setup_supabase(cfg: dict) -> None:
     anon_key = ask_validated("Publishable key", _validate_supabase_publishable_key, secret=True)
     ok("Publishable key format ✓")
 
-    field_header(4, 4, "Database connection string")
+    field_header(4, 4, "Database URI")
     print(f"""\
   Where to find it:
-    Click the  {bold('Connect')}  button at the top of your project dashboard
-    →  {bold('Direct connection')}  tab
-    →  copy the URI
+    Click the  {bold('Connect')}  button at the top of your project dashboard.
+    A modal opens with three connection types — pick one:
 
-  Alternatively:  Settings  →  Database  →  Connection string  →  URI
+    {bold('Transaction Pooler')}  {dim('(recommended — port 6543)')}
+      Best for serverless / short-lived connections.
+      URI looks like:
+      {dim('postgres://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres')}
+
+    {bold('Session Pooler')}  {dim('(port 5432 via pooler — use if on an IPv4-only network)')}
+      URI looks like:
+      {dim('postgres://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres')}
+
+    {bold('Direct Connection')}  {dim('(port 5432 — use only for long-lived VM/container deployments)')}
+      URI looks like:
+      {dim('postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres')}
+
   Replace  {yellow('[YOUR-PASSWORD]')}  with your actual database password.
-
-  Format:  {dim('postgresql://postgres:[password]@aws-0-[region].pooler.supabase.com:5432/postgres')}
 """)
     db_url = ask_validated("Database URL", _validate_db_url, secret=True)
     ok("Database URL format ✓")
