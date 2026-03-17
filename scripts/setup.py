@@ -1342,16 +1342,44 @@ def write_env(cfg: dict) -> None:
     ENV_FILE.write_text("\n".join(lines) + "\n")
     ok(f".env written  →  {ENV_FILE}")
 
+def _pip_flags() -> list[str]:
+    """Return extra pip flags needed for the current Python environment.
+
+    PEP 668: system-managed Pythons (Homebrew, apt-managed) refuse pip installs
+    unless --break-system-packages is passed.  Virtual environments never need
+    it.  We detect the situation once and use the right flags from the start so
+    the user never sees a noisy externally-managed-environment error.
+    """
+    in_venv = (
+        sys.prefix != sys.base_prefix          # venv / virtualenv
+        or os.environ.get("VIRTUAL_ENV")        # activated venv
+        or os.environ.get("CONDA_DEFAULT_ENV")  # conda
+    )
+    if in_venv:
+        return []
+    # Probe silently: try a no-op pip call; if it exits non-zero the env is
+    # managed and we need the override flag for all subsequent installs.
+    probe = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--dry-run", "--quiet",
+         "--break-system-packages", "pip"],
+        capture_output=True,
+    )
+    # If --break-system-packages itself is what made it work, use it always.
+    # Simpler heuristic: just check for the marker file pip writes on managed envs.
+    marker = Path(sys.prefix) / "EXTERNALLY-MANAGED"
+    if marker.exists():
+        return ["--break-system-packages"]
+    return []
+
+
+_PIP_FLAGS: list[str] = _pip_flags()
+
+
 def _pip_install(reqs: list[str]) -> int:
-    """Run pip install, retrying with --break-system-packages on PEP 668 errors."""
-    rc = run_visible([sys.executable, "-m", "pip", "install", "-q"] + reqs)
-    if rc != 0:
-        # PEP 668: externally-managed-environment — retry with the override flag
-        rc = run_visible([
-            sys.executable, "-m", "pip", "install", "-q",
-            "--break-system-packages",
-        ] + reqs)
-    return rc
+    """Run pip install with the correct flags for this Python environment."""
+    return run_visible(
+        [sys.executable, "-m", "pip", "install", "-q"] + _PIP_FLAGS + reqs
+    )
 
 
 def apply_config(cfg: dict | None = None) -> None:
