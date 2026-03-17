@@ -182,10 +182,14 @@ export default function AdminCredentials() {
         <DialogContent>
           <DialogHeader><DialogTitle>Generate API Credentials</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Select a user to generate credentials for:</p>
+            <p className="text-sm text-muted-foreground">Select a user and key type:</p>
             <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
               <option value="">Select user...</option>
               {profiles.map((p) => <option key={p.auth_user_id} value={p.auth_user_id}>{p.email}</option>)}
+            </select>
+            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={keyType} onChange={(e) => setKeyType(e.target.value as "live" | "test")}>
+              <option value="live">Live Key (bp_live_…)</option>
+              <option value="test">Test Key (bp_test_…)</option>
             </select>
           </div>
           <DialogFooter>
