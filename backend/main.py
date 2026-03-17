@@ -16,6 +16,9 @@ from __future__ import annotations
 import logging
 import os
 
+from dotenv import load_dotenv
+load_dotenv()  # load .env before any module that reads os.environ at import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
