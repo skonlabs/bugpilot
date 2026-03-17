@@ -172,7 +172,7 @@ jobs:
 
       - name: Update tap formula
         env:
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.TAP_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${{ github.ref_name }}"
@@ -189,7 +189,6 @@ jobs:
 
           # Fetch current file SHA required by the GitHub Contents API for updates
           FILE_SHA=$(gh api repos/skonlabs/homebrew-tap/contents/Formula/bugpilot.rb \
-            --header "Authorization: token $TAP_TOKEN" \
             --jq '.sha')
           [[ -n "$FILE_SHA" ]] || { echo "ERROR: could not retrieve file SHA from tap repo"; exit 1; }
 
@@ -246,7 +245,6 @@ jobs:
 
           gh api repos/skonlabs/homebrew-tap/contents/Formula/bugpilot.rb \
             --method PUT \
-            --header "Authorization: token $TAP_TOKEN" \
             -f message="chore: bump bugpilot to v$VERSION" \
             -f content="$ENCODED" \
             -f sha="$FILE_SHA" \
