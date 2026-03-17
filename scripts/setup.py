@@ -1342,13 +1342,22 @@ def write_env(cfg: dict) -> None:
     ENV_FILE.write_text("\n".join(lines) + "\n")
     ok(f".env written  →  {ENV_FILE}")
 
-def apply_config() -> None:
+def _pip_install(reqs: list[str]) -> int:
+    """Run pip install, retrying with --break-system-packages on PEP 668 errors."""
+    rc = run_visible([sys.executable, "-m", "pip", "install", "-q"] + reqs)
+    if rc != 0:
+        # PEP 668: externally-managed-environment — retry with the override flag
+        rc = run_visible([
+            sys.executable, "-m", "pip", "install", "-q",
+            "--break-system-packages",
+        ] + reqs)
+    return rc
+
+
+def apply_config(cfg: dict | None = None) -> None:
     # Python dependencies
     info("Installing Python dependencies...")
-    rc = run_visible([
-        sys.executable, "-m", "pip", "install", "-q",
-        "-r", str(ROOT / "backend" / "requirements.txt"),
-    ])
+    rc = _pip_install(["-r", str(ROOT / "backend" / "requirements.txt")])
     if rc == 0:
         ok("Python dependencies installed.")
     else:
@@ -1357,12 +1366,16 @@ def apply_config() -> None:
     # Connector base deps
     base_req = ROOT / "backend" / "connectors" / "_base" / "requirements.txt"
     if base_req.exists():
-        run_visible([sys.executable, "-m", "pip", "install", "-q", "-r", str(base_req)])
+        _pip_install(["-r", str(base_req)])
 
     # Database migrations
     print()
     info("Running database migrations  (supabase db push)...")
-    rc = run_visible(["supabase", "db", "push"], cwd=str(ROOT / "backend"))
+    db_url = (cfg or {}).get("supabase", {}).get("db_url", "")
+    push_cmd = ["supabase", "db", "push"]
+    if db_url:
+        push_cmd += ["--db-url", db_url]
+    rc = run_visible(push_cmd, cwd=str(ROOT / "backend"))
     if rc == 0:
         ok("Database migrations applied.")
     else:
@@ -1791,7 +1804,7 @@ def main() -> None:
     header("Applying Configuration")
     write_env(cfg)
     print()
-    apply_config()
+    apply_config(cfg)
 
     # ── Steps 9-10: CLI account + connectors (require server + CLI binary) ────
     setup_cli_account(cfg, terms_ts)
