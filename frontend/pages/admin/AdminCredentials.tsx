@@ -45,9 +45,10 @@ export default function AdminCredentials() {
 
   const getEmail = (userId: string) => profiles.find((p) => p.auth_user_id === userId)?.email ?? userId;
 
-  const generateCredentials = async () => {
+  const generateCredentials = async (keyType: "live" | "test" = "live") => {
     if (!selectedUser || !user) return;
-    const apiKey = generateKey("bp_");
+    const prefix = keyType === "live" ? "bp_live_" : "bp_test_";
+    const apiKey = generateKey(prefix);
     const secret = generateKey("bps_");
     const secretHash = await hashSecret(secret);
     const { error } = await supabase.from("bugpilot_credentials").insert({
