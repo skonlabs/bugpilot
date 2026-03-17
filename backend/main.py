@@ -15,16 +15,16 @@ from __future__ import annotations
 
 import logging
 import os
-
 from pathlib import Path
-from dotenv import load_dotenv
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.auth import auth_middleware
 from backend.api import health, keys, investigations, connectors, webhooks, triggers, history, reports
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
