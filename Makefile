@@ -80,18 +80,24 @@ lint:
 	cd $(CLI_DIR) && go vet ./... || true
 
 # ── Dev servers ───────────────────────────────────────────────────────────────
+VENV     := .venv
+VENV_BIN := $(VENV)/bin
+
 dev-backend:
+	@[ -d $(VENV) ] || python3 -m venv $(VENV)
 	@echo "Installing backend dependencies..."
-	@python3 -m pip install -q -r backend/requirements.txt
+	@$(VENV_BIN)/pip install -q -r backend/requirements.txt
 	@echo "Starting backend dev server on :8000..."
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-	PYTHONPATH=$(PYTHONPATH) uvicorn backend.main:app \
+	PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/uvicorn backend.main:app \
 	  --reload --host 0.0.0.0 --port 8000 --log-level debug
 
 dev-worker:
+	@[ -d $(VENV) ] || python3 -m venv $(VENV)
+	@$(VENV_BIN)/pip install -q -r backend/requirements.txt
 	@echo "Starting worker..."
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-	PYTHONPATH=$(PYTHONPATH) python backend/worker/main.py
+	PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/python backend/worker/main.py
 
 dev-frontend:
 	@echo "Starting frontend dev server..."
