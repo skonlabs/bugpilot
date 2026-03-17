@@ -256,23 +256,23 @@ def _validate_db_url(url: str) -> tuple[bool, str]:
         return False, "Replace [YOUR-PASSWORD] with your actual database password"
     if "@" not in url:
         return False, "Missing credentials — format: postgresql://user:password@host:5432/db"
-    # TCP-level connectivity check (full auth requires psycopg2 which isn't
-    # installed yet at this point in setup)
+    # Best-effort TCP reachability check.  Full credential validation
+    # requires psycopg2 which isn't installed yet.  Supabase direct DB
+    # hosts are also sometimes firewalled from outside their network, so
+    # a failure here is advisory only — we warn and continue.
     try:
         parsed = urllib.parse.urlparse(url)
         host = parsed.hostname or ""
         port = parsed.port or 5432
-        print(f"     {dim('Checking connectivity...')} ", end="", flush=True)
-        s = socket.create_connection((host, port), timeout=8)
-        s.close()
-        print(green("reachable"))
+        if host:
+            print(f"     {dim('Checking connectivity...')} ", end="", flush=True)
+            s = socket.create_connection((host, port), timeout=8)
+            s.close()
+            print(green("reachable"))
     except Exception as e:
-        print()
-        return False, (
-            f"Could not reach database host.\n"
-            f"       Error: {e}\n"
-            f"       Check the host/port in your URI and that the DB is accepting connections."
-        )
+        print(yellow(f"(could not reach host — {e})"))
+        hint("Could not verify DB connectivity at this stage; setup will continue.\n"
+             "       The connection will be fully tested when the application first starts.")
     return True, ""
 
 
