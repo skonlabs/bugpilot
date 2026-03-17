@@ -17,12 +17,22 @@ log = logging.getLogger(__name__)
 _supabase: Client | None = None
 
 
+def _require(key: str) -> str:
+    val = os.environ.get(key)
+    if not val:
+        raise RuntimeError(
+            f"Environment variable {key!r} is not set. "
+            "Run 'make dev-setup' to create .env, then restart with 'make dev-backend'."
+        )
+    return val
+
+
 def _get_supabase() -> Client:
     global _supabase
     if _supabase is None:
         _supabase = create_client(
-            os.environ["SUPABASE_URL"],
-            os.environ["SUPABASE_SERVICE_KEY"],
+            _require("SUPABASE_URL"),
+            _require("SUPABASE_SERVICE_KEY"),
         )
     return _supabase
 
@@ -43,7 +53,7 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
         _pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=int(os.environ.get("DATABASE_MIN_POOL", "2")),
             maxconn=int(os.environ.get("DATABASE_POOL_SIZE", "20")),
-            dsn=os.environ["DATABASE_URL"],
+            dsn=_require("DATABASE_URL"),
             sslmode="require",
             connect_timeout=10,
             options="-c search_path=ag_catalog,public",  # Required for AGE
