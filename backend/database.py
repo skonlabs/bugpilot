@@ -14,10 +14,24 @@ from supabase import create_client, Client
 log = logging.getLogger(__name__)
 
 # ── Supabase client (auth, storage, realtime — not for raw investigation SQL) ──
-supabase: Client = create_client(
-    os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_SERVICE_KEY"],
-)
+_supabase: Client | None = None
+
+
+def _get_supabase() -> Client:
+    global _supabase
+    if _supabase is None:
+        _supabase = create_client(
+            os.environ["SUPABASE_URL"],
+            os.environ["SUPABASE_SERVICE_KEY"],
+        )
+    return _supabase
+
+
+# Keep module-level `supabase` name working via a proxy property isn't possible
+# for a plain variable, so callers should use get_supabase() directly.
+def get_supabase() -> Client:
+    return _get_supabase()
+
 
 # ── Direct psycopg2 pool (AGE Cypher queries + raw investigation SQL) ──────────
 _pool: psycopg2.pool.ThreadedConnectionPool | None = None
