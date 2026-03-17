@@ -27,7 +27,7 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from backend.database import get_conn, release_conn, set_org_context, supabase
+from backend.database import get_conn, release_conn, set_org_context, get_supabase
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -212,7 +212,7 @@ async def slack_webhook(request: Request):
     # Use the Supabase service-role client to bypass RLS for this cross-org lookup.
     team_id = body.get("team_id", "")
     try:
-        resp = supabase.table("connectors").select("org_id").eq("type", "slack").execute()
+        resp = get_supabase().table("connectors").select("org_id").eq("type", "slack").execute()
         org_id = None
         for row in (resp.data or []):
             smap = row.get("service_map") or {}
