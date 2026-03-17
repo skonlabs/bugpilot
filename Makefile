@@ -82,7 +82,7 @@ lint:
 # ── Dev servers ───────────────────────────────────────────────────────────────
 dev-backend:
 	@echo "Installing backend dependencies..."
-	@pip install -q -r backend/requirements.txt
+	@python3 -m pip install -q -r backend/requirements.txt
 	@echo "Starting backend dev server on :8000..."
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 	PYTHONPATH=$(PYTHONPATH) uvicorn backend.main:app \
@@ -112,16 +112,16 @@ migrate-reset:
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 install-deps:
-	pip install -r backend/requirements.txt
-	pip install -r backend/connectors/_base/requirements.txt
+	python3 -m pip install -r backend/requirements.txt
+	python3 -m pip install -r backend/connectors/_base/requirements.txt
 	@for dir in backend/connectors/sentry backend/connectors/jira backend/connectors/freshdesk \
 	             backend/connectors/email_imap backend/connectors/github backend/connectors/database \
 	             backend/connectors/log_files; do \
 	  if [ -f "$$dir/requirements.txt" ]; then \
-	    pip install -r $$dir/requirements.txt; \
+	    python3 -m pip install -r $$dir/requirements.txt; \
 	  fi; \
 	done
-	pip install pytest pytest-cov ruff mypy
+	python3 -m pip install pytest pytest-cov ruff mypy
 	cd $(CLI_DIR) && go mod download
 	cd frontend && bun install
 
