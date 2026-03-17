@@ -82,11 +82,13 @@ lint:
 # ── Dev servers ───────────────────────────────────────────────────────────────
 dev-backend:
 	@echo "Starting backend dev server on :8000..."
+	@set -a; [ -f .env ] && . ./.env; set +a; \
 	PYTHONPATH=$(PYTHONPATH) uvicorn backend.main:app \
 	  --reload --host 0.0.0.0 --port 8000 --log-level debug
 
 dev-worker:
 	@echo "Starting worker..."
+	@set -a; [ -f .env ] && . ./.env; set +a; \
 	PYTHONPATH=$(PYTHONPATH) python backend/worker/main.py
 
 dev-frontend:
