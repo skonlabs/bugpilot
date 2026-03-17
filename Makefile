@@ -89,16 +89,16 @@ dev-backend:
 	@echo "Installing backend dependencies..."
 	@$(VENV_BIN)/pip install -q -r backend/requirements.txt
 	@echo "Starting backend dev server on :8000..."
-	@set -a; . ./.env; set +a; \
-	PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/uvicorn backend.main:app \
+	@PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/dotenv -f .env run -- \
+	  $(VENV_BIN)/uvicorn backend.main:app \
 	  --reload --host 0.0.0.0 --port 8000 --log-level debug
 
 dev-worker:
 	@[ -d $(VENV) ] || python3 -m venv $(VENV)
 	@$(VENV_BIN)/pip install -q -r backend/requirements.txt
 	@echo "Starting worker..."
-	@set -a; [ -f .env ] && . ./.env; set +a; \
-	PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/python backend/worker/main.py
+	@PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/dotenv -f .env run -- \
+	  $(VENV_BIN)/python backend/worker/main.py
 
 dev-frontend:
 	@echo "Starting frontend dev server..."
