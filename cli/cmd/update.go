@@ -27,6 +27,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	yellow := color.New(color.FgYellow)
 	green := color.New(color.FgGreen)
 	red := color.New(color.FgRed)
+	bold := color.New(color.Bold)
 
 	yellow.Print("Checking for updates... ")
 
@@ -45,16 +46,21 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	latest := release.TagName
-	fmt.Printf("Latest: %s, Current: %s\n", latest, Version)
+	if latest == "" {
+		red.Println("✗ (no releases found)")
+		return fmt.Errorf("no releases found")
+	}
 
 	if latest == Version {
-		green.Println("✓ You are already up to date.")
+		green.Printf("✓ Already up to date (%s)\n", Version)
 		return nil
 	}
 
+	fmt.Printf("Current: %s  →  Latest: %s\n", Version, bold.Sprint(latest))
+
 	checkOnly, _ := cmd.Flags().GetBool("check-only")
 	if checkOnly {
-		yellow.Printf("⚡ Update available: %s\n", latest)
+		yellow.Printf("⚡ Run 'bugpilot update' to install %s\n", latest)
 		return nil
 	}
 
@@ -63,12 +69,25 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("find asset: %w", err)
 	}
 
-	yellow.Printf("Downloading %s from %s\n", latest, assetURL)
-	if err := update.Download(assetURL); err != nil {
+	yellow.Printf("Downloading %s...\n", latest)
+
+	var lastPct int
+	progress := func(downloaded, total int64) {
+		if total <= 0 {
+			return
+		}
+		pct := int(downloaded * 100 / total)
+		if pct != lastPct && pct%10 == 0 {
+			fmt.Printf("  %d%%\n", pct)
+			lastPct = pct
+		}
+	}
+
+	if err := update.Download(assetURL, progress); err != nil {
 		red.Printf("✗ Update failed: %v\n", err)
 		return err
 	}
 
-	green.Printf("✓ Updated to %s\n", latest)
+	green.Printf("✓ Updated to %s — restart any open terminals to use the new version.\n", latest)
 	return nil
 }
