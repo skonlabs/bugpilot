@@ -89,7 +89,8 @@ dev-backend:
 	@echo "Installing backend dependencies..."
 	@$(VENV_BIN)/pip install -q -r backend/requirements.txt
 	@echo "Starting backend dev server on :8000..."
-	@PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/uvicorn backend.main:app \
+	@set -a; . ./.env; set +a; \
+	PYTHONPATH=$(PYTHONPATH) $(VENV_BIN)/uvicorn backend.main:app \
 	  --reload --host 0.0.0.0 --port 8000 --log-level debug
 
 dev-worker:

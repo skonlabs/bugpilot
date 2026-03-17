@@ -2,12 +2,12 @@
 GitHub connector — fetches merged PRs and their diffs for hypothesis ranking.
 
 Config keys:
-  app_id          — GitHub App ID
+  token           — Personal Access Token (recommended: fine-grained or classic)
+  org             — GitHub org or user login (optional with PAT; required for App auth)
+  repos           — list of repo full names or short names to include (empty = all accessible)
+  app_id          — GitHub App ID  (alternative to token)
   private_key     — GitHub App private key (PEM string)
-  installation_id — GitHub App installation ID
-  org             — GitHub org or user (e.g. "acme-corp")
-  repos           — list of repo names to include (empty = all in org)
-  token           — alternative: Personal Access Token (if not using App auth)
+  installation_id — GitHub App installation ID (auto-discovered from org if omitted)
 
 UES event types emitted: code_change
 """
@@ -63,10 +63,11 @@ class GitHubConnector(ConnectorBase):
         has_token = self._config.get("token")
         if not has_app and not has_token:
             raise ValueError(
-                "GitHub connector requires either (app_id + private_key) or token"
+                "GitHub connector requires either a Personal Access Token ('token') "
+                "or GitHub App credentials ('app_id' + 'private_key')"
             )
-        if not self._config.get("org"):
-            raise ValueError("GitHub connector requires 'org' field")
+        if has_app and not self._config.get("org"):
+            raise ValueError("GitHub App auth requires the 'org' field")
 
     def health_check(self) -> ConnectorHealth:
         try:
@@ -100,15 +101,16 @@ class GitHubConnector(ConnectorBase):
         if not repos:
             repos = self._list_repos()
 
+        # Normalise to full_name format (owner/repo)
+        repos = [self._full_name(r) for r in repos]
+
         events = []
         raw_count = 0
         warnings = []
 
         for repo in repos:
             try:
-                prs, count, warns = self._fetch_repo_prs(
-                    repo, start, end, normaliser
-                )
+                prs, count, warns = self._fetch_repo_prs(repo, start, end, normaliser)
                 events.extend(prs)
                 raw_count += count
                 warnings.extend(warns)
@@ -120,15 +122,26 @@ class GitHubConnector(ConnectorBase):
             connector_type=self.connector_type,
             normalised_events=events,
             raw_event_count=raw_count,
-            metadata={"org": self._config["org"], "repos_queried": repos},
+            metadata={"repos_queried": repos},
             warnings=warnings,
         )
 
+    def _full_name(self, repo: str) -> str:
+        """Ensure repo is in 'owner/repo' format. Prepend org if it's a bare name."""
+        if "/" in repo:
+            return repo
+        org = self._config.get("org")
+        if not org:
+            raise ValueError(
+                f"Cannot resolve repo '{repo}' to owner/repo — "
+                "either provide full names ('owner/repo') or set 'org'"
+            )
+        return f"{org}/{repo}"
+
     def _fetch_repo_prs(
-        self, repo: str, start: datetime, end: datetime,
+        self, full_name: str, start: datetime, end: datetime,
         normaliser: GitHubNormaliser
     ) -> tuple[list, int, list]:
-        org = self._config["org"]
         client = self._client()
         events = []
         raw_count = 0
@@ -137,7 +150,7 @@ class GitHubConnector(ConnectorBase):
 
         while True:
             resp = client.get(
-                f"{GITHUB_API}/repos/{org}/{repo}/pulls",
+                f"{GITHUB_API}/repos/{full_name}/pulls",
                 params={
                     "state": "closed",
                     "sort": "updated",
@@ -157,7 +170,6 @@ class GitHubConnector(ConnectorBase):
                 merged_at = pr.get("merged_at")
                 if not merged_at:
                     continue
-                # Parse merged_at
                 try:
                     merged_dt = datetime.fromisoformat(merged_at.replace("Z", "+00:00"))
                 except Exception:
@@ -169,10 +181,9 @@ class GitHubConnector(ConnectorBase):
                 if merged_dt > end:
                     continue
 
-                # Enrich with file list
                 try:
                     files_resp = client.get(
-                        f"{GITHUB_API}/repos/{org}/{repo}/pulls/{pr['number']}/files",
+                        f"{GITHUB_API}/repos/{full_name}/pulls/{pr['number']}/files",
                         params={"per_page": 100},
                     )
                     files_resp.raise_for_status()
@@ -182,7 +193,7 @@ class GitHubConnector(ConnectorBase):
                             "status": f["status"],
                             "additions": f.get("additions", 0),
                             "deletions": f.get("deletions", 0),
-                            "patch": f.get("patch", "")[:2000],  # cap patch size
+                            "patch": f.get("patch", "")[:2000],
                         }
                         for f in files_resp.json()
                     ]
@@ -191,7 +202,7 @@ class GitHubConnector(ConnectorBase):
                     files = []
 
                 pr["_files"] = files
-                pr["_repo"] = repo
+                pr["_repo"] = full_name
                 raw_count += 1
                 try:
                     events.append(normaliser.to_ues(pr))
@@ -205,30 +216,38 @@ class GitHubConnector(ConnectorBase):
         return events, raw_count, warnings
 
     def _list_repos(self) -> list[str]:
-        """List all repos in org (up to 300)."""
-        org = self._config["org"]
+        """List repos accessible to the token (up to 300), as full names."""
         client = self._client()
+        org = self._config.get("org")
         repos = []
         page = 1
+
         while len(repos) < 300:
-            resp = client.get(
-                f"{GITHUB_API}/orgs/{org}/repos",
-                params={"per_page": 100, "page": page},
-            )
-            if resp.status_code == 404:
-                # Maybe it's a user, not org
+            if org:
                 resp = client.get(
-                    f"{GITHUB_API}/users/{org}/repos",
+                    f"{GITHUB_API}/orgs/{org}/repos",
                     params={"per_page": 100, "page": page},
+                )
+                if resp.status_code == 404:
+                    resp = client.get(
+                        f"{GITHUB_API}/users/{org}/repos",
+                        params={"per_page": 100, "page": page},
+                    )
+            else:
+                # PAT without org — list all repos accessible to the token
+                resp = client.get(
+                    f"{GITHUB_API}/user/repos",
+                    params={"per_page": 100, "page": page, "affiliation": "owner,collaborator,organization_member"},
                 )
             resp.raise_for_status()
             data = resp.json()
             if not data:
                 break
-            repos.extend(r["name"] for r in data)
+            repos.extend(r["full_name"] for r in data)
             if len(data) < 100:
                 break
             page += 1
+
         return repos
 
     def _get_token(self) -> str:
@@ -236,8 +255,7 @@ class GitHubConnector(ConnectorBase):
         if self._config.get("token"):
             return self._config["token"]
 
-        # GitHub App: generate installation token
-
+        # GitHub App auth
         try:
             import jwt as pyjwt
         except ImportError:
@@ -252,7 +270,6 @@ class GitHubConnector(ConnectorBase):
         app_jwt = pyjwt.encode(payload, private_key, algorithm="RS256")
 
         if not installation_id:
-            # Auto-discover installation for org
             resp = httpx.get(
                 f"{GITHUB_API}/app/installations",
                 headers={
