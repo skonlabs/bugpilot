@@ -3,8 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "cd frontend && bun install && bunx --bun vite",
-    "build": "cd frontend && bun install && bunx --bun vite build",
-    "build:dev": "cd frontend && bun install && bunx --bun vite build --mode development",
+    "build": "cd frontend && bun install && rm -rf ../dist && bunx --bun vite build && mv dist ../dist",
+    "build:dev": "cd frontend && bun install && rm -rf ../dist && bunx --bun vite build --mode development && mv dist ../dist",
     "preview": "cd frontend && bunx --bun vite preview"
   }
 }
