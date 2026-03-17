@@ -28,18 +28,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Detect OS and arch
+# Detect OS and arch — names must match release asset filenames from release.yml
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
 case "$ARCH" in
-  x86_64)  ARCH="x86_64" ;;
+  x86_64)        ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
   *) error "Unsupported architecture: $ARCH" ;;
 esac
 
 case "$OS" in
-  linux|darwin) ;;
+  linux)  ;;
+  darwin) OS="macos" ;;
   *) error "Unsupported OS: $OS (use install.ps1 for Windows)" ;;
 esac
 
