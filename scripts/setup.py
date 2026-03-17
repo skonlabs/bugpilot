@@ -1382,6 +1382,20 @@ def _pip_install(reqs: list[str]) -> int:
     )
 
 
+def _db_reachable(db_url: str, timeout: float = 5.0) -> bool:
+    """Return True if the database host:port is reachable over TCP."""
+    # Extract host and port via regex to avoid urlparse choking on special chars
+    m = re.search(r'@([^@:/\[]+|\[[^\]]+\]):(\d+)', db_url)
+    if not m:
+        return True  # can't determine — let supabase CLI surface the real error
+    host, port = m.group(1).strip("[]"), int(m.group(2))
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 def _encode_db_url(db_url: str) -> str:
     """Percent-encode the password in a database URL.
 
@@ -1424,15 +1438,20 @@ def apply_config(cfg: dict | None = None) -> None:
     print()
     info("Running database migrations  (supabase db push)...")
     db_url = (cfg or {}).get("supabase", {}).get("db_url", "")
-    push_cmd = ["supabase", "db", "push"]
-    if db_url:
-        push_cmd += ["--db-url", _encode_db_url(db_url)]
-    rc = run_visible(push_cmd, cwd=str(ROOT / "backend"))
-    if rc == 0:
-        ok("Database migrations applied.")
+    if db_url and not _db_reachable(db_url):
+        warn("Cannot reach the Supabase database host from this environment.")
+        hint("Run migrations manually once you have network access to the DB:")
+        hint("  cd backend && supabase db push --db-url '<your-db-url>'")
     else:
-        warn("Migration step had errors — the schema may already be up to date.")
-        hint("If this is a fresh project and you see errors, check your DATABASE_URL in .env.")
+        push_cmd = ["supabase", "db", "push"]
+        if db_url:
+            push_cmd += ["--db-url", _encode_db_url(db_url)]
+        rc = run_visible(push_cmd, cwd=str(ROOT / "backend"))
+        if rc == 0:
+            ok("Database migrations applied.")
+        else:
+            warn("Migration step had errors — the schema may already be up to date.")
+            hint("If this is a fresh project and you see errors, check your DATABASE_URL in .env.")
 
     # CLI binary
     print()
