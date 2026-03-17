@@ -188,7 +188,7 @@ export default function Credentials() {
           >
             <div className="flex items-center gap-2">
               <RadioGroupItem value="test" id="type-test" disabled={!canGenerateTest} />
-              <Label htmlFor="type-test" className={!canGenerateTest ? "text-muted-foreground line-through" : ""}>
+              <Label htmlFor="type-test" className={!canGenerateTest ? "text-muted-foreground/50 cursor-not-allowed" : ""}>
                 Test Key
                 <span className="ml-1.5 text-xs text-muted-foreground font-normal">
                   (bp_test_…)
@@ -197,7 +197,7 @@ export default function Credentials() {
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="live" id="type-live" disabled={!canGenerateLive} />
-              <Label htmlFor="type-live" className={!canGenerateLive ? "text-muted-foreground line-through" : ""}>
+              <Label htmlFor="type-live" className={!canGenerateLive ? "text-muted-foreground/50 cursor-not-allowed" : ""}>
                 Live Key
                 <span className="ml-1.5 text-xs text-muted-foreground font-normal">
                   (bp_live_…)
