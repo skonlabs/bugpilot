@@ -123,37 +123,30 @@ func Download(latestURL string, progressFn func(downloaded, total int64)) error 
 }
 
 // AssetURLForPlatform returns the download URL for the current OS/arch.
-// Asset names follow the convention used by install.sh:
+// Asset names follow the convention used by the release workflow:
 //
-//	bugpilot-linux-x86_64
+//	bugpilot-linux-amd64
 //	bugpilot-linux-arm64
-//	bugpilot-darwin-x86_64
-//	bugpilot-darwin-arm64
-//	bugpilot-windows-x86_64.exe
+//	bugpilot-macos-amd64
+//	bugpilot-macos-arm64
+//	bugpilot-windows-amd64.exe
 func AssetURLForPlatform(assets []Asset) (string, error) {
 	goos := runtime.GOOS
 	goarch := runtime.GOARCH
 
-	// Map Go arch names to the names used in release asset filenames
-	archMap := map[string]string{
-		"amd64": "x86_64",
-		"arm64": "arm64",
-	}
-	archName, ok := archMap[goarch]
-	if !ok {
-		return "", fmt.Errorf("unsupported architecture: %s", goarch)
-	}
-
-	// OS names match uname -s output (lowercase), same as install.sh
+	// Map Go OS names to release asset OS names
 	osMap := map[string]string{
 		"linux":   "linux",
-		"darwin":  "darwin",
+		"darwin":  "macos",
 		"windows": "windows",
 	}
 	osName, ok := osMap[goos]
 	if !ok {
 		return "", fmt.Errorf("unsupported OS: %s", goos)
 	}
+
+	// Arch names match Go's GOARCH values in release asset filenames (amd64, arm64)
+	archName := goarch
 
 	for _, asset := range assets {
 		name := strings.ToLower(asset.Name)
