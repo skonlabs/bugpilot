@@ -17,14 +17,31 @@ import logging
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+# ── Load .env before anything else touches os.environ ────────────────────────
+# Try several candidate locations so the file is found whether uvicorn's
+# reload subprocess inherits the original CWD or resolves paths differently.
+from dotenv import load_dotenv  # noqa: E402
 
-from backend.auth import auth_middleware
-from backend.api import health, keys, investigations, connectors, webhooks, triggers, history, reports
+def _load_env() -> None:
+    candidates = [
+        Path(__file__).resolve().parent.parent / ".env",  # <project>/.env
+        Path.cwd() / ".env",                              # wherever uvicorn was launched from
+    ]
+    for path in candidates:
+        if path.exists():
+            loaded = load_dotenv(path, override=True)
+            if loaded:
+                return
+    # File not found — dotenv will silently no-op; startup check below will catch it.
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+_load_env()
+# ─────────────────────────────────────────────────────────────────────────────
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from backend.auth import auth_middleware  # noqa: E402
+from backend.api import health, keys, investigations, connectors, webhooks, triggers, history, reports  # noqa: E402
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -48,6 +65,21 @@ else:
     )
 
 log = logging.getLogger(__name__)
+
+# ── Required environment variables ───────────────────────────────────────────
+_REQUIRED = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]
+
+
+def _check_env() -> None:
+    missing = [v for v in _REQUIRED if not os.environ.get(v)]
+    if missing:
+        msg = (
+            f"Missing required environment variables: {', '.join(missing)}\n"
+            "  1. Make sure .env exists in the project root (run 'make dev-setup')\n"
+            "  2. Start the server with 'make dev-backend' (not bare uvicorn)\n"
+            f"  3. Checked paths: {[str(Path(__file__).resolve().parent.parent / '.env'), str(Path.cwd() / '.env')]}"
+        )
+        raise RuntimeError(msg)
 
 
 # ── App factory ───────────────────────────────────────────────────────────────
@@ -86,6 +118,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def startup():
+        _check_env()
         log.info("BugPilot API starting up")
 
     @app.on_event("shutdown")
