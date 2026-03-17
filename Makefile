@@ -81,6 +81,8 @@ lint:
 
 # ── Dev servers ───────────────────────────────────────────────────────────────
 dev-backend:
+	@echo "Installing backend dependencies..."
+	@pip install -q -r backend/requirements.txt
 	@echo "Starting backend dev server on :8000..."
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 	PYTHONPATH=$(PYTHONPATH) uvicorn backend.main:app \
