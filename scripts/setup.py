@@ -1382,6 +1382,30 @@ def _pip_install(reqs: list[str]) -> int:
     )
 
 
+def _encode_db_url(db_url: str) -> str:
+    """Percent-encode the password in a database URL.
+
+    Supabase-generated passwords can contain special characters like [ ] @ : /
+    that break URL parsers (notably the Go net/url parser used by the supabase
+    CLI).  stdlib urlparse itself rejects [ ] in the netloc, so we use a regex
+    to locate and replace only the password portion without touching anything
+    else in the URL.
+    """
+    # Match:  scheme://user:PASSWORD@rest-of-url
+    # The password is everything between the first colon after the last '://'
+    # user-separator and the last '@' before the host.
+    m = re.match(
+        r'(?P<prefix>[a-zA-Z][a-zA-Z0-9+\-.]*://[^:/@]+:)'
+        r'(?P<password>[^@]*)'
+        r'(?P<suffix>@.+)',
+        db_url,
+    )
+    if not m:
+        return db_url
+    encoded = urllib.parse.quote(m.group("password"), safe="")
+    return m.group("prefix") + encoded + m.group("suffix")
+
+
 def apply_config(cfg: dict | None = None) -> None:
     # Python dependencies
     info("Installing Python dependencies...")
@@ -1402,7 +1426,7 @@ def apply_config(cfg: dict | None = None) -> None:
     db_url = (cfg or {}).get("supabase", {}).get("db_url", "")
     push_cmd = ["supabase", "db", "push"]
     if db_url:
-        push_cmd += ["--db-url", db_url]
+        push_cmd += ["--db-url", _encode_db_url(db_url)]
     rc = run_visible(push_cmd, cwd=str(ROOT / "backend"))
     if rc == 0:
         ok("Database migrations applied.")
