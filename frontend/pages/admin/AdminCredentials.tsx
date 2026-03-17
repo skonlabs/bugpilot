@@ -194,7 +194,7 @@ export default function AdminCredentials() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowGenerate(false)}>Cancel</Button>
-            <Button onClick={() => { generateCredentials(); setShowGenerate(false); }} disabled={!selectedUser}>Generate</Button>
+            <Button onClick={() => { generateCredentials(keyType); setShowGenerate(false); }} disabled={!selectedUser}>Generate</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
