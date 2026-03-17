@@ -4,6 +4,7 @@
   "scripts": {
     "dev": "cd frontend && bun install && bunx --bun vite",
     "build": "cd frontend && bun install && bunx --bun vite build",
+    "build:dev": "cd frontend && bun install && bunx --bun vite build --mode development",
     "preview": "cd frontend && bunx --bun vite preview"
   }
 }

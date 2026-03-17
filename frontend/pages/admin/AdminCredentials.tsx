@@ -27,6 +27,7 @@ export default function AdminCredentials() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
+  const [keyType, setKeyType] = useState<"live" | "test">("live");
   const [selectedUser, setSelectedUser] = useState("");
   const [generatedSecret, setGeneratedSecret] = useState("");
   const [generatedKey, setGeneratedKey] = useState("");
@@ -45,9 +46,10 @@ export default function AdminCredentials() {
 
   const getEmail = (userId: string) => profiles.find((p) => p.auth_user_id === userId)?.email ?? userId;
 
-  const generateCredentials = async () => {
+  const generateCredentials = async (keyType: "live" | "test" = "live") => {
     if (!selectedUser || !user) return;
-    const apiKey = generateKey("bp_");
+    const prefix = keyType === "live" ? "bp_live_" : "bp_test_";
+    const apiKey = generateKey(prefix);
     const secret = generateKey("bps_");
     const secretHash = await hashSecret(secret);
     const { error } = await supabase.from("bugpilot_credentials").insert({
@@ -180,15 +182,19 @@ export default function AdminCredentials() {
         <DialogContent>
           <DialogHeader><DialogTitle>Generate API Credentials</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Select a user to generate credentials for:</p>
+            <p className="text-sm text-muted-foreground">Select a user and key type:</p>
             <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
               <option value="">Select user...</option>
               {profiles.map((p) => <option key={p.auth_user_id} value={p.auth_user_id}>{p.email}</option>)}
             </select>
+            <select className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={keyType} onChange={(e) => setKeyType(e.target.value as "live" | "test")}>
+              <option value="live">Live Key (bp_live_…)</option>
+              <option value="test">Test Key (bp_test_…)</option>
+            </select>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowGenerate(false)}>Cancel</Button>
-            <Button onClick={() => { generateCredentials(); setShowGenerate(false); }} disabled={!selectedUser}>Generate</Button>
+            <Button onClick={() => { generateCredentials(keyType); setShowGenerate(false); }} disabled={!selectedUser}>Generate</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
