@@ -1342,16 +1342,68 @@ def write_env(cfg: dict) -> None:
     ENV_FILE.write_text("\n".join(lines) + "\n")
     ok(f".env written  →  {ENV_FILE}")
 
+def _pip_flags() -> list[str]:
+    """Return extra pip flags needed for the current Python environment.
+
+    PEP 668: system-managed Pythons (Homebrew, apt-managed) refuse pip installs
+    unless --break-system-packages is passed.  Virtual environments never need
+    it.  We detect the situation once and use the right flags from the start so
+    the user never sees a noisy externally-managed-environment error.
+    """
+    in_venv = (
+        sys.prefix != sys.base_prefix          # venv / virtualenv
+        or os.environ.get("VIRTUAL_ENV")        # activated venv
+        or os.environ.get("CONDA_DEFAULT_ENV")  # conda
+    )
+    if in_venv:
+        return []
+    # Probe silently: try a no-op pip call; if it exits non-zero the env is
+    # managed and we need the override flag for all subsequent installs.
+    probe = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--dry-run", "--quiet",
+         "--break-system-packages", "pip"],
+        capture_output=True,
+    )
+    # If --break-system-packages itself is what made it work, use it always.
+    # Simpler heuristic: just check for the marker file pip writes on managed envs.
+    marker = Path(sys.prefix) / "EXTERNALLY-MANAGED"
+    if marker.exists():
+        return ["--break-system-packages"]
+    return []
+
+
+_PIP_FLAGS: list[str] = _pip_flags()
+
+
 def _pip_install(reqs: list[str]) -> int:
-    """Run pip install, retrying with --break-system-packages on PEP 668 errors."""
-    rc = run_visible([sys.executable, "-m", "pip", "install", "-q"] + reqs)
-    if rc != 0:
-        # PEP 668: externally-managed-environment — retry with the override flag
-        rc = run_visible([
-            sys.executable, "-m", "pip", "install", "-q",
-            "--break-system-packages",
-        ] + reqs)
-    return rc
+    """Run pip install with the correct flags for this Python environment."""
+    return run_visible(
+        [sys.executable, "-m", "pip", "install", "-q"] + _PIP_FLAGS + reqs
+    )
+
+
+def _encode_db_url(db_url: str) -> str:
+    """Percent-encode the password in a database URL.
+
+    Supabase-generated passwords can contain special characters like [ ] @ : /
+    that break URL parsers (notably the Go net/url parser used by the supabase
+    CLI).  stdlib urlparse itself rejects [ ] in the netloc, so we use a regex
+    to locate and replace only the password portion without touching anything
+    else in the URL.
+    """
+    # Match:  scheme://user:PASSWORD@rest-of-url
+    # The password is everything between the first colon after the last '://'
+    # user-separator and the last '@' before the host.
+    m = re.match(
+        r'(?P<prefix>[a-zA-Z][a-zA-Z0-9+\-.]*://[^:/@]+:)'
+        r'(?P<password>[^@]*)'
+        r'(?P<suffix>@.+)',
+        db_url,
+    )
+    if not m:
+        return db_url
+    encoded = urllib.parse.quote(m.group("password"), safe="")
+    return m.group("prefix") + encoded + m.group("suffix")
 
 
 def apply_config(cfg: dict | None = None) -> None:
@@ -1374,7 +1426,7 @@ def apply_config(cfg: dict | None = None) -> None:
     db_url = (cfg or {}).get("supabase", {}).get("db_url", "")
     push_cmd = ["supabase", "db", "push"]
     if db_url:
-        push_cmd += ["--db-url", db_url]
+        push_cmd += ["--db-url", _encode_db_url(db_url)]
     rc = run_visible(push_cmd, cwd=str(ROOT / "backend"))
     if rc == 0:
         ok("Database migrations applied.")
