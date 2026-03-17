@@ -27,6 +27,7 @@ export default function AdminCredentials() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [showGenerate, setShowGenerate] = useState(false);
+  const [keyType, setKeyType] = useState<"live" | "test">("live");
   const [selectedUser, setSelectedUser] = useState("");
   const [generatedSecret, setGeneratedSecret] = useState("");
   const [generatedKey, setGeneratedKey] = useState("");
