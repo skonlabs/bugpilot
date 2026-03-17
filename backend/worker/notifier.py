@@ -154,9 +154,9 @@ def publish_sns(
     error_message: Optional[str] = None,
 ) -> None:
     """Publish investigation completion event to SNS."""
-    sns_arn = os.environ.get("SNS_TOPIC_ARN")
+    sns_arn = os.environ.get("AWS_SNS_TOPIC_ARN") or os.environ.get("SNS_TOPIC_ARN")
     if not sns_arn:
-        log.debug("SNS_TOPIC_ARN not set, skipping SNS publish")
+        log.debug("AWS_SNS_TOPIC_ARN not set, skipping SNS publish")
         return
 
     payload = {
