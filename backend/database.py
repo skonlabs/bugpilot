@@ -51,7 +51,7 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
     global _pool
     if _pool is None:
         _pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=int(os.environ.get("DATABASE_MIN_POOL", "2")),
+            minconn=int(os.environ.get("DATABASE_MIN_POOL", "0")),
             maxconn=int(os.environ.get("DATABASE_POOL_SIZE", "20")),
             dsn=_require("DATABASE_URL"),
             sslmode="require",

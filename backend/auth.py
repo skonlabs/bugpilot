@@ -105,7 +105,14 @@ async def auth_middleware(request: Request, call_next):
     raw_key = auth.removeprefix("Bearer ").strip()
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
 
-    conn = get_conn()
+    try:
+        conn = get_conn()
+    except Exception as e:
+        log.error(f"Database unavailable: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"error": "database_unavailable", "detail": "Database connection failed. Check DATABASE_URL and network connectivity."},
+        )
     try:
         # Look up key
         with conn.cursor() as cur:
