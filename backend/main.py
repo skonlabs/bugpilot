@@ -27,11 +27,15 @@ def _load_env() -> None:
         Path(__file__).resolve().parent.parent / ".env",  # <project>/.env
         Path.cwd() / ".env",                              # wherever uvicorn was launched from
     ]
+    seen: set[Path] = set()
     for path in candidates:
-        if path.exists():
-            loaded = load_dotenv(path, override=True)
-            if loaded:
-                return
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.exists():
+            load_dotenv(resolved, override=True)
+            return
     # File not found — dotenv will silently no-op; startup check below will catch it.
 
 _load_env()
@@ -77,7 +81,7 @@ def _check_env() -> None:
             f"Missing required environment variables: {', '.join(missing)}\n"
             "  1. Make sure .env exists in the project root (run 'make dev-setup')\n"
             "  2. Start the server with 'make dev-backend' (not bare uvicorn)\n"
-            f"  3. Checked paths: {[str(Path(__file__).resolve().parent.parent / '.env'), str(Path.cwd() / '.env')]}"
+            f"  3. Checked paths: {list(dict.fromkeys([str(Path(__file__).resolve().parent.parent / '.env'), str(Path.cwd() / '.env')]))}"
         )
         raise RuntimeError(msg)
 
