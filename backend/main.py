@@ -41,8 +41,11 @@ def _load_env() -> None:
 _load_env()
 # ─────────────────────────────────────────────────────────────────────────────
 
-from fastapi import FastAPI  # noqa: E402
+import psycopg2  # noqa: E402
+
+from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
 
 from backend.auth import AuthMiddleware  # noqa: E402
 from backend.api import health, keys, investigations, connectors, webhooks, triggers, history, reports  # noqa: E402
@@ -156,6 +159,24 @@ def create_app() -> FastAPI:
     # anyio ExceptionGroup wrapping which prevented try/except from catching
     # psycopg2 errors in the dispatch function.
     app.add_middleware(AuthMiddleware)
+
+    # Global handler: DB errors from route handlers return 503 before the
+    # exception can escape ExceptionMiddleware and become a BaseExceptionGroup
+    # (which `except Exception` in AuthMiddleware cannot catch on Python 3.14).
+    @app.exception_handler(psycopg2.OperationalError)
+    async def _db_error_handler(request: Request, exc: psycopg2.OperationalError) -> JSONResponse:
+        log.error(f"Database unavailable (route handler): {exc}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "database_unavailable",
+                "detail": (
+                    "Database connection failed. "
+                    "Check DATABASE_URL in .env — your Supabase project may be paused "
+                    "(visit supabase.com to restore it) or use the Transaction Pooler URL."
+                ),
+            },
+        )
 
     # Routers
     app.include_router(health.router)               # /health

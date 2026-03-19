@@ -133,6 +133,83 @@ async def test_route_handler_db_down_returns_503():
 
 
 @pytest.mark.anyio
+async def test_base_exception_group_unwrapped_to_503():
+    """
+    Simulate what Python 3.14 + anyio does: wrap OperationalError in a
+    BaseExceptionGroup (as happens when an inner BaseHTTPMiddleware task group
+    catches it). AuthMiddleware must unwrap it and return 503, not crash.
+    """
+    app = _make_app()
+
+    # Auth passes, but self.app() raises a BaseExceptionGroup wrapping OperationalError
+    wrapped = BaseExceptionGroup("unhandled errors in a TaskGroup", [DB_DOWN_EXC])
+
+    auth_conn = MagicMock()
+    cursor = MagicMock()
+    cursor.__enter__ = MagicMock(return_value=cursor)
+    cursor.__exit__ = MagicMock(return_value=False)
+    cursor.fetchone.side_effect = [("org-test-123", "full"), (True, "1.0")]
+    auth_conn.cursor.return_value = cursor
+
+    async def fake_inner_app(scope, receive, send):
+        raise wrapped
+
+    with (
+        patch("backend.auth.get_conn", return_value=auth_conn),
+        patch("backend.auth.release_conn"),
+        patch("backend.auth.set_org_context"),
+        patch("backend.auth._get_redis", side_effect=Exception("redis down")),
+        patch.object(app, "middleware_stack", wraps=app.build_middleware_stack()),
+    ):
+        # Patch the ASGI app that AuthMiddleware calls to simulate inner failure
+        original_build = app.build_middleware_stack
+
+        class _FakeInner:
+            async def __call__(self, scope, receive, send):
+                raise wrapped
+
+        import backend.auth as _auth_mod
+        original_cls_app = None
+
+        # Directly test AuthMiddleware in isolation
+        from backend.auth import AuthMiddleware
+        mw = AuthMiddleware(_FakeInner())
+
+        from starlette.testclient import TestClient
+        from starlette.requests import Request as StarletteRequest
+
+        responses = []
+
+        async def mock_send(message):
+            responses.append(message)
+
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/investigations",
+            "query_string": b"",
+            "headers": [
+                (b"authorization", f"Bearer {VALID_KEY}".encode()),
+                (b"content-type", b"application/json"),
+            ],
+            "state": {},
+        }
+
+        async def mock_receive():
+            return {"type": "http.request", "body": b'{"text":"test"}', "more_body": False}
+
+        await mw(scope, mock_receive, mock_send)
+
+    # The first response message is http.response.start with the status code
+    assert responses, "No response was sent"
+    start = next((m for m in responses if m.get("type") == "http.response.start"), None)
+    assert start is not None, f"No http.response.start in responses: {responses}"
+    assert start["status"] == 503, (
+        f"Expected 503 when BaseExceptionGroup wraps OperationalError, got {start['status']}"
+    )
+
+
+@pytest.mark.anyio
 async def test_health_check_bypasses_auth():
     """Health endpoint must work with no auth and no DB."""
     app = _make_app()

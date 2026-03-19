@@ -16,6 +16,7 @@ import hashlib
 import logging
 from typing import Callable
 
+import psycopg2
 import redis as redis_lib
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -227,14 +228,41 @@ class AuthMiddleware:
             await self.app(scope, receive, send)
             conn.commit()
 
-        except Exception as e:
+        except BaseException as e:
+            # Catch BaseException (not just Exception) because Python 3.11+
+            # anyio task groups inside inner middlewares wrap exceptions in
+            # BaseExceptionGroup, which is a BaseException subclass and is
+            # silently missed by `except Exception`.
             conn.rollback()
-            log.error(f"Auth middleware error: {e}", exc_info=True)
-            response = JSONResponse(
-                status_code=500,
-                content={"error": "internal_error", "detail": "An unexpected error occurred"},
-            )
-            await response(scope, receive, send)
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+
+            # Unwrap single-exception BaseExceptionGroup chains
+            actual: BaseException = e
+            while hasattr(actual, "exceptions") and len(actual.exceptions) == 1:
+                actual = actual.exceptions[0]  # type: ignore[attr-defined]
+
+            if isinstance(actual, psycopg2.OperationalError):
+                status_code = 503
+                content: dict = {
+                    "error": "database_unavailable",
+                    "detail": (
+                        "Database connection failed. "
+                        "Check DATABASE_URL in .env — your Supabase project may be paused "
+                        "(visit supabase.com to restore it) or use the Transaction Pooler URL."
+                    ),
+                }
+            else:
+                status_code = 500
+                content = {"error": "internal_error", "detail": "An unexpected error occurred"}
+
+            log.error(f"Auth middleware error (unwrapped: {actual!r}): {e}", exc_info=True)
+            try:
+                response = JSONResponse(status_code=status_code, content=content)
+                await response(scope, receive, send)
+            except Exception:
+                pass  # headers already sent — nothing we can do
         finally:
             release_conn(conn)
 
