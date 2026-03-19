@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from typing import Callable
 
 import redis as redis_lib
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from backend.database import get_conn, release_conn, set_org_context
 
@@ -88,114 +90,156 @@ def _update_key_last_used(key_hash: str) -> None:
         log.warning(f"Failed to update last_used_at: {e}")
 
 
-async def auth_middleware(request: Request, call_next):
+class AuthMiddleware:
     """
-    Validate API key and set org context on every request.
-    Skip auth for /health and /v1/webhooks/* (webhooks use secret params).
-    Return HTTP 451 if terms not accepted.
+    Pure ASGI middleware for API key validation.
+
+    Using a raw ASGI class (not BaseHTTPMiddleware) avoids the anyio
+    ExceptionGroup wrapping that occurs in Python 3.11+ with Starlette's
+    BaseHTTPMiddleware, which prevented try/except from catching psycopg2
+    errors before they became unhandled 500s.
     """
-    path = request.url.path
 
-    # Skip auth for health check and webhooks
-    if path == "/health" or path.startswith("/v1/webhooks/"):
-        return await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return JSONResponse(
-            status_code=401,
-            content={"error": "missing_auth", "detail": "Missing Authorization header"},
-        )
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-    raw_key = auth.removeprefix("Bearer ").strip()
-    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        request = Request(scope, receive)
+        path = request.url.path
 
-    try:
-        conn = get_conn()
-    except Exception as e:
-        log.error(f"Database unavailable: {e}")
-        return JSONResponse(
-            status_code=503,
-            content={"error": "database_unavailable", "detail": "Database connection failed. Check DATABASE_URL and network connectivity."},
-        )
-    try:
-        # Look up key
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT org_id, scope FROM api_keys "
-                "WHERE key_hash = %s AND revoked_at IS NULL",
-                (key_hash,),
-            )
-            row = cur.fetchone()
+        # Skip auth for health check and webhooks
+        if path == "/health" or path.startswith("/v1/webhooks/"):
+            await self.app(scope, receive, send)
+            return
 
-        if not row:
-            return JSONResponse(
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            response = JSONResponse(
                 status_code=401,
-                content={"error": "invalid_key", "detail": "Invalid or revoked API key"},
+                content={"error": "missing_auth", "detail": "Missing Authorization header"},
             )
+            await response(scope, receive, send)
+            return
 
-        org_id, scope = row
+        raw_key = auth.removeprefix("Bearer ").strip()
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
 
-        # Check terms acceptance
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT terms_accepted, terms_version FROM orgs WHERE id = %s",
-                (str(org_id),),
-            )
-            org_row = cur.fetchone()
-
-        if not org_row:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "org_not_found", "detail": "Organisation not found"},
-            )
-
-        terms_accepted, terms_version = org_row
-
-        if not terms_accepted:
-            return JSONResponse(
-                status_code=451,
+        # Get DB connection — return 503 immediately if DB is unreachable
+        try:
+            conn = get_conn()
+        except Exception as e:
+            log.error(f"Database unavailable during auth: {e}")
+            response = JSONResponse(
+                status_code=503,
                 content={
-                    "error": "terms_not_accepted",
-                    "message": "Please run 'bugpilot init' to accept the Terms of Service.",
-                    "terms_url": "https://bugpilot.io/terms",
+                    "error": "database_unavailable",
+                    "detail": (
+                        "Database connection failed. "
+                        "Check DATABASE_URL in .env — your Supabase project may be paused "
+                        "(visit supabase.com to restore it) or use the Transaction Pooler URL."
+                    ),
                 },
             )
+            await response(scope, receive, send)
+            return
 
-        # Check if terms version is outdated (current required: "1.0")
-        from backend.config import settings
-        if terms_version is not None and terms_version < settings.REQUIRED_TERMS_VERSION:
-            return JSONResponse(
-                status_code=451,
-                content={
-                    "error": "terms_update_required",
-                    "new_version": settings.REQUIRED_TERMS_VERSION,
-                    "terms_url": "https://bugpilot.io/terms",
-                    "message": "Terms of Service updated. Please re-accept.",
-                },
+        try:
+            # Look up key
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT org_id, scope FROM api_keys "
+                    "WHERE key_hash = %s AND revoked_at IS NULL",
+                    (key_hash,),
+                )
+                row = cur.fetchone()
+
+            if not row:
+                response = JSONResponse(
+                    status_code=401,
+                    content={"error": "invalid_key", "detail": "Invalid or revoked API key"},
+                )
+                await response(scope, receive, send)
+                return
+
+            org_id, scope_val = row
+
+            # Check terms acceptance
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT terms_accepted, terms_version FROM orgs WHERE id = %s",
+                    (str(org_id),),
+                )
+                org_row = cur.fetchone()
+
+            if not org_row:
+                response = JSONResponse(
+                    status_code=401,
+                    content={"error": "org_not_found", "detail": "Organisation not found"},
+                )
+                await response(scope, receive, send)
+                return
+
+            terms_accepted, terms_version = org_row
+
+            if not terms_accepted:
+                response = JSONResponse(
+                    status_code=451,
+                    content={
+                        "error": "terms_not_accepted",
+                        "message": "Please run 'bugpilot init' to accept the Terms of Service.",
+                        "terms_url": "https://bugpilot.io/terms",
+                    },
+                )
+                await response(scope, receive, send)
+                return
+
+            # Check if terms version is outdated (current required: "1.0")
+            from backend.config import settings
+            if terms_version is not None and terms_version < settings.REQUIRED_TERMS_VERSION:
+                response = JSONResponse(
+                    status_code=451,
+                    content={
+                        "error": "terms_update_required",
+                        "new_version": settings.REQUIRED_TERMS_VERSION,
+                        "terms_url": "https://bugpilot.io/terms",
+                        "message": "Terms of Service updated. Please re-accept.",
+                    },
+                )
+                await response(scope, receive, send)
+                return
+
+            # Set RLS context
+            set_org_context(conn, str(org_id))
+
+            # Attach to request state
+            scope["state"] = scope.get("state", {})
+            request.state.org_id = str(org_id)
+            request.state.scope = scope_val
+            request.state.db_conn = conn
+
+            # Update last_used_at asynchronously
+            _update_key_last_used(key_hash)
+
+            await self.app(scope, receive, send)
+            conn.commit()
+
+        except Exception as e:
+            conn.rollback()
+            log.error(f"Auth middleware error: {e}", exc_info=True)
+            response = JSONResponse(
+                status_code=500,
+                content={"error": "internal_error", "detail": "An unexpected error occurred"},
             )
+            await response(scope, receive, send)
+        finally:
+            release_conn(conn)
 
-        # Set RLS context
-        set_org_context(conn, str(org_id))
 
-        # Attach to request state
-        request.state.org_id = str(org_id)
-        request.state.scope = scope
-        request.state.db_conn = conn
-
-        # Update last_used_at asynchronously
-        _update_key_last_used(key_hash)
-
-        response = await call_next(request)
-        conn.commit()
-        return response
-
-    except HTTPException:
-        conn.rollback()
-        raise
-    except Exception as e:
-        conn.rollback()
-        log.error(f"Auth middleware error: {e}", exc_info=True)
-        raise
-    finally:
-        release_conn(conn)
+# Keep the old function name so main.py import still works
+async def auth_middleware(request: Request, call_next: Callable):  # type: ignore[misc]
+    """Deprecated shim — AuthMiddleware class is used directly in main.py."""
+    raise NotImplementedError("Use AuthMiddleware class instead")

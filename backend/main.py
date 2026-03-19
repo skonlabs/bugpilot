@@ -44,7 +44,7 @@ _load_env()
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from backend.auth import auth_middleware  # noqa: E402
+from backend.auth import AuthMiddleware  # noqa: E402
 from backend.api import health, keys, investigations, connectors, webhooks, triggers, history, reports  # noqa: E402
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -152,7 +152,10 @@ def create_app() -> FastAPI:
     )
 
     # Auth middleware (runs on every request except /health and /v1/webhooks/*)
-    app.middleware("http")(auth_middleware)
+    # Using a pure ASGI class (not BaseHTTPMiddleware) to avoid Python 3.11+
+    # anyio ExceptionGroup wrapping which prevented try/except from catching
+    # psycopg2 errors in the dispatch function.
+    app.add_middleware(AuthMiddleware)
 
     # Routers
     app.include_router(health.router)               # /health
