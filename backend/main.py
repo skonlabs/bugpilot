@@ -86,6 +86,50 @@ def _check_env() -> None:
         raise RuntimeError(msg)
 
 
+# ── Startup connectivity probes (non-fatal — warn but don't block) ────────────
+
+def _warn_if_db_unreachable() -> None:
+    db_url = os.environ.get("DATABASE_URL", "")
+    try:
+        import psycopg2
+        conn = psycopg2.connect(
+            dsn=db_url,
+            sslmode="require",
+            connect_timeout=5,
+        )
+        conn.close()
+        log.info("Database connection OK")
+    except Exception as e:
+        msg = str(e)
+        log.warning(f"Database unreachable at startup: {msg}")
+        if "db." in db_url and ".supabase.co" in db_url:
+            log.warning(
+                "Your DATABASE_URL uses the direct connection format (db.xxx.supabase.co). "
+                "If your Supabase project is on the free tier it may be paused — "
+                "visit https://supabase.com to restore it. "
+                "Alternatively, use the Transaction Pooler URL "
+                "(postgres://postgres.[ref]:[pw]@aws-0-[region].pooler.supabase.com:6543/postgres) "
+                "from the 'Connect' button in your project dashboard."
+            )
+        log.warning("All database-dependent endpoints will return 503 until the DB is reachable.")
+
+
+def _warn_if_redis_unreachable() -> None:
+    redis_url = os.environ.get("REDIS_URL", "")
+    try:
+        import redis as redis_lib
+        r = redis_lib.Redis.from_url(redis_url, socket_connect_timeout=3)
+        r.ping()
+        r.close()
+        log.info("Redis connection OK")
+    except Exception as e:
+        log.warning(
+            f"Redis unreachable at startup: {e}. "
+            "Rate limiting and caching will be unavailable. "
+            "Start Redis with: redis-server"
+        )
+
+
 # ── App factory ───────────────────────────────────────────────────────────────
 
 def create_app() -> FastAPI:
@@ -124,6 +168,8 @@ def create_app() -> FastAPI:
     async def startup():
         _check_env()
         log.info("BugPilot API starting up")
+        _warn_if_db_unreachable()
+        _warn_if_redis_unreachable()
 
     @app.on_event("shutdown")
     async def shutdown():
