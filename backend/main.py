@@ -67,7 +67,7 @@ else:
 log = logging.getLogger(__name__)
 
 # ── Required environment variables ───────────────────────────────────────────
-_REQUIRED = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_KEY"]
+_REQUIRED = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_KEY", "REDIS_URL"]
 
 
 def _check_env() -> None:
