@@ -2,6 +2,9 @@
 .bugpilot/
 config.yaml
 
+# Local dev secrets (connector credentials stored here when BUGPILOT_ENV != production)
+.local-secrets/
+
 # Python
 __pycache__/
 *.py[cod]
