@@ -31,7 +31,13 @@ def _get_redis() -> redis_lib.Redis:
     global _redis
     if _redis is None:
         import os
-        _redis = redis_lib.Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+        url = os.environ.get("REDIS_URL")
+        if not url:
+            raise RuntimeError(
+                "Environment variable 'REDIS_URL' is not set. "
+                "Run 'make dev-setup' to create .env, then restart with 'make dev-backend'."
+            )
+        _redis = redis_lib.Redis.from_url(url, decode_responses=True)
     return _redis
 
 

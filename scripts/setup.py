@@ -34,6 +34,58 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = ROOT / ".env"
 TERMS_VERSION = "1.0"
+
+
+def _read_existing_env() -> dict:
+    """Parse the existing .env file into a flat key→value dict (stdlib only)."""
+    if not ENV_FILE.exists():
+        return {}
+    result: dict = {}
+    for raw in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        if key:
+            result[key] = value
+    return result
+
+
+def _cfg_to_env(cfg: dict) -> dict:
+    """Flatten an in-progress cfg dict back to env-var keys (used by go-back flow)."""
+    e: dict = {}
+    sup = cfg.get("supabase", {})
+    e["SUPABASE_URL"]         = sup.get("url", "")
+    e["SUPABASE_SERVICE_KEY"] = sup.get("service_key", "")
+    e["SUPABASE_ANON_KEY"]    = sup.get("anon_key", "")
+    e["DATABASE_URL"]         = sup.get("db_url", "")
+    red_c = cfg.get("redis", {})
+    e["REDIS_URL"] = red_c.get("url", "")
+    aws = cfg.get("aws", {})
+    if aws.get("mode") == "aws":
+        e["AWS_REGION"]          = aws.get("region", "")
+        e["AWS_SQS_P1_URL"]      = aws.get("sqs_p1", "")
+        e["AWS_SQS_P2_URL"]      = aws.get("sqs_p2", "")
+        e["AWS_SQS_RETRO_URL"]   = aws.get("sqs_retro", "")
+        e["AWS_SNS_TOPIC_ARN"]   = aws.get("sns_arn", "")
+        e["AWS_ACCESS_KEY_ID"]   = aws.get("access_key_id", "")
+        e["AWS_SECRET_ACCESS_KEY"] = aws.get("secret_key", "")
+    llm = cfg.get("llm", {})
+    e["ANTHROPIC_API_KEY"] = llm.get("anthropic_key", "")
+    e["OPENAI_API_KEY"]    = llm.get("openai_key", "")
+    sec = cfg.get("security", {})
+    e["CONNECTOR_ENCRYPTION_KEY"] = sec.get("encryption_key", "")
+    e["SLACK_SIGNING_SECRET"]     = sec.get("slack_secret", "")
+    app = cfg.get("app", {})
+    e["BUGPILOT_ENV"]      = app.get("env", "")
+    e["BUGPILOT_BASE_URL"] = app.get("base_url", "")
+    e["LOG_LEVEL"]         = app.get("log_level", "")
+    e["LOG_FORMAT"]        = app.get("log_format", "")
+    return e
 TERMS_URL = "https://bugpilot.io/terms"
 TOTAL_STEPS = 10   # 1-Prerequisites  2-ToS  3-Supabase  4-Redis  5-AWS
                    # 6-AI  7-Security  8-Settings  9-CLI  10-Sources
@@ -656,7 +708,8 @@ def accept_terms() -> datetime:
 # STEP 3 — Supabase
 # ══════════════════════════════════════════════════════════════════════════════
 
-def setup_supabase(cfg: dict) -> None:
+def setup_supabase(cfg: dict, existing: dict | None = None) -> None:
+    ex = existing or {}
     header("Database  (Supabase)", step=3)
     print("""\
   Supabase stores all BugPilot data: investigations, connector configs,
@@ -676,7 +729,8 @@ def setup_supabase(cfg: dict) -> None:
 
   Format:  {dim('https://xxxxxxxxxxxx.supabase.co')}
 """)
-    url = ask_validated("Project URL", _validate_supabase_url)
+    url = ask_validated("Project URL", _validate_supabase_url,
+                        default=ex.get("SUPABASE_URL", ""))
     ok("Supabase URL ✓")
 
     field_header(2, 4, "Secret key  ⚠  keep this secret — it has full DB access")
@@ -688,7 +742,8 @@ def setup_supabase(cfg: dict) -> None:
 
   Current format:  {dim('sb_secret_...')}
 """)
-    service_key = ask_validated("Secret key", _make_validate_supabase_secret_key(url), secret=True)
+    service_key = ask_validated("Secret key", _make_validate_supabase_secret_key(url),
+                                default=ex.get("SUPABASE_SERVICE_KEY", ""), secret=True)
     ok("Secret key verified ✓")
 
     field_header(3, 4, "Publishable key  (safe to use in the browser)")
@@ -700,7 +755,8 @@ def setup_supabase(cfg: dict) -> None:
 
   Current format:  {dim('sb_publishable_...')}
 """)
-    anon_key = ask_validated("Publishable key", _make_validate_supabase_publishable_key(url), secret=True)
+    anon_key = ask_validated("Publishable key", _make_validate_supabase_publishable_key(url),
+                             default=ex.get("SUPABASE_ANON_KEY", ""), secret=True)
     ok("Publishable key verified ✓")
 
     field_header(4, 4, "Database URI")
@@ -724,7 +780,8 @@ def setup_supabase(cfg: dict) -> None:
 
   Replace  {yellow('[YOUR-PASSWORD]')}  with your actual database password.
 """)
-    db_url = ask_validated("Database URL", _validate_db_url, secret=True)
+    db_url = ask_validated("Database URL", _validate_db_url,
+                           default=ex.get("DATABASE_URL", ""), secret=True)
     ok("Database URL format ✓")
 
     cfg["supabase"] = {
@@ -770,11 +827,24 @@ def _install_redis_local() -> bool:
     return True
 
 
-def setup_redis(cfg: dict) -> None:
+def setup_redis(cfg: dict, existing: dict | None = None) -> None:
+    ex = existing or {}
     header("Redis  (rate limiting & caching)", step=4)
     print("""\
   Redis handles rate limiting and caches investigation state between steps.
 """)
+
+    _existing_redis_url = ex.get("REDIS_URL", "")
+    if "localhost" in _existing_redis_url or "127.0.0.1" in _existing_redis_url:
+        _redis_mode_default = "1"
+    elif "redis.cloud" in _existing_redis_url or ".redis.io" in _existing_redis_url:
+        _redis_mode_default = "2"
+    elif "upstash.io" in _existing_redis_url:
+        _redis_mode_default = "3"
+    elif _existing_redis_url:
+        _redis_mode_default = "4"
+    else:
+        _redis_mode_default = "1"
 
     mode = choose(
         "Where will Redis run?",
@@ -784,6 +854,7 @@ def setup_redis(cfg: dict) -> None:
             ("upstash", "Upstash      —  upstash.com                    Free tier, pay-per-request"),
             ("custom",  "Custom       —  I already have a Redis URL"),
         ],
+        default=_redis_mode_default,
     )
 
     if mode == "local":
@@ -845,6 +916,7 @@ def setup_redis(cfg: dict) -> None:
     redis_url = ask_validated(
         "Redis URL",
         _validate_redis_url,
+        default=_existing_redis_url,
         secret=True,
     )
     ok("Redis connection verified ✓")
@@ -858,7 +930,8 @@ def setup_redis(cfg: dict) -> None:
 # STEP 5 — AWS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def setup_aws(cfg: dict) -> None:
+def setup_aws(cfg: dict, existing: dict | None = None) -> None:
+    ex = existing or {}
     header("AWS  (background worker queues)", step=5)
     print("""\
   BugPilot can process investigations asynchronously using three SQS FIFO
@@ -867,12 +940,14 @@ def setup_aws(cfg: dict) -> None:
   Skipping means investigations run inline — perfectly fine for development.
 """)
 
+    _aws_mode_default = "2" if ex.get("AWS_SQS_P1_URL") else "1"
     mode = choose(
         "How do you want to handle the worker queue?",
         [
             ("skip", "Skip  —  inline mode, no queues    (recommended for first-time setup)"),
             ("aws",  "Real AWS  —  I have an AWS account and will create the queues"),
         ],
+        default=_aws_mode_default,
     )
 
     if mode == "skip":
@@ -889,7 +964,8 @@ def setup_aws(cfg: dict) -> None:
 
   Common values:  {dim('us-east-1   eu-west-1   eu-west-2   ap-southeast-1   ap-southeast-2')}
 """)
-    region = ask_validated("AWS region", _validate_aws_region, default="us-east-1")
+    region = ask_validated("AWS region", _validate_aws_region,
+                           default=ex.get("AWS_REGION", "us-east-1"))
     ok(f"Region: {region}")
 
     print(f"""
@@ -916,15 +992,18 @@ def setup_aws(cfg: dict) -> None:
     input("  Press Enter when all 3 queues are created...")
 
     field_header(2, 6, "P1 Queue URL  (bugpilot-p1.fifo — critical priority)")
-    p1_url = ask_validated("P1 queue URL", _make_validate_sqs_url(region))
+    p1_url = ask_validated("P1 queue URL", _make_validate_sqs_url(region),
+                           default=ex.get("AWS_SQS_P1_URL", ""))
     ok("P1 queue URL ✓")
 
     field_header(3, 6, "P2 Queue URL  (bugpilot-p2.fifo — standard priority)")
-    p2_url = ask_validated("P2 queue URL", _make_validate_sqs_url(region))
+    p2_url = ask_validated("P2 queue URL", _make_validate_sqs_url(region),
+                           default=ex.get("AWS_SQS_P2_URL", ""))
     ok("P2 queue URL ✓")
 
     field_header(4, 6, "Retro Queue URL  (bugpilot-retro.fifo — post-incident)")
-    retro_url = ask_validated("Retro queue URL", _make_validate_sqs_url(region))
+    retro_url = ask_validated("Retro queue URL", _make_validate_sqs_url(region),
+                              default=ex.get("AWS_SQS_RETRO_URL", ""))
     ok("Retro queue URL ✓")
 
     print(f"""
@@ -946,7 +1025,8 @@ def setup_aws(cfg: dict) -> None:
     input("  Press Enter when the SNS topic is created...")
 
     field_header(5, 6, "SNS Topic ARN")
-    sns_arn = ask_validated("SNS topic ARN", _make_validate_sns_arn(region))
+    sns_arn = ask_validated("SNS topic ARN", _make_validate_sns_arn(region),
+                            default=ex.get("AWS_SNS_TOPIC_ARN", ""))
     ok("SNS topic ARN ✓")
 
     field_header(6, 6, "AWS Credentials")
@@ -962,14 +1042,16 @@ def setup_aws(cfg: dict) -> None:
     sqs:SendMessage    sqs:ReceiveMessage    sqs:DeleteMessage    sqs:GetQueueAttributes
     sns:Publish
 """)
-    access_key_id = ask_validated("AWS Access Key ID", _validate_nonempty)
+    access_key_id = ask_validated("AWS Access Key ID", _validate_nonempty,
+                                  default=ex.get("AWS_ACCESS_KEY_ID", ""))
 
     # Basic format check for the access key ID
     if not (access_key_id.startswith("AKIA") or access_key_id.startswith("ASIA")):
         warn("Access Key ID doesn't start with AKIA or ASIA — double-check you pasted the Key ID")
         hint("The Key ID is different from the Secret Access Key")
 
-    secret_key = ask_validated("AWS Secret Access Key", _validate_nonempty, secret=True)
+    secret_key = ask_validated("AWS Secret Access Key", _validate_nonempty,
+                               default=ex.get("AWS_SECRET_ACCESS_KEY", ""), secret=True)
     ok("AWS credentials saved.")
 
     cfg["aws"] = {
@@ -990,12 +1072,22 @@ def setup_aws(cfg: dict) -> None:
 # STEP 6 — AI Provider
 # ══════════════════════════════════════════════════════════════════════════════
 
-def setup_llm(cfg: dict) -> None:
+def setup_llm(cfg: dict, existing: dict | None = None) -> None:
+    ex = existing or {}
     header("AI Provider", step=6)
     print("""\
   BugPilot uses an LLM to generate investigation hypotheses and
   plain-English summaries. At least one provider is required.
 """)
+
+    _has_anthropic = bool(ex.get("ANTHROPIC_API_KEY"))
+    _has_openai    = bool(ex.get("OPENAI_API_KEY"))
+    if _has_anthropic and _has_openai:
+        _llm_mode_default = "3"
+    elif _has_openai:
+        _llm_mode_default = "2"
+    else:
+        _llm_mode_default = "1"
 
     mode = choose(
         "Which AI provider do you want to use?",
@@ -1004,6 +1096,7 @@ def setup_llm(cfg: dict) -> None:
             ("openai",    "OpenAI    — GPT-4o"),
             ("both",      "Both      — automatically fall back if one is unavailable"),
         ],
+        default=_llm_mode_default,
     )
 
     anthropic_key = openai_key = ""
@@ -1020,6 +1113,7 @@ def setup_llm(cfg: dict) -> None:
         anthropic_key = ask_validated(
             "Anthropic API key",
             _validate_anthropic_key,
+            default=ex.get("ANTHROPIC_API_KEY", ""),
             secret=True,
         )
         ok("Anthropic key format ✓")
@@ -1035,6 +1129,7 @@ def setup_llm(cfg: dict) -> None:
         openai_key = ask_validated(
             "OpenAI API key",
             _validate_openai_key,
+            default=ex.get("OPENAI_API_KEY", ""),
             secret=True,
         )
         ok("OpenAI key format ✓")
@@ -1052,29 +1147,40 @@ def setup_llm(cfg: dict) -> None:
 # STEP 7 — Security & Optional Integrations
 # ══════════════════════════════════════════════════════════════════════════════
 
-def setup_security(cfg: dict) -> None:
+def setup_security(cfg: dict, existing: dict | None = None) -> None:
+    ex = existing or {}
     header("Security & Optional Integrations", step=7)
 
-    # Auto-generate connector encryption key
+    # Connector encryption key — preserve existing to avoid invalidating saved credentials
     print(f"  {bold('Connector encryption key')}")
     info("Encrypts connector credentials stored in the database.")
-    info("Generated automatically — you never need to copy this value.")
-    info("Auto-generating secure AES-256 key...")
-    try:
-        r = run(["openssl", "rand", "-base64", "32"], check=False)
-        enc_key = r.stdout.strip() if r.returncode == 0 else ""
-    except Exception:
-        enc_key = ""
-    if not enc_key:
-        enc_key = base64.b64encode(secrets.token_bytes(32)).decode()
-    ok(f"Encryption key generated  {dim('(saved to .env only — never commit .env)')}")
+    existing_enc_key = ex.get("CONNECTOR_ENCRYPTION_KEY", "")
+    if existing_enc_key:
+        info("Existing key found — keeping it to preserve saved connector credentials.")
+        info("Regenerating would invalidate all credentials stored in the database.")
+        if confirm("Regenerate a new encryption key? (only if starting fresh)", default=False):
+            existing_enc_key = ""
+    if existing_enc_key:
+        enc_key = existing_enc_key
+        ok(f"Encryption key preserved  {dim('(saved to .env only — never commit .env)')}")
+    else:
+        info("Auto-generating secure AES-256 key...")
+        try:
+            r = run(["openssl", "rand", "-base64", "32"], check=False)
+            enc_key = r.stdout.strip() if r.returncode == 0 else ""
+        except Exception:
+            enc_key = ""
+        if not enc_key:
+            enc_key = base64.b64encode(secrets.token_bytes(32)).decode()
+        ok(f"Encryption key generated  {dim('(saved to .env only — never commit .env)')}")
 
     # Slack (optional)
     print()
     print(f"  {bold('Slack integration')}  {dim('(optional)')}")
     info("Posts investigation summaries to a Slack channel when investigations complete.")
-    slack_secret = ""
-    if confirm("Configure Slack now?", default=False):
+    slack_secret = ex.get("SLACK_SIGNING_SECRET", "")
+    _slack_prompt = "Reconfigure Slack?" if slack_secret else "Configure Slack now?"
+    if confirm(_slack_prompt, default=bool(slack_secret)):
         print(f"""
   Where to find your Slack signing secret:
     {cyan('https://api.slack.com/apps')}  →  select your app  (create one if needed)
@@ -1084,10 +1190,14 @@ def setup_security(cfg: dict) -> None:
 
   Looks like:  {dim('a 32-character hexadecimal string')}
 """)
-        slack_secret = ask_validated("Slack signing secret", _validate_nonempty, secret=True)
+        slack_secret = ask_validated("Slack signing secret", _validate_nonempty,
+                                     default=slack_secret, secret=True)
         ok("Slack signing secret saved.")
     else:
-        info("Slack skipped. Set SLACK_SIGNING_SECRET in .env to enable it later.")
+        if slack_secret:
+            ok("Slack signing secret kept from existing config.")
+        else:
+            info("Slack skipped. Set SLACK_SIGNING_SECRET in .env to enable it later.")
 
     cfg["security"] = {
         "encryption_key": enc_key,
@@ -1101,23 +1211,29 @@ def setup_security(cfg: dict) -> None:
 # STEP 8 — Application Settings
 # ══════════════════════════════════════════════════════════════════════════════
 
-def setup_app(cfg: dict) -> None:
+def setup_app(cfg: dict, existing: dict | None = None) -> None:
+    ex = existing or {}
     header("Application Settings", step=8)
 
+    _env_mode_default = "2" if ex.get("BUGPILOT_ENV") == "production" else "1"
     env_mode = choose(
         "Environment mode:",
         [
             ("development", "development  —  verbose logs, Swagger UI at /docs      (for dev)"),
             ("production",  "production   —  JSON logs, Swagger disabled            (for prod)"),
         ],
+        default=_env_mode_default,
     )
 
     print()
     info("API base URL — where the backend server will listen.")
     info("The CLI uses this URL to connect. Keep the default for local development.")
-    base_url = ask("API base URL", default="http://localhost:8000")
+    base_url = ask("API base URL",
+                   default=ex.get("BUGPILOT_BASE_URL", "http://localhost:8000"))
 
     print()
+    _log_level_map = {"info": "1", "debug": "2", "warn": "3", "error": "4"}
+    _log_level_default = _log_level_map.get(ex.get("LOG_LEVEL", "").lower(), "1")
     log_level = choose(
         "Log level:",
         [
@@ -1126,14 +1242,17 @@ def setup_app(cfg: dict) -> None:
             ("warn",  "warn   — warnings and errors only"),
             ("error", "error  — errors only"),
         ],
+        default=_log_level_default,
     )
 
+    _log_format_default = "2" if ex.get("LOG_FORMAT") == "json" else "1"
     log_format = choose(
         "Log format:",
         [
             ("text", "text  — human-readable         (better for development)"),
             ("json", "json  — structured/machine      (better for production log ingestion)"),
         ],
+        default=_log_format_default,
     )
 
     cfg["app"] = {
@@ -1161,7 +1280,7 @@ def _mask(val: str, show: int = 8) -> str:
 def _status(val: str) -> str:
     return green("✓") if val else red("✗  not set")
 
-def pre_apply_review(cfg: dict, terms_ts: datetime) -> None:
+def pre_apply_review(cfg: dict, terms_ts: datetime, existing: dict | None = None) -> None:
     """
     Show a full summary of everything collected so far.
     Allow going back to any step to change values.
@@ -1264,12 +1383,14 @@ def pre_apply_review(cfg: dict, terms_ts: datetime) -> None:
 
         try:
             n = int(choice)
-            if   n == 3: setup_supabase(cfg)
-            elif n == 4: setup_redis(cfg)
-            elif n == 5: setup_aws(cfg)
-            elif n == 6: setup_llm(cfg)
-            elif n == 7: setup_security(cfg)
-            elif n == 8: setup_app(cfg)
+            # Use current cfg values as defaults so re-entry pre-fills with what was typed
+            _back_existing = _cfg_to_env(cfg)
+            if   n == 3: setup_supabase(cfg, _back_existing)
+            elif n == 4: setup_redis(cfg, _back_existing)
+            elif n == 5: setup_aws(cfg, _back_existing)
+            elif n == 6: setup_llm(cfg, _back_existing)
+            elif n == 7: setup_security(cfg, _back_existing)
+            elif n == 8: setup_app(cfg, _back_existing)
             else:
                 fail("Enter a number between 3 and 8, or press Enter to apply.")
         except ValueError:
@@ -1854,6 +1975,15 @@ def main() -> None:
 
     cfg: dict = {}
 
+    # ── Load existing .env so every step can pre-fill current values ──────────
+    existing = _read_existing_env()
+    if existing:
+        print()
+        ok(f"Existing .env found at  {ENV_FILE}")
+        info("Current values will be shown as defaults — press Enter to keep them.")
+        info("Ctrl+C at any time to abort with no changes written.")
+        print()
+
     # ── Steps 1-2: Prerequisites + ToS ───────────────────────────────────────
     if not check_prerequisites():
         sys.exit(1)
@@ -1861,15 +1991,15 @@ def main() -> None:
     terms_ts = accept_terms()
 
     # ── Steps 3-8: Collect all configuration (nothing written yet) ────────────
-    setup_supabase(cfg)
-    setup_redis(cfg)
-    setup_aws(cfg)
-    setup_llm(cfg)
-    setup_security(cfg)
-    setup_app(cfg)
+    setup_supabase(cfg, existing)
+    setup_redis(cfg, existing)
+    setup_aws(cfg, existing)
+    setup_llm(cfg, existing)
+    setup_security(cfg, existing)
+    setup_app(cfg, existing)
 
     # ── Review: show everything, allow going back ─────────────────────────────
-    pre_apply_review(cfg, terms_ts)
+    pre_apply_review(cfg, terms_ts, existing)
 
     # ── Apply: first write to disk here ──────────────────────────────────────
     header("Applying Configuration")
