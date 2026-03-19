@@ -50,20 +50,25 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
 
 
 def check_rate_limit(org_id: str, endpoint_type: str) -> None:
-    """Raise 429 if rate limit exceeded."""
+    """Raise 429 if rate limit exceeded. Skip silently if Redis is unavailable."""
     limit, window = RATE_LIMITS.get(endpoint_type, RATE_LIMITS["default"])
     key = f"rl:{org_id}:{endpoint_type}"
-    r = _get_redis()
-    count = r.incr(key)
-    if count == 1:
-        r.expire(key, window)
-    if count > limit:
-        ttl = r.ttl(key)
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded: {limit} {endpoint_type} per {window}s",
-            headers={"Retry-After": str(ttl)},
-        )
+    try:
+        r = _get_redis()
+        count = r.incr(key)
+        if count == 1:
+            r.expire(key, window)
+        if count > limit:
+            ttl = r.ttl(key)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded: {limit} {endpoint_type} per {window}s",
+                headers={"Retry-After": str(ttl)},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        log.warning("Redis unavailable — skipping rate limit check for %s/%s", org_id, endpoint_type)
 
 
 def _update_key_last_used(key_hash: str) -> None:
